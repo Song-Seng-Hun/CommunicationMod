@@ -19,6 +19,7 @@ import com.megacrit.cardcrawl.potions.AbstractPotion;
 import com.megacrit.cardcrawl.potions.PotionSlot;
 import com.megacrit.cardcrawl.powers.AbstractPower;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
+import com.megacrit.cardcrawl.relics.FrozenEye;
 import com.megacrit.cardcrawl.relics.RunicDome;
 import com.megacrit.cardcrawl.rewards.RewardItem;
 import com.megacrit.cardcrawl.rooms.*;
@@ -497,7 +498,8 @@ public class GameStateConverter {
     /**
      * Gets the state of the current combat in game.
      * The combat state object contains:
-     * "draw_pile" (list): The list of cards in your draw pile
+     * "draw_pile" (list): Cards in your draw pile, in display order unless order is visible.
+     * "draw_pile_order_visible" (boolean): With Frozen Eye, draw_pile is bottom-to-top (last card drawn next).
      * "discard_pile" (list): The list of cards in your discard pile
      * "exhaust_pile" (list): The list of cards in your exhaust pile
      * "hand" (list): The list of cards in your hand
@@ -508,7 +510,6 @@ public class GameStateConverter {
      * "turn" (int): The current turn (or round) number of the combat.
      * "cards_discarded_this_turn" (int): The number of cards discarded this turn.
      * "times_damaged" (int): The number of times the player has been damaged this combat (for Blood for Blood).
-     * Note: The order of the draw pile is not currently randomized when sent to the client.
      * @return The combat state object
      */
     private static HashMap<String, Object> getCombatState() {
@@ -518,7 +519,8 @@ public class GameStateConverter {
             monsters.add(convertMonsterToJson(monster));
         }
         state.put("monsters", monsters);
-        ArrayList<Object> draw_pile = new ArrayList<>();
+        boolean drawPileOrderVisible = AbstractDungeon.player.hasRelic(FrozenEye.ID);
+        ArrayList<HashMap<String, Object>> draw_pile = new ArrayList<>();
         for(AbstractCard card : AbstractDungeon.player.drawPile.group) {
             draw_pile.add(convertCardToJson(card));
         }
@@ -538,7 +540,8 @@ public class GameStateConverter {
         for(AbstractCard card : AbstractDungeon.player.limbo.group) {
             limbo.add(convertCardToJson(card));
         }
-        state.put("draw_pile", draw_pile);
+        state.put("draw_pile", DrawPileVisibility.orderForPlayer(draw_pile, drawPileOrderVisible));
+        state.put("draw_pile_order_visible", drawPileOrderVisible);
         state.put("discard_pile", discard_pile);
         state.put("exhaust_pile", exhaust_pile);
         state.put("hand", hand);
