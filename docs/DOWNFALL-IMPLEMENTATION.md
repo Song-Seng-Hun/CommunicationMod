@@ -191,6 +191,13 @@ regression now checks the typed return instructions on the actual transformed me
 the full preparation pipeline passed after this fix. This was not exercised by
 the earlier initialization-only smoke check.
 
+The next window launch reached the game's `create()` path and exposed an unconditional
+`new SteamUtils(callback)` even though SteamAPI was disabled. The copied profile now
+skips that native callback allocation; SteamInputHelper already skips its initialization
+when Steam is unavailable, and clientUtils disposal is null-checked. Mouse/keyboard
+remain the intended controls for this profile. `SteamUtilsStartupTest` reproduces the
+old allocation and checks its removal as part of the full preparation command.
+
 ## Whole-hand decision milestone
 
 `COMBAT-READINESS.md` records the common full-hand gate: two matching completed

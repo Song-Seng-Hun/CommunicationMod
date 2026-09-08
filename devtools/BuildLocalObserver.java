@@ -46,6 +46,16 @@ public final class BuildLocalObserver {
     private static Map<String,byte[]> patch(ClassPool pool)throws Exception {
         Set<CtClass> changed=new LinkedHashSet<>();
         CtClass game=take(pool,changed,"com.megacrit.cardcrawl.core.CardCrawlGame");
+        // SteamInputHelper already skips itself when SteamAPI.isSteamRunning() is
+        // false, but create() allocates SteamUtils unconditionally just before it.
+        // Its disposal path is null-checked. Do not initialize that native callback
+        // in this mouse/keyboard-only test profile.
+        game.getDeclaredMethod("create").instrument(new javassist.expr.ExprEditor(){
+            public void edit(javassist.expr.NewExpr allocation)throws CannotCompileException {
+                if(allocation.getClassName().equals("com.codedisaster.steamworks.SteamUtils"))
+                    allocation.replace("{ $_ = null; }");
+            }
+        });
         CtMethod render=game.getDeclaredMethod("render");
         DialogueRenderPatch.Frame.Raw(render);CombatReadinessPatch.Frame.Raw(render);
         render.insertAfter("{ communicationmod.observation.LocalObserver.tick(); }");

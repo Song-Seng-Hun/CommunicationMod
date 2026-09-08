@@ -21,7 +21,7 @@ try {
     $cp = "$root\target\classes;$game;$base;$gson"
     & javac '-J-Xmx256m' --release 8 -encoding UTF-8 -cp $cp -d $tools `
         "$PSScriptRoot\OfflineBytecode.java" "$PSScriptRoot\BuildLocalObserver.java" "$PSScriptRoot\LocalObserverLaunch.java" `
-        "$PSScriptRoot\ObserverSessionTest.java" "$PSScriptRoot\ObserverClientTest.java" "$PSScriptRoot\LocalObserverBuildTest.java" "$PSScriptRoot\LocalObserverLaunchTest.java"
+        "$PSScriptRoot\ObserverSessionTest.java" "$PSScriptRoot\ObserverClientTest.java" "$PSScriptRoot\LocalObserverBuildTest.java" "$PSScriptRoot\LocalObserverLaunchTest.java" "$PSScriptRoot\SteamUtilsStartupTest.java"
     if ($LASTEXITCODE -ne 0) { throw 'Local observer tools compilation failed' }
     foreach ($test in @('ObserverSessionTest','LocalObserverLaunchTest')) {
         & $java8 '-Xmx128m' -cp "$tools;$cp" $test
@@ -31,6 +31,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Packaged client round trip failed' }
     & $java8 '-Xmx384m' -cp "$tools;$cp" LocalObserverBuildTest $DownfallPath $prepared $mod
     if ($LASTEXITCODE -ne 0) { throw 'Prepared runtime bytecode checks failed' }
+    & $java8 '-Xmx128m' -cp "$tools;$cp" SteamUtilsStartupTest "$prepared\desktop-1.0-modded.jar"
+    if ($LASTEXITCODE -ne 0) { throw 'Offline startup callback regression failed' }
     New-Item -ItemType Directory -Path "$prepared\launcher", "$prepared\localappdata", "$prepared\appdata" | Out-Null
     Copy-Item -LiteralPath "$tools\LocalObserverLaunch.class" -Destination "$prepared\launcher\LocalObserverLaunch.class"
     # Only promote a copy after the launch integrity check. No game window here.
