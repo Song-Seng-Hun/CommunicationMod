@@ -33,7 +33,7 @@ public final class MenuUi {
                     for(MenuButton button:screen.buttons) {
                         if((Boolean)field(button,MenuButton.class,"hidden"))continue;
                         String id="menu."+button.result.name().toLowerCase(Locale.ROOT);
-                        boolean allowed=button.result.name().equals("PLAY");
+                        boolean allowed=button.result.name().equals("PLAY") || allowEmbark && button.result.name().equals("RESUME_GAME");
                         JsonObject row=row(id,(String)field(button,MenuButton.class,"label"),allowed);rows.add(row);
                         stable &= Math.abs(number(button,MenuButton.class,"x")-number(button,MenuButton.class,"targetX"))<0.5f;
                         if(allowed)add(id,row.get("label").getAsString(),screen,button,()->{button.buttonEffect();screen.hideMenuButtons();});

@@ -13,6 +13,7 @@ import java.util.*;
 /** Explicit copied-test-profile actions only. Does not enable the legacy command executor. */
 public final class RunUi {
     private final MenuUi menu=new MenuUi(true);
+    private final RewardUi rewards=new RewardUi();
     private List<ProtocolSession.Action> offered=Collections.emptyList();
     private boolean inMenu,reported;
 
@@ -37,6 +38,8 @@ public final class RunUi {
                 Map<String,Object> decision=CombatObservation.observation();
                 if(Boolean.TRUE.equals(decision.get("ready")) && "play".equals(decision.get("mode")))combat((String)decision.get("decision_id"));
                 else status.addProperty("reason","combat_not_ready_or_unsupported_selection");
+            } else if(type.equals("COMBAT_REWARD") || type.equals("CARD_REWARD")) {
+                rewards.capture(view,status);offered.addAll(rewards.actions());
             } else if(type.equals("EVENT")) {
                 offered.addAll(DialogueObservation.eventReadingActions());
                 if(DialogueObservation.allowsEventCommand("choose")) {

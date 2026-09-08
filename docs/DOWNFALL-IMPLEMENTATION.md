@@ -348,3 +348,40 @@ Remaining: Neow/event reading and choices in live play; card-selection effects
 other character tutorials and systems; base/workshop environments. Only standalone
 Hermit normal first combat is live-verified here. No whole-run clear, whole-game
 support, screenshot/text comparison or all-combination validation is claimed.
+
+### 2026-09-08: standard rewards and saved-run resume
+
+Added opt-in resume and scoped standard GOLD/CARD reward controls. Card choice
+uses the original cardSelectUpdate with a synchronous hover hook cleared in
+finally; skip uses its actual enabled button. Proceed is limited to an empty
+reward list in an ordinary MonsterRoom. Special selection modes and custom
+reward classes remain unsupported. Default passive operation is unchanged.
+
+Verification: the missing-adapter test failed before implementation. Complete
+`prepare-local-test.ps1` regression passed (exit 0), including binding/hook,
+privacy, stable-state, offline submission and original/output hash checks;
+log: `target/reward-control-verification.log`. This produced the 21-class copied
+runtime `local-test-20260908-193529-83d00d0f`. The prior test profile's 47 files
+were copied and hash-verified, with the prior runtime retained. Original Steam
+files and normal saves were not changed.
+
+Live KOR evidence: session `d5f687d3-198a-4c83-be79-981245edb50b`, recording
+`87f53af9-a6aa-4c87-9c5a-8e3803c2d3f4` within that runtime:
+
+- MAIN_MENU state 4: selected localized Continue; state 16 restored the saved
+  first-combat reward screen at floor 1, HP 74, gold 99.
+- Gold claim -> state 20, gold 113. The remaining card reward was reindexed;
+  the next command used the fresh state and action ID.
+- Card reward -> state 26: Korean descriptions for WideOpen, GhostlyPresence
+  and Quickdraw, with available keyword text; deck size 10. Existing text
+  completeness limitations remain explicit, not a claim of full rendering.
+- Selected Quickdraw (`빠른 대응`) -> state 36: deck size 11 with exactly one
+  selected UUID, empty reward list and the localized Proceed action.
+- Proceed -> MAP state 40: HP 74, gold 113, deck 11; next node (1,1) is `?`.
+  The game remains at this map without entering the event.
+
+Recording audit: 21 distinct states, five applied results, no actions exposed
+on unready states, empty client error log and responsive game window. This is
+protocol/live-effect evidence, not a screenshot comparison. Skip was offered
+but not executed. Special rewards, Singing Bowl, forced card selectors, event
+and boss transitions, other environments and a full Hermit clear remain pending.
