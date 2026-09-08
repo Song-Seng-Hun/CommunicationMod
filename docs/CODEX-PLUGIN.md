@@ -51,7 +51,9 @@
 
 사용자 보고로 첫 플러그인 실행이 소리만 나고 창은 표시되지 않는 문제를 확인했습니다. 당시 테스트 게임 PID 36848은 살아 있지만 `MainWindowHandle`은 0이었고, 게임 실행 경로가 `Start-Process -WindowStyle Hidden`을 사용했습니다. MCP의 메뉴 수신 성공은 창이 사용자에게 보인다는 검증이 아니었습니다.
 
-게임 실행만 `WindowStyle Normal`로 변경했습니다. PowerShell/MCP 보조 프로세스의 숨김 실행은 유지합니다. `PluginLifecycleTest.ps1`에 실제 실행 AST의 표시 모드 검사를 추가하여 기존 코드에서 실패하는 것을 확인했습니다. 기존 실행 중인 게임은 재등록만으로 바뀌거나 종료되지 않습니다. 이번 수정 후 새 게임 창의 실제 표시와 기존 숨겨진 창 복구는 아직 검증하지 못했습니다(Windows 창 제어 도구 초기화 오류).
+게임 실행만 `WindowStyle Normal`로 변경했습니다. PowerShell/MCP 보조 프로세스의 숨김 실행은 유지합니다. `PluginLifecycleTest.ps1`에 실제 실행 AST의 표시 모드 검사를 추가하여 기존 코드에서 실패하는 것을 확인했습니다. 기존 실행 중인 게임은 재등록만으로 바뀌거나 종료되지 않습니다.
+
+수정본 `0.1.0+codex.20260908125453`을 재등록하고 installed/enabled를 확인했습니다. 창 제어 도구 초기화 오류로 기존 창 복원이 불가능하여, 사용자 승인 후 실행 경로를 재검증한 PID 36848만 종료했습니다. 수정된 설치 캐시로 새 게임 PID 37688을 실행하여 Windows 주 창 핸들 68093172와 제목 `Modded Slay the Spire`, MCP의 한국어 `MAIN_MENU`/상태 4/세션 `307bf311-415e-4db6-9860-d26ecf729c8f`, 제출 차단, 같은 PID 재사용을 확인했습니다. 총 약 77초, 게임 행동 0회이며 저장 파일은 수정하지 않았습니다. 스크린샷 검증과는 구분합니다. `verify-plugin-live.mjs`도 이제 게임 PID의 주 창 핸들과 제목을 검사하여 숨김 실행을 성공으로 선언하지 않습니다.
 
 - 설치 ID `downfall-agent@personal`, 버전 `0.1.0+codex.20260908123748`; CLI 조회에서 installed/enabled 확인.
 - Node 테스트 11개 통과. 기존 10개 고정 평가 질문도 실제 SDK 도구로 정답 접근 가능 확인(별도 LLM 평가 아님).
