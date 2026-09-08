@@ -385,3 +385,29 @@ on unready states, empty client error log and responsive game window. This is
 protocol/live-effect evidence, not a screenshot comparison. Skip was offered
 but not executed. Special rewards, Singing Bowl, forced card selectors, event
 and boss transitions, other environments and a full Hermit clear remain pending.
+
+### 2026-09-08: first live event reading and result cycle
+
+Existing artifact `8a2a070` was exercised without source/runtime changes in the
+same copied test session and recording as the reward milestone above. No normal
+Steam files or online submission settings were modified.
+
+- MAP state 40 -> node (1,1) -> World of Goop (`끈적이 천지`), floor 2.
+- State 161: complete Korean rendered body and both options were present.
+  `discussion_required` exposed only acknowledgement, not event choices.
+  The body describes falling into slime and finding lost adventurers' coins.
+- After explaining the body and tradeoff to the user, acknowledgement -> state
+  165 with the two choices. Selected gain 75 gold / lose 11 HP.
+- State 195: HP 74 -> 63, gold 113 -> 188, a new complete Korean result body,
+  `page_role=after_choice`, and last_discussion retaining the prior body,
+  explanation and selected option. Leaving was withheld until this new page
+  was explained and acknowledged independently.
+- Acknowledgement -> state 199 with `[떠난다]`; selecting it -> MAP state 203,
+  preserving HP 63 / gold 188. Next offered node is (0,2), `?`; not entered.
+
+Fresh JSONL audit of states after 40: 82 distinct states, zero actions in
+unready states, four discussion-required snapshots with zero premature event
+choices. Client error log is empty. The JVM remained responsive; no screenshot
+or visible-window verification is claimed. This validates one standard event's
+before/after reading and map return, not all events or special card selectors.
+No new build/regression-suite run was needed for this documentation-only change.
