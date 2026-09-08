@@ -68,7 +68,8 @@ try {
   # Start-Process joins ArgumentList on Windows; only the classpath needs quoting.
   if ($gameProfile.cp.Contains('"')) { throw 'Unsupported quote in runtime path' }
   $arguments=@('-Xmx768m','-Dfile.encoding=UTF-8','-cp',('"'+$gameProfile.cp+'"'),'LocalObserverLaunch','--mcp-control')
-  $started = Start-Process -FilePath $gameProfile.java -ArgumentList $arguments -WorkingDirectory $gameProfile.runtime -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $gameProfile.runtime "plugin-$stamp.stdout.log") -RedirectStandardError (Join-Path $gameProfile.runtime "plugin-$stamp.stderr.log")
+  # Unlike the MCP/PowerShell helper, this is the interactive game the user wants to see.
+  $started = Start-Process -FilePath $gameProfile.java -ArgumentList $arguments -WorkingDirectory $gameProfile.runtime -WindowStyle Normal -PassThru -RedirectStandardOutput (Join-Path $gameProfile.runtime "plugin-$stamp.stdout.log") -RedirectStandardError (Join-Path $gameProfile.runtime "plugin-$stamp.stderr.log")
  } finally { $env:LOCALAPPDATA=$oldLocal; $env:APPDATA=$oldRoaming }
  @{phase='running';pid=$started.Id;runtime=$gameProfile.runtime;test_submissions='disabled_in_test_copy'} | ConvertTo-Json -Compress
 } finally { if($held){$mutex.ReleaseMutex()}; if($mutex){$mutex.Dispose()} }
