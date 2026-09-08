@@ -2,13 +2,20 @@ import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js';
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
 import {z} from 'zod';import {randomUUID} from 'node:crypto';import {fileURLToPath} from 'node:url';import path from 'node:path';
 import {Connection} from './connection.js';import {focus,section,obj,type Obj} from './view.js';
+import {Lifecycle} from './lifecycle.js';
 const root=process.env.COMMUNICATIONMOD_WORKSPACE ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const link=new Connection(root),server=new McpServer({name:'communicationmod-mcp-server',version:'0.1.0'});
+const lifecycle=new Lifecycle(root,link);
 const read={readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false};
 const ids={session_id:z.string().min(1).max(128),state_id:z.number().int().nonnegative()};
 const outputSchema=z.object({data:z.record(z.string(),z.unknown())});
 function response(data:Obj){return {content:[{type:'text' as const,text:JSON.stringify(data)}],structuredContent:{data}};}
 async function guard(run:()=>Promise<Obj>){try{await link.ensure();return response(await run());}catch(e){return {isError:true,content:[{type:'text' as const,text:e instanceof Error?e.message:'MCP operation failed; inspect current state before acting.'}]};}}
+async function lifecycleGuard(run:()=>Promise<Obj>){try{return response(await run());}catch(e){return {isError:true,content:[{type:'text' as const,text:e instanceof Error?e.message:'Game startup failed; inspect sts_game_status before retrying.'}]};}}
+server.registerTool('sts_game_status',{title:'Downfall process and connection status',description:'Inspect the configured test game process without launching, closing, or playing it. Works before a game connection exists. Reports stopped/running, scoped PID, runtime and next step.',inputSchema:z.object({}).strict(),outputSchema,annotations:read},
+ ()=>lifecycleGuard(()=>lifecycle.status()));
+server.registerTool('sts_start_game',{title:'Start Downfall and connect',description:'Start the verified copied Downfall game with bundled Java 8 and test online submission blocks, or reuse the same running test game. Only when the user requests game launch/play. Never rebuilds, edits saves, resumes a run, or makes choices. Waits briefly for MCP; starting means inspect state/status, not spawn again. Game stays open when MCP closes.',inputSchema:z.object({wait_ms:z.number().int().min(0).max(15000).default(15000)}).strict(),outputSchema,annotations:{...read,readOnlyHint:false}},
+ ({wait_ms})=>lifecycleGuard(()=>lifecycle.start(wait_ms)));
 server.registerTool('sts_get_state',{title:'Current game decision',description:'Get only current-screen decision information, full localized card/event text and offered actions. Deck/map/history are on-demand via sts_get_context. Never infer actions from an unready state.',inputSchema:z.object({wait_ms:z.number().int().min(0).max(15000).default(0)}).strict(),outputSchema,annotations:read},
  ({wait_ms})=>guard(async()=>focus(await link.game.wait(wait_ms))));
 server.registerTool('sts_act',{title:'Act and await next game decision',description:'Apply ONE offered action using the observed session/state IDs, then return its receipt and next stable decision. No automatic retries or multi-action planning. For event acknowledgement provide the reading_id and meaningful commentary in arguments. Unknown/applied_waiting means inspect state and request; do not resend.',

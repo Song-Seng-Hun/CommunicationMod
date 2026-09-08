@@ -2,6 +2,8 @@
 
 Persistent, local-only MCP control for the **verified copied Downfall test runtime**. This does not install a Steam launcher or expand the set of supported game screens.
 
+For the integrated Codex plugin (game launch through MCP), see `docs/CODEX-PLUGIN.md` in the repository. It packages this server and adds `sts_start_game` and read-only `sts_game_status`. Prefer the plugin over a duplicate manual MCP registration.
+
 ## Build and launch (PowerShell, repository root)
 
 ```powershell

@@ -4,8 +4,10 @@ import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {createInterface} from 'node:readline';
 import {fileURLToPath} from 'node:url';
 import {performance} from 'node:perf_hooks';
+import path from 'node:path';
 const client=new Client({name:'communicationmod-manual-verifier',version:'1.0.0'});
-await client.connect(new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('../dist/index.js',import.meta.url))],stderr:'inherit'}));
+const entry=process.argv[2]?path.resolve(process.argv[2],'scripts','start.mjs'):fileURLToPath(new URL('../dist/index.js',import.meta.url));
+await client.connect(new StdioClientTransport({command:process.execPath,args:[entry],stderr:'inherit'}));
 console.log(JSON.stringify({tools:(await client.listTools()).tools.map(t=>t.name)}));
 try {
  for await(const line of createInterface({input:process.stdin,crlfDelay:Infinity})) {
