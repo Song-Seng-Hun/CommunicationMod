@@ -53,6 +53,7 @@ public class GameStateConverter {
      */
     public static String getCommunicationState() {
         HashMap<String, Object> response = new HashMap<>();
+        response.put("combat_decision", communicationmod.observation.CombatObservation.observation());
         response.put("available_commands", CommandExecutor.getAvailableCommands());
         response.put("ready_for_command", GameStateListener.isWaitingForCommand());
         boolean isInGame = CommandExecutor.isInDungeon();
@@ -60,6 +61,7 @@ public class GameStateConverter {
         if(isInGame) {
             response.put("game_state", getGameState());
         }
+        communicationmod.observation.CombatObservation.finishObservation(response);
         Gson gson = new Gson();
         return gson.toJson(response);
     }
@@ -538,9 +540,17 @@ public class GameStateConverter {
             exhaust_pile.add(convertCardToJson(card));
         }
         ArrayList<Object> hand = new ArrayList<>();
-        for(AbstractCard card : AbstractDungeon.player.hand.group) {
-            hand.add(convertCardToJson(card));
+        boolean handComplete = communicationmod.observation.CombatObservation.handComplete();
+        if (handComplete) {
+            int index = 0;
+            for(AbstractCard card : AbstractDungeon.player.hand.group) {
+                HashMap<String,Object> row = convertCardToJson(card);
+                communicationmod.observation.CombatObservation.addHandPosition(row, card, index++);
+                hand.add(row);
+            }
         }
+        state.put("hand_complete", handComplete);
+        state.put("hand_unavailable_reason", handComplete ? null : "not_a_stable_play_decision_use_selection_screen_if_present");
         ArrayList<Object> limbo = new ArrayList<>();
         for(AbstractCard card : AbstractDungeon.player.limbo.group) {
             limbo.add(convertCardToJson(card));
@@ -644,7 +654,9 @@ public class GameStateConverter {
             jsonCard.put("misc", card.misc);
         }
         if(AbstractDungeon.getMonsters() != null) {
-            jsonCard.put("is_playable", card.canUse(AbstractDungeon.player, null));
+            boolean decisionReady = !communicationmod.observation.CombatObservation.inCombat()
+                || communicationmod.observation.CombatObservation.handComplete();
+            jsonCard.put("is_playable", decisionReady && card.canUse(AbstractDungeon.player, null));
         }
         jsonCard.put("cost", card.costForTurn);
         jsonCard.put("upgrades", card.timesUpgraded);

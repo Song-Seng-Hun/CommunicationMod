@@ -89,6 +89,10 @@ public class CommandExecutor {
 
     public static ArrayList<String> getAvailableCommands() {
         ArrayList<String> availableCommands = new ArrayList<>();
+        if (communicationmod.observation.CombatObservation.inCombat()) {
+            availableCommands.add("state"); availableCommands.add("wait");
+            return availableCommands;
+        }
         if (communicationmod.observation.DialogueObservation.inEventContext()) {
             if (isChooseCommandAvailable()) availableCommands.add("choose");
             availableCommands.add("state"); availableCommands.add("wait");
@@ -125,6 +129,7 @@ public class CommandExecutor {
     }
 
     public static boolean isCommandAvailable(String command) {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand(command)) return false;
         if (!communicationmod.observation.DialogueObservation.allowsEventCommand(command)) return false;
         if(command.equals("confirm") || command.equalsIgnoreCase("proceed")) {
             return isConfirmCommandAvailable();
@@ -140,6 +145,7 @@ public class CommandExecutor {
     }
 
     private static boolean isPlayCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("play")) return false;
         if(isInDungeon()) {
             if(AbstractDungeon.getCurrRoom().phase == AbstractRoom.RoomPhase.COMBAT && !AbstractDungeon.isScreenUp) {
                 // Play command is not available if none of the cards are playable.
@@ -155,10 +161,12 @@ public class CommandExecutor {
     }
 
     public static boolean isEndCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("end")) return false;
         return isInDungeon() && AbstractDungeon.getCurrRoom().phase == AbstractRoom.RoomPhase.COMBAT && !AbstractDungeon.isScreenUp;
     }
 
     public static boolean isChooseCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("choose")) return false;
         if (!communicationmod.observation.DialogueObservation.allowsEventCommand("choose")) return false;
         if(isInDungeon()) {
             return !isPlayCommandAvailable() && !ChoiceScreenUtils.getCurrentChoiceList().isEmpty();
@@ -168,6 +176,7 @@ public class CommandExecutor {
     }
 
     public static boolean isPotionCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("potion")) return false;
         if(isInDungeon()) {
             for(AbstractPotion potion : AbstractDungeon.player.potions) {
                 if(!(potion instanceof PotionSlot)) {
@@ -179,6 +188,7 @@ public class CommandExecutor {
     }
 
     public static boolean isConfirmCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("confirm")) return false;
         if (!communicationmod.observation.DialogueObservation.allowsEventCommand("confirm")) return false;
         if(isInDungeon()) {
             return ChoiceScreenUtils.isConfirmButtonAvailable();
@@ -188,6 +198,7 @@ public class CommandExecutor {
     }
 
     public static boolean isCancelCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("cancel")) return false;
         if (!communicationmod.observation.DialogueObservation.allowsEventCommand("cancel")) return false;
         if(isInDungeon()) {
             return ChoiceScreenUtils.isCancelButtonAvailable();

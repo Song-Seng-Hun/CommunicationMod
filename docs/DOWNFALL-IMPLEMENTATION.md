@@ -168,3 +168,13 @@ action and headless Korean reference exchange are present; event choice and raw-
 guards are wired in source. No strategy AI is implemented. Live v2 dispatch, actual
 UI verification and special event selectors/minigames remain incomplete. Existing
 global automation/launch/online holds are unchanged; no game deployment is claimed.
+
+## Whole-hand decision milestone
+
+`COMBAT-READINESS.md` records the common full-hand gate: two matching completed
+frames, actual pending-work/turn/visibility checks, versioned UUID-based actions,
+live revalidation and consumption before mutation. Unstable ordinary hands are
+withheld; forced standard selectors have a separate decision mode. Hermit position
+indication uses the read-only UI predicate, only for stable hand rows. Unversioned
+combat mutations are denied instead of bypassing the snapshot token. Global safety
+holds remain active, and the live v2 bridge and actual gameplay are still unverified.
