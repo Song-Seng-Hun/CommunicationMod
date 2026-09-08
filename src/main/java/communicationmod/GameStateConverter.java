@@ -180,7 +180,7 @@ public class GameStateConverter {
      * @param text The text for which the formatting should be removed
      * @return The input text, with the formatting characters removed
      */
-    private static String removeTextFormatting(String text) {
+    public static String removeTextFormatting(String text) {
         text = text.replaceAll("~|@(\\S+)~|@", "$1");
         return text.replaceAll("#.|NL", "");
     }
@@ -243,6 +243,7 @@ public class GameStateConverter {
             state.put("event_id", ReflectionHacks.getPrivateStatic(event.getClass(), "ID"));
         }
         state.put("options", options);
+        state.put("event_reading", DialogueObservation.eventReading());
         return state;
     }
 

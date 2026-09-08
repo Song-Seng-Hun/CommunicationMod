@@ -89,6 +89,11 @@ public class CommandExecutor {
 
     public static ArrayList<String> getAvailableCommands() {
         ArrayList<String> availableCommands = new ArrayList<>();
+        if (communicationmod.observation.DialogueObservation.inEventContext()) {
+            if (isChooseCommandAvailable()) availableCommands.add("choose");
+            availableCommands.add("state"); availableCommands.add("wait");
+            return availableCommands;
+        }
         if (isPlayCommandAvailable()) {
             availableCommands.add("play");
         }
@@ -120,6 +125,7 @@ public class CommandExecutor {
     }
 
     public static boolean isCommandAvailable(String command) {
+        if (!communicationmod.observation.DialogueObservation.allowsEventCommand(command)) return false;
         if(command.equals("confirm") || command.equalsIgnoreCase("proceed")) {
             return isConfirmCommandAvailable();
         } else if (command.equals("skip") || command.equals("cancel") || command.equals("return") || command.equals("leave")) {
@@ -153,6 +159,7 @@ public class CommandExecutor {
     }
 
     public static boolean isChooseCommandAvailable() {
+        if (!communicationmod.observation.DialogueObservation.allowsEventCommand("choose")) return false;
         if(isInDungeon()) {
             return !isPlayCommandAvailable() && !ChoiceScreenUtils.getCurrentChoiceList().isEmpty();
         } else {
@@ -172,6 +179,7 @@ public class CommandExecutor {
     }
 
     public static boolean isConfirmCommandAvailable() {
+        if (!communicationmod.observation.DialogueObservation.allowsEventCommand("confirm")) return false;
         if(isInDungeon()) {
             return ChoiceScreenUtils.isConfirmButtonAvailable();
         } else {
@@ -180,6 +188,7 @@ public class CommandExecutor {
     }
 
     public static boolean isCancelCommandAvailable() {
+        if (!communicationmod.observation.DialogueObservation.allowsEventCommand("cancel")) return false;
         if(isInDungeon()) {
             return ChoiceScreenUtils.isCancelButtonAvailable();
         } else {

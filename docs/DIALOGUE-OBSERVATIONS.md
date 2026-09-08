@@ -37,7 +37,9 @@ option converter; this milestone is not a complete audit of all legacy state fie
 `text` is the longest rendered snapshot so far for that utterance, preserving words
 when the tail of a bubble fades. `visible_text` is the latest visible snapshot, or
 empty after disappearance. This is not a reconstruction of words that never drew.
-No field promises that the full sentence has finished revealing. Normal rerenders
+The journal does not promise that the full sentence has finished revealing.
+Ordinary event pages now additionally expose the completion/discussion gate in
+[`EVENT-READING.md`](EVENT-READING.md). Normal rerenders
 update the same ID; another bubble saying the identical sentence receives a new ID.
 Event body updates receive new observation identities without inspecting new text.
 
@@ -90,8 +92,9 @@ History retains at most 64 utterances of 8,192 characters each. A frame accepts 
 can evict metadata, reported explicitly. Capture budgets can omit text; clients must
 check truncation/unsupported reasons. Internal getter/render execution time is not
 controlled by these limits. Dialogue-originated state notification is capped at one
-per 250 ms, with changes retained between notifications; it never executes an action
-or changes action readiness. History is local in-memory data, not written to saves.
+per 250 ms, with changes retained between notifications; it never executes an action.
+The separate event-reading gate now notifies readiness boundaries and restricts
+event choices. History is local in-memory data, not written to saves.
 
 `devtools/verify-dialogue-observation.ps1` runs:
 

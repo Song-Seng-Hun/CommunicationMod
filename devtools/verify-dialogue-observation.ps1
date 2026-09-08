@@ -4,7 +4,9 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $out = Join-Path ([IO.Path]::GetTempPath()) ('dialogue-observation-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $out | Out-Null
-$sources = @("$PSScriptRoot\DialogueHistoryTest.java", "$PSScriptRoot\RenderedWordsTest.java")
+$sources = @("$PSScriptRoot\DialogueHistoryTest.java", "$PSScriptRoot\RenderedWordsTest.java", "$PSScriptRoot\EventReadingTest.java")
+$reading = "$root\src\main\java\communicationmod\observation\EventReading.java"
+if (Test-Path -LiteralPath $reading) { $sources += $reading }
 $pure = "$root\src\main\java\communicationmod\observation\DialogueHistory.java"
 if (Test-Path -LiteralPath $pure) { $sources += $pure }
 $words = "$root\src\main\java\communicationmod\observation\RenderedWords.java"
@@ -17,6 +19,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Dialogue pure compilation failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Dialogue history tests failed' }
 & "$DownfallPath\jre\bin\java.exe" '-Xmx128m' '-Dfile.encoding=UTF-8' -cp $out RenderedWordsTest
 if ($LASTEXITCODE -ne 0) { throw 'Rendered word tests failed' }
+& "$DownfallPath\jre\bin\java.exe" '-Xmx128m' '-Dfile.encoding=UTF-8' -cp $out EventReadingTest
+if ($LASTEXITCODE -ne 0) { throw 'Event reading tests failed' }
 if ($PureOnly) { return }
 $game = "$DownfallPath\desktop-1.0-modded.jar"
 $base = "$DownfallPath\package\BaseMod-modded.jar"

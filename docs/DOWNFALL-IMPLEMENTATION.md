@@ -158,3 +158,13 @@ known paths. Event body output no longer reads the pre-reveal update cache. Know
 overlays/fades suppress new capture; custom occlusion remains explicitly unverified.
 History and notification rates are bounded. Existing action/online launch gates are
 unchanged. The milestones above remain partial until actual offline UI acceptance.
+
+## Event reading/discussion milestone
+
+`EVENT-READING.md` adds the full-read -> client commentary -> choice -> result-read
+contract. Ordinary dialog completion uses rendered word counts as well as textDone;
+unread/hidden/truncated pages cannot be acknowledged or chosen. A v2 acknowledgement
+action and headless Korean reference exchange are present; event choice and raw-input
+guards are wired in source. No strategy AI is implemented. Live v2 dispatch, actual
+UI verification and special event selectors/minigames remain incomplete. Existing
+global automation/launch/online holds are unchanged; no game deployment is claimed.

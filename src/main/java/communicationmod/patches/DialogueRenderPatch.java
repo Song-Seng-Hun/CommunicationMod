@@ -17,7 +17,8 @@ public final class DialogueRenderPatch {
     }
     private static void render(CtBehavior method, String channel) throws CannotCompileException {
         method.insertBefore(safe("enterRender($0,\"" + channel + "\")"));
-        method.insertAfter(safe("finishRender()"));
+        method.insertAfter(safe("event_dialog".equals(channel)
+            ? "finishEventRender(show,textDone,words.size())" : "finishRender()"));
         method.insertAfter(safe("leaveRender()"), true);
     }
     private static void word(CtBehavior method) throws CannotCompileException {

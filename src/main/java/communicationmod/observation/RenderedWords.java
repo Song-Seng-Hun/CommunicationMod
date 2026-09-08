@@ -26,4 +26,7 @@ public final class RenderedWords {
     }
     public String text() { return text.toString(); }
     public boolean truncated() { return truncated; }
+    public boolean isComplete(boolean textDone, int expectedWords) {
+        return textDone && expectedWords > 0 && seen.size() == expectedWords && !truncated && text.length() > 0;
+    }
 }

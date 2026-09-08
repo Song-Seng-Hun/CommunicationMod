@@ -798,6 +798,7 @@ public class ChoiceScreenUtils {
     }
 
     public static void makeEventChoice(int choice) {
+        communicationmod.observation.DialogueObservation.claimEventChoice(choice);
         ArrayList<LargeDialogOptionButton> activeButtons = getActiveEventButtons();
         if (activeButtons.size() > 0) {
             activeButtons.get(choice).pressed = true;

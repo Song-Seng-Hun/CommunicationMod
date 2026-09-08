@@ -42,7 +42,26 @@ public final class DialogueBindingTest {
             });
         }
         checkRenderOrdering();
+        requireCall(pool.get("communicationmod.GameStateConverter").getDeclaredMethod("getEventState"), "eventReading");
+        requireCall(pool.get("communicationmod.ChoiceScreenUtils").getDeclaredMethod("makeEventChoice"), "claimEventChoice");
+        requireCall(pool.get("communicationmod.CommandExecutor").getDeclaredMethod("isCommandAvailable"), "allowsEventCommand");
+        final boolean[] dungeonGuard = {false};
+        pool.get("communicationmod.observation.DialogueObservation").getDeclaredMethod("inEventContext").instrument(new javassist.expr.ExprEditor() {
+            @Override public void edit(javassist.expr.MethodCall call) {
+                if (call.getClassName().equals("communicationmod.CommandExecutor") && call.getMethodName().equals("isInDungeon")) dungeonGuard[0]=true;
+            }
+        });
+        if (!dungeonGuard[0]) throw new AssertionError("Stale event map node could lock main-menu commands");
         System.out.println("PASS: actual frame/origin/render/word/body methods accept dialogue hooks; no game execution");
+    }
+    private static void requireCall(CtBehavior method, String name) throws Exception {
+        final boolean[] seen = {false};
+        method.instrument(new javassist.expr.ExprEditor() {
+            @Override public void edit(javassist.expr.MethodCall call) {
+                if (call.getClassName().equals("communicationmod.observation.DialogueObservation") && call.getMethodName().equals(name)) seen[0]=true;
+            }
+        });
+        if (!seen[0]) throw new AssertionError("Missing event reading binding: "+method.getLongName()+" -> "+name);
     }
     private static void patch(ClassPool pool, String hook, String owner, String method) throws Exception {
         apply(hook, pool.get(owner).getDeclaredMethod(method));
@@ -53,6 +72,7 @@ public final class DialogueBindingTest {
         catch (ClassNotFoundException missing) { throw new AssertionError("Dialogue render hook missing: " + name, missing); }
         Method raw = hook.getMethod("Raw", CtBehavior.class);
         raw.invoke(null, method);
+        if (name.equals("GenericRender") || name.equals("RoomRender")) requireCall(method,"finishEventRender");
         if (method.getMethodInfo().getCodeAttribute() == null) throw new AssertionError("Missing executable hook");
         final boolean[] contained = {false};
         method.instrument(new javassist.expr.ExprEditor() {
