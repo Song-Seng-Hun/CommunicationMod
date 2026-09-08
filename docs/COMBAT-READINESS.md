@@ -1,5 +1,10 @@
 # Combat decision readiness
 
+Update: `LOCAL-OBSERVER-TEST.md` now provides a non-VM human-play observation profile.
+The original launch/action holds mentioned below apply to legacy entry points;
+the new passive transport is wired for testing. Actual gameplay acceptance and
+v2 mutation dispatch remain unfinished.
+
 ## Approved design / implementation plan
 
 The user approved waiting for the entire hand, rechecking at dispatch, and reporting

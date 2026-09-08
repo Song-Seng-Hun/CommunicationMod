@@ -1,18 +1,19 @@
 # CommunicationMod
 Slay the Spire mod that provides a protocol for allowing another process to control the game
 
-## Fork development status: automation temporarily disabled
+## Fork development status: local observation tests available
 
-Account-record submission permission has been revoked. This branch now refuses
-game/Steam development launches (including `-SmokeTest`) and agent commands until
-native Steam submission blocking and save/cloud isolation are verified. There is
-no override flag. This is a fail-closed hold, **not** a working offline sandbox.
-Manual Steam gameplay and already-running/older copied artifacts are not changed.
+Use `devtools/prepare-local-test.ps1`, then `Start-Downfall-Test.cmd` for a separate
+human-play Downfall observation copy. No VM is required. The passive v2 client records
+localized text, dialogue and full-hand readiness; it does not play cards or select
+events. The copied test profile disables audited Steam recording/metrics paths and
+uses separate local storage. It does not change Steam Play or installed game files.
+See [local test instructions](docs/LOCAL-OBSERVER-TEST.md).
 
 See [implementation and acceptance ledger](docs/DOWNFALL-IMPLEMENTATION.md) and
-[v2 protocol core](docs/PROTOCOL-V2.md). The v2 core is currently headless-tested,
-not connected to gameplay. Setup and v1 protocol instructions below are retained
-as historical reference, not instructions to bypass the safety hold.
+[v2 protocol core](docs/PROTOCOL-V2.md). Live action dispatch and actual gameplay
+acceptance remain unfinished. Old development launchers and legacy agent commands
+remain blocked; setup/v1 instructions below are historical reference.
 
 Offline preparation now blocks the audited Steam and LibGDX upload surfaces in
 new, nonlaunchable local JAR copies. Run `devtools/verify-offline-bytecode.ps1`

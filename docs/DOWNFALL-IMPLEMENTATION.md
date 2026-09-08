@@ -7,13 +7,13 @@
   normal/custom/daily/endless modes and resume. Unrelated mods/future versions are excluded.
 - New JSON-lines protocol v2, not legacy compatibility; include player-visible
   descriptions/numbers/state/actions. Never expose hidden draw order or arbitrary internal fields.
-- **Online recording permission was revoked.** No agent/test achievement, statistic,
-  leaderboard submission or account-connected automatic play before isolation is verified.
-  Daily challenges are local functionality tests only, not online submission tests.
-- Test saves must be separate from real saves and cloud synchronization. Merely
-  changing LOCALAPPDATA, a game profile, or a JVM offline flag is not proof.
-- Steam Play integration is conditional on this safety gate. No replacement of
-  original executables/JARs, forced Steam shutdown, global Java downgrade, or bypass switch.
+- **Revised local test policy (2026-09-08):** no VM requirement or blanket OS/native
+  isolation prerequisite. Use a separate local test copy, keep manipulated test
+  records out of online submissions, and address concrete risks in scope.
+- The first human-play observer profile disables audited Steam integration/metrics
+  recording in its copied JARs. This is not an OS security sandbox for arbitrary mods.
+- No replacement of original executables/JARs, forced Steam shutdown, or global Java
+  downgrade. Steam Play integration remains separate future work.
 - Do not upload game/dependency JARs, saves, logs or personal configuration.
 
 ## Current milestone
@@ -22,24 +22,21 @@
 | --- | --- | --- |
 | Launch safety hold | Legacy PowerShell and Java launchers refuse before game loading; subprocess/command entry held off | Headless guard checks; this is a hold, NOT an offline sandbox |
 | Runtime inventory | ZIP-only hashes, root metadata, sorted package-name candidates | Fixture tests; candidates are NOT actual registered/verified content |
-| Protocol v2 core | Version/session/state/action IDs, validation, replay rejection, invalidation, local-only failures | Headless unit and fixture pipe tests; not connected to gameplay |
+| Protocol v2 core | Version/session/state/action IDs, validation, replay rejection, invalidation, local-only failures; passive observer bridge | Unit and real child-process tests; game observation hooks installed in test copy; live mutation dispatch and gameplay acceptance unfinished |
 | Transport | UTF-8, LF/CRLF, 1 MiB input bound, EOF termination, invalid-input/output failure shutdown | Real reader/writer thread tests; legacy command dispatch remains held off |
 | Existing fixes | Hidden draw order policy and null keyword tooltip guard retained | Existing focused headless regressions; gameplay not verified |
 | Public descriptions | Cached card text, dynamic variable values, localized keyword/standard extra hover tooltips, language marker, relic/potion/power text and player stance | Pure text/tooltip/privacy tests and installed-bytecode binding checks; character-break/CN cache, StSLib render-only tooltip extensions and displayed cost explicitly incomplete; custom rendering/getter purity and gameplay unverified |
 | Dialogue/situation | Rendered speech/event words, known-origin speaker labels, bounded recent history and public situation; final-frame publication and known overlay filtering | JDK tests and actual-method insertion plus generated render-order fixture; custom renderers, pixel occlusion, actual patch loading/gameplay unverified |
 | Downfall map coordinates | Optional adapter calls Downfall's actual first-node and boss UI helpers; graph connections remain the game's own normal/Flight/boot checks | Pure graph and installed-bytecode binding checks; real reverse-map/boss/act/endless play not yet verified |
 | Offline bytecode preparation | Pinned four JAR hashes; new nonlaunchable copies; Steam/native entrypoints and LibGDX HTTP/socket/browser boundaries disabled; active metrics senders disabled | Java 8 transformation and artifact checks; original packaged bootstrap preserved byte-for-byte; NOT full native/OS/save/cloud isolation |
-| Native Steam/cloud isolation | Storage/direct-upload bytecode audit completed; runtime isolation not verified | Still blocks game/agent launch and Steam Play integration |
+| Local observer profile | Separate hash-checked copy, passive v2 transport, human controls, test submission paths disabled | No VM required; initialization and process round trip checked, actual gameplay unverified |
 | Base/workshop environments | Missing in the examined Steam library | Need legitimate installed game and normal MTS/BaseMod/StSLib/Downfall artifacts |
 
 ## Remaining ordered work
 
-1. Use the static findings in `OFFLINE-STORAGE-AUDIT.md` and prepared offline artifacts
-   to implement and verify the remaining process-wide network/native-library boundary,
-   separate writable storage/configuration, and actual cloud exclusion.
-   Implement a separate verified offline runtime with game and library hashes bound
-   to verification. Keep the unconditional launch/automation hold until it passes.
-   Never interpret an environment property or a user-editable "verified" JSON as proof.
+1. Validate human gameplay and observations with `LOCAL-OBSERVER-TEST.md`. The earlier
+   VM/process-wide isolation prerequisite was withdrawn by the user. Keep test records
+   separate and verify the relevant copied submission paths; do not claim OS isolation.
 2. Remove duplicate core patching of standalone; preserve its packaged metadata and
    original initializer behavior. Normal game/workshop use normal ModTheSpire.
 3. Connect bounded v2 transport and game-thread snapshot/action adapters; retire
@@ -168,6 +165,24 @@ action and headless Korean reference exchange are present; event choice and raw-
 guards are wired in source. No strategy AI is implemented. Live v2 dispatch, actual
 UI verification and special event selectors/minigames remain incomplete. Existing
 global automation/launch/online holds are unchanged; no game deployment is claimed.
+
+## Local observer preparation (2026-09-08)
+
+`LOCAL-OBSERVER-TEST.md` and `Start-Downfall-Test.cmd` define the new human-play
+observation profile. Historical global-hold notes below refer to old entry points,
+not a requirement for a VM. The new copy preserves the packaged initialization path,
+installs only observer hooks, disables audited Steam integration/metrics recording,
+and does not alter Steam Play, original JARs or original saves.
+
+Validated: 14 passive v2 protocol/privacy assertions, a real child-process UTF-8
+exchange using the packaged client, copied-bytecode hook ordering/submission checks,
+launch manifest checks, full foundation regression and packaged initialization
+without a game window. First clean initialization logged missing BaseMod console
+history but completed successfully. Evidence: local `target/local-observer-*.log`.
+
+Not validated: a real game window and captured gameplay, UI/JSON comparisons, all
+special screens, base/workshop variants. This is passive transport preparation,
+not live v2 action dispatch or completed Downfall support.
 
 ## Whole-hand decision milestone
 
