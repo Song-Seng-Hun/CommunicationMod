@@ -21,14 +21,19 @@ try {
     $cp = "$root\target\classes;$game;$base;$gson"
     & javac '-J-Xmx256m' --release 8 -encoding UTF-8 -cp $cp -d $tools `
         "$PSScriptRoot\OfflineBytecode.java" "$PSScriptRoot\BuildLocalObserver.java" "$PSScriptRoot\LocalObserverLaunch.java" `
-        "$PSScriptRoot\ObserverSessionTest.java" "$PSScriptRoot\ObserverClientTest.java" "$PSScriptRoot\LocalObserverBuildTest.java" "$PSScriptRoot\LocalObserverLaunchTest.java" "$PSScriptRoot\SteamUtilsStartupTest.java"
+        "$PSScriptRoot\ObserverSessionTest.java" "$PSScriptRoot\ObserverClientTest.java" "$PSScriptRoot\LocalObserverBuildTest.java" "$PSScriptRoot\LocalObserverLaunchTest.java" "$PSScriptRoot\SteamUtilsStartupTest.java" `
+        "$PSScriptRoot\MenuControlSessionTest.java" "$PSScriptRoot\MenuUiBindingTest.java" "$PSScriptRoot\MenuInboxTest.java"
     if ($LASTEXITCODE -ne 0) { throw 'Local observer tools compilation failed' }
-    foreach ($test in @('ObserverSessionTest','LocalObserverLaunchTest')) {
+    foreach ($test in @('ObserverSessionTest','LocalObserverLaunchTest','MenuControlSessionTest')) {
         & $java8 '-Xmx128m' -cp "$tools;$cp" $test
         if ($LASTEXITCODE -ne 0) { throw "$test failed" }
     }
     & $java8 '-Xmx128m' -cp "$tools;$cp" ObserverClientTest $mod
     if ($LASTEXITCODE -ne 0) { throw 'Packaged client round trip failed' }
+    & $java8 '-Xmx128m' -cp "$tools;$cp" MenuInboxTest $mod
+    if ($LASTEXITCODE -ne 0) { throw 'Menu client round trip failed' }
+    & $java8 '-Xmx128m' -cp "$tools;$cp" MenuUiBindingTest $game "$root\target\classes"
+    if ($LASTEXITCODE -ne 0) { throw 'Menu UI binding checks failed' }
     & $java8 '-Xmx384m' -cp "$tools;$cp" LocalObserverBuildTest $DownfallPath $prepared $mod
     if ($LASTEXITCODE -ne 0) { throw 'Prepared runtime bytecode checks failed' }
     & $java8 '-Xmx128m' -cp "$tools;$cp" SteamUtilsStartupTest "$prepared\desktop-1.0-modded.jar"

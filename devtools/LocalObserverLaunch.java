@@ -7,16 +7,17 @@ import java.util.*;
 public final class LocalObserverLaunch {
     private static final String[] FILES={"desktop-1.0-modded.jar","package/BaseMod-modded.jar","package/StSLib-modded.jar","package/EvilWithin-modded.jar","CommunicationMod.jar"};
     public static void main(String[] args)throws Exception {
-        if(args.length>1 || (args.length==1 && !args[0].equals("--check") && !args[0].equals("--smoke")))throw new IllegalArgumentException("Only --check or --smoke supported");
+        if(args.length>1 || (args.length==1 && !args[0].equals("--check") && !args[0].equals("--smoke") && !args[0].equals("--menu-control")))throw new IllegalArgumentException("Only --check, --smoke or --menu-control supported");
         Path root=Paths.get("").toRealPath();
         Properties report=verify(root);
         if(args.length==1 && args[0].equals("--check")){System.out.println("PASS: prepared and installed JAR hashes match the test manifest");return;}
         if(!System.getProperty("java.specification.version").equals("1.8"))throw new IOException("Use the bundled Java 8 for this profile");
-        boolean smoke=args.length==1;
+        boolean smoke=args.length==1 && args[0].equals("--smoke");
         Path records=root.resolve("recordings").resolve(UUID.randomUUID().toString());
         if(!smoke)Files.createDirectories(records);
         System.setProperty("communicationmod.smoke",Boolean.toString(smoke));
         System.setProperty("communicationmod.observer",Boolean.toString(!smoke));
+        System.setProperty("communicationmod.menu_control",Boolean.toString(args.length==1 && args[0].equals("--menu-control")));
         System.setProperty("communicationmod.client.jar",root.resolve("CommunicationMod.jar").toString());
         System.setProperty("communicationmod.recording",records.toString());
         System.setProperty("communicationmod.build",report.getProperty("output.CommunicationMod.jar"));

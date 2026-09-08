@@ -2,6 +2,7 @@ package communicationmod.observation;
 
 import communicationmod.*;
 import communicationmod.protocol.ObserverSession;
+import communicationmod.protocol.MenuControlSession;
 import com.google.gson.*;
 import com.megacrit.cardcrawl.core.Settings;
 import java.io.File;
@@ -16,6 +17,8 @@ public final class LocalObserver {
     private static boolean attempted,closed,reported;
     private static long nextCapture,helloDeadline;
     private static String previous;
+    private static MenuControlSession menuSession;
+    private static long nextMenuHeartbeat;
 
     public static void tick() {
         if(closed || !Boolean.getBoolean("communicationmod.observer"))return;
@@ -24,6 +27,7 @@ public final class LocalObserver {
             if(client==null || !client.isAlive() || !reader.isAlive() || !writer.isAlive()) {
                 close();return;
             }
+            if(Boolean.getBoolean("communicationmod.menu_control")){tickMenu();return;}
             for(int i=0;i<4;i++) {
                 String line=INPUT.poll();if(line==null)break;
                 send(SESSION.receive(line));
@@ -55,6 +59,23 @@ public final class LocalObserver {
         } catch(RuntimeException | LinkageError failure) {report(failure);close();}
     }
 
+    private static void tickMenu() {
+        if(menuSession==null){MenuUi ui=new MenuUi();menuSession=new MenuControlSession(ui::capture,ui::actions);}
+        JsonObject runtime=new JsonObject();
+        runtime.addProperty("environment","downfall_standalone");runtime.addProperty("profile","local_menu_control");
+        runtime.addProperty("language",Settings.language.name());runtime.addProperty("build",System.getProperty("communicationmod.build","unknown"));
+        runtime.addProperty("control","menu_only");runtime.addProperty("test_submissions","disabled_in_test_copy");
+        String state=menuSession.update(runtime);
+        long now=System.nanoTime();
+        if(state!=null){send(state);nextMenuHeartbeat=now+1_000_000_000L;}
+        else if(menuSession.connected() && now>=nextMenuHeartbeat) {
+            // Same state ID: permit deliberate decisions and retry a temporarily locked snapshot cache.
+            send(menuSession.receive("{\"type\":\"get_state\"}"));nextMenuHeartbeat=now+1_000_000_000L;
+        }
+        String line=INPUT.poll();if(line!=null)send(menuSession.receive(line));
+        if(!menuSession.connected() && now>helloDeadline)throw new IllegalStateException("Menu v2 handshake timed out");
+    }
+
     private static void start() {
         attempted=true;
         String jar=System.getProperty("communicationmod.client.jar"), logs=System.getProperty("communicationmod.recording");
@@ -64,6 +85,7 @@ public final class LocalObserver {
             if(!directory.isDirectory())throw new IllegalStateException("Recording directory missing");
             ProcessBuilder builder=new ProcessBuilder(new File(System.getProperty("java.home"),"bin/java.exe").toString(),
                 "-Xmx64m","-Dfile.encoding=UTF-8","-cp",jar,"communicationmod.devclient.ObservationClient",logs);
+            if(Boolean.getBoolean("communicationmod.menu_control"))builder.command().add("--menu-control");
             builder.redirectError(ProcessBuilder.Redirect.appendTo(new File(directory,"client-errors.log")));
             client=builder.start();
             reader=new Thread(new DataReader(INPUT,client.getInputStream(),false),"comm-observer-reader");
@@ -71,7 +93,7 @@ public final class LocalObserver {
             reader.setDaemon(true);writer.setDaemon(true);reader.start();writer.start();
             helloDeadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(15);
             Runtime.getRuntime().addShutdownHook(new Thread(LocalObserver::close,"comm-observer-shutdown"));
-            System.out.println("[COMM-OBSERVER] Passive v2 client started; controls remain with the player. Records: "+logs);
+            System.out.println("[COMM-OBSERVER] "+(Boolean.getBoolean("communicationmod.menu_control")?"Menu-only":"Passive")+" v2 client started. Records: "+logs);
         }catch(java.io.IOException e){throw new IllegalStateException("Unable to start passive client",e);}
     }
     private static void send(String line) {

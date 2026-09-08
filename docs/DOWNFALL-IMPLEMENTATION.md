@@ -225,7 +225,45 @@ remained alive; the game window responded. This verifies real menu observation
 transport (`ENG`, `in_game=false`, `observation_only`), not combat readiness,
 localized gameplay/UI correspondence or full Downfall compatibility.
 
-## Whole-hand decision milestone
+## Menu control live milestone (2026-09-08)
+
+`LOCAL-MENU-CONTROL.md` documents the explicit opt-in `-MenuControl` path. Default
+launch remains passive. The menu session uses the existing v2 core, two completed
+stable frames, same-state heartbeats, pre-dispatch manual-change validation, and
+consumption before invoking the original UI handlers. Allowlisted menu fields are
+read individually; unavailable characters do not expose their hidden identities.
+No legacy executor, Embark, resume, abandon, daily/custom or combat action is enabled.
+
+Full preparation passed (`target/menu-control-final-verification.log`), including
+pure session guards/failed-action consumption, real subprocess request/reply tests,
+installed menu method/field bindings, original UI post-click hiding, existing passive
+recording/locked-cache regressions and copied runtime submission/hash checks. The
+initial full build exposed the game's older bundled Gson lacking JsonObject.size();
+argument checking uses the compatible entrySet().isEmpty() API. Local review found
+and regression-tested MenuButton's post-effect hideMenuButtons call before deployment.
+
+Actual runtime: `local-test-20260908-150305-0e1881fe`, language `KOR`. All 36 prior
+test preference files were hash-verified unchanged after copying, including the gpt
+profile and language setting. No previous test JVM remained when preparing the launch.
+The four explicit live actions and resulting stable states were:
+
+| From | Action | Verified next state |
+| --- | --- | --- |
+| MAIN_MENU, 4 | menu.play (게임 시작) | PANEL_MENU/PLAY, 10 |
+| PANEL_MENU/PLAY, 10 | menu.panel.PLAY_NORMAL (일반) | PANEL_MENU/EVIL, 16; 일반/몰락 labels and descriptions |
+| PANEL_MENU/EVIL, 16 | menu.panel.PLAY_NORMAL (일반) | CHAR_SELECT, 20; unlocked Hermit offered |
+| CHAR_SELECT, 20 | menu.character.HERMIT (허밋) | CHAR_SELECT, 24; Hermit selected=true |
+
+Every action returned `status=applied`; completion was verified from the next stable
+state, not just that acknowledgement. The run was not started (`in_game=false`).
+The Downfall/몰락 choice was observed and offered, but that alternative branch was
+not executed in this check. Menus in base/workshop variants, other character choices,
+arbitrary overlays, Embark and actual combat remain unverified or unimplemented.
+This is a verified standalone Hermit menu path, not whole-game automation or full
+Downfall support. Game/transport evidence is in the local launch log and the session's
+`observations.jsonl`; game JARs, personal settings and logs are not committed.
+
+## Whole-hand decision milestone (implementation boundary)
 
 `COMBAT-READINESS.md` records the common full-hand gate: two matching completed
 frames, actual pending-work/turn/visibility checks, versioned UUID-based actions,

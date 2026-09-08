@@ -8,7 +8,7 @@ import java.nio.file.*;
 /** Passive recording client. stdout is exclusively protocol JSONL, stderr is diagnostic. */
 public final class ObservationClient {
     public static void main(String[] args) throws Exception {
-        if (args.length != 1) throw new IllegalArgumentException("New recording directory required");
+        if (args.length<1 || args.length>2 || (args.length==2 && !args[1].equals("--menu-control"))) throw new IllegalArgumentException("New recording directory and optional --menu-control required");
         Path output=Paths.get(args[0]).toAbsolutePath();
         Files.createDirectories(output);
         SnapshotCache cache=new SnapshotCache(output);
@@ -16,6 +16,8 @@ public final class ObservationClient {
              OutputStream transcript=Files.newOutputStream(output.resolve("observations.jsonl"),StandardOpenOption.CREATE_NEW)) {
             System.out.println("{\"type\":\"hello\",\"protocol_version\":2}");
             System.out.flush();
+            MenuRequestInbox inbox=args.length==2?new MenuRequestInbox(output):null;
+            try {
             long bytes=0;
             String line;
             while((line=input.readLine())!=null) {
@@ -25,10 +27,12 @@ public final class ObservationClient {
                 bytes+=record.length;
                 if(bytes>64L*1024*1024)throw new IOException("Recording limit reached (64 MiB); human play is unaffected");
                 transcript.write(record);transcript.flush();
+                if(inbox!=null)inbox.reply(message);
                 if("state".equals(message.get("type").getAsString())) {
                     cache.publish(record);
                 }
             }
+            } finally {if(inbox!=null)inbox.close();}
         }
     }
 
