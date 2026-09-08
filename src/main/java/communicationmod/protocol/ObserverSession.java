@@ -23,13 +23,17 @@ public final class ObserverSession {
     public boolean connected() { return connected; }
 
     public String publish(JsonObject runtime, JsonObject legacyObservation) {
+        return protocol.publish(runtime, publicObservation(legacyObservation), Collections.emptyList(), false, "observation_only");
+    }
+
+    public static JsonObject publicObservation(JsonObject legacyObservation) {
         JsonObject view = new JsonParser().parse(legacyObservation.toString()).getAsJsonObject();
         view.remove("available_commands");
         view.remove("ready_for_command");
         // The old converter also includes internal debugging identifiers. They are
         // not UI information and must not reach the observation client.
         removeInternalFields(view);
-        return protocol.publish(runtime, view, Collections.emptyList(), false, "observation_only");
+        return view;
     }
 
     private static void removeInternalFields(JsonElement value) {

@@ -8,7 +8,7 @@ import java.nio.file.*;
 /** Passive recording client. stdout is exclusively protocol JSONL, stderr is diagnostic. */
 public final class ObservationClient {
     public static void main(String[] args) throws Exception {
-        if (args.length<1 || args.length>2 || (args.length==2 && !args[1].equals("--menu-control"))) throw new IllegalArgumentException("New recording directory and optional --menu-control required");
+        if (args.length<1 || args.length>2 || (args.length==2 && !args[1].equals("--menu-control") && !args[1].equals("--play-control"))) throw new IllegalArgumentException("New recording directory and optional --menu-control/--play-control required");
         Path output=Paths.get(args[0]).toAbsolutePath();
         Files.createDirectories(output);
         SnapshotCache cache=new SnapshotCache(output);
@@ -16,7 +16,7 @@ public final class ObservationClient {
              OutputStream transcript=Files.newOutputStream(output.resolve("observations.jsonl"),StandardOpenOption.CREATE_NEW)) {
             System.out.println("{\"type\":\"hello\",\"protocol_version\":2}");
             System.out.flush();
-            MenuRequestInbox inbox=args.length==2?new MenuRequestInbox(output):null;
+            MenuRequestInbox inbox=args.length==2?new MenuRequestInbox(output,args[1].equals("--play-control")):null;
             try {
             long bytes=0;
             String line;

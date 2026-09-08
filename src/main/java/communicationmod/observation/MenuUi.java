@@ -13,6 +13,9 @@ public final class MenuUi {
     private JsonObject current;
     private List<ProtocolSession.Action> offered=Collections.emptyList();
     private boolean reported;
+    private final boolean allowEmbark;
+    public MenuUi(){this(false);}
+    public MenuUi(boolean allowEmbark){this.allowEmbark=allowEmbark;}
 
     public JsonObject capture() {
         JsonObject root=new JsonObject(),menu=new JsonObject();root.add("menu",menu);
@@ -65,7 +68,18 @@ public final class MenuUi {
                             if(!option.selected)throw new IllegalStateException("Character UI did not select requested option");
                         });
                     }
-                    menu.addProperty("scope","character_selection_only_no_embark");
+                    menu.addProperty("scope",allowEmbark?"local_test_run_start":"character_selection_only_no_embark");
+                    com.megacrit.cardcrawl.ui.buttons.ConfirmButton confirm=screen.charSelectScreen.confirmButton;
+                    boolean selected=false;for(CharacterOption option:screen.charSelectScreen.options)selected|=option.selected && !option.locked;
+                    if(allowEmbark && selected && !confirm.isDisabled && !(Boolean)field(confirm,confirm.getClass(),"isHidden")) {
+                        stable &= Math.abs(number(confirm,confirm.getClass(),"current_x")-number(confirm,confirm.getClass(),"target_x"))<0.5f;
+                        String label=(String)field(confirm,confirm.getClass(),"buttonText");rows.add(row("run.embark",label,true));
+                        add("run.embark",label,screen,confirm,()->{
+                            if(!Boolean.getBoolean("communicationmod.play_control"))throw new IllegalStateException("Play control not enabled");
+                            confirm.hb.clicked=true;
+                            try{screen.charSelectScreen.updateButtons();}finally{confirm.hb.clicked=false;}
+                        });
+                    }
                     break;
                 default:return blocked(root,"unsupported_menu_screen");
             }
@@ -89,7 +103,8 @@ public final class MenuUi {
             JsonObject fresh=capture();
             if(CardCrawlGame.mainMenuScreen!=owner || !expected.equals(fresh.toString()) || !fresh.getAsJsonObject("menu").get("stable").getAsBoolean())
                 throw new IllegalStateException("Menu changed before execution");
-            boolean present=owner.buttons.contains(target) || owner.panelScreen.panels.contains(target) || owner.charSelectScreen.options.contains(target);
+            boolean present=owner.buttons.contains(target) || owner.panelScreen.panels.contains(target) || owner.charSelectScreen.options.contains(target)
+                || allowEmbark && owner.charSelectScreen.confirmButton==target;
             if(!present)throw new IllegalStateException("Menu option replaced");
             effect.run();
         }));

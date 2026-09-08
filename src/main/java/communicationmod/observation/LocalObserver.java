@@ -60,11 +60,15 @@ public final class LocalObserver {
     }
 
     private static void tickMenu() {
-        if(menuSession==null){MenuUi ui=new MenuUi();menuSession=new MenuControlSession(ui::capture,ui::actions);}
+        boolean play=Boolean.getBoolean("communicationmod.play_control");
+        if(menuSession==null){
+            if(play){RunUi ui=new RunUi();menuSession=new MenuControlSession(ui::capture,ui::actions,true);}
+            else {MenuUi ui=new MenuUi();menuSession=new MenuControlSession(ui::capture,ui::actions);}
+        }
         JsonObject runtime=new JsonObject();
-        runtime.addProperty("environment","downfall_standalone");runtime.addProperty("profile","local_menu_control");
+        runtime.addProperty("environment","downfall_standalone");runtime.addProperty("profile",play?"local_play_control":"local_menu_control");
         runtime.addProperty("language",Settings.language.name());runtime.addProperty("build",System.getProperty("communicationmod.build","unknown"));
-        runtime.addProperty("control","menu_only");runtime.addProperty("test_submissions","disabled_in_test_copy");
+        runtime.addProperty("control",play?"partial_run":"menu_only");runtime.addProperty("test_submissions","disabled_in_test_copy");
         String state=menuSession.update(runtime);
         long now=System.nanoTime();
         if(state!=null){send(state);nextMenuHeartbeat=now+1_000_000_000L;}
@@ -85,7 +89,8 @@ public final class LocalObserver {
             if(!directory.isDirectory())throw new IllegalStateException("Recording directory missing");
             ProcessBuilder builder=new ProcessBuilder(new File(System.getProperty("java.home"),"bin/java.exe").toString(),
                 "-Xmx64m","-Dfile.encoding=UTF-8","-cp",jar,"communicationmod.devclient.ObservationClient",logs);
-            if(Boolean.getBoolean("communicationmod.menu_control"))builder.command().add("--menu-control");
+            if(Boolean.getBoolean("communicationmod.play_control"))builder.command().add("--play-control");
+            else if(Boolean.getBoolean("communicationmod.menu_control"))builder.command().add("--menu-control");
             builder.redirectError(ProcessBuilder.Redirect.appendTo(new File(directory,"client-errors.log")));
             client=builder.start();
             reader=new Thread(new DataReader(INPUT,client.getInputStream(),false),"comm-observer-reader");

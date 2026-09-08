@@ -57,6 +57,12 @@ public final class BuildLocalObserver {
             }
         });
         CtMethod render=game.getDeclaredMethod("render");
+        take(pool,changed,"com.megacrit.cardcrawl.map.MapRoomNode").getDeclaredMethod("update").instrument(new javassist.expr.ExprEditor(){
+            public void edit(javassist.expr.MethodCall call)throws CannotCompileException {
+                if(call.getClassName().equals("com.megacrit.cardcrawl.helpers.Hitbox") && call.getMethodName().equals("update"))
+                    call.replace("{$proceed($$);if(java.lang.Boolean.getBoolean(\"communicationmod.play_control\")){communicationmod.patches.MapRoomNodeHoverPatch.Insert(this);}}");
+            }
+        });
         DialogueRenderPatch.Frame.Raw(render);CombatReadinessPatch.Frame.Raw(render);
         render.insertAfter("{ communicationmod.observation.LocalObserver.tick(); }");
         game.getDeclaredMethod("dispose").insertBefore("{ communicationmod.observation.LocalObserver.close(); }");

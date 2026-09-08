@@ -1,4 +1,4 @@
-param([string]$ActionId, [ValidateRange(1,60)][int]$TimeoutSeconds = 15)
+param([string]$ActionId, [ValidateRange(1,60)][int]$TimeoutSeconds = 15, [string]$Arguments = '{}')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 function Read-SharedJson([string]$Path) {
@@ -14,12 +14,14 @@ $recording = Get-ChildItem -LiteralPath "$runtime\recordings" -Directory | Sort-
 if (-not $recording) { throw 'No recording session; start with -MenuControl first' }
 $snapshotPath = Join-Path $recording.FullName 'latest-state.json'
 $state = Read-SharedJson $snapshotPath
-if ($state.runtime.control -ne 'menu_only') { throw 'This recording is observation-only; restart with -MenuControl' }
+if ($state.runtime.control -notin @('menu_only','partial_run')) { throw 'This recording is observation-only; restart with -MenuControl or -PlayControl' }
 if (-not $ActionId) { $state | ConvertTo-Json -Depth 25; return }
 if ((Get-Item -LiteralPath $snapshotPath).LastWriteTimeUtc -lt [DateTime]::UtcNow.AddSeconds(-10)) { throw 'Recording heartbeat is stale; no action sent' }
 if (-not $state.ready -or -not ($state.actions | Where-Object { $_.id -ceq $ActionId })) { throw 'Action is not offered in the latest stable state' }
 $requestId = [guid]::NewGuid().ToString()
-$request = @{type='act';session_id=$state.session_id;state_id=$state.state_id;request_id=$requestId;action_id=$ActionId;arguments=@{}} | ConvertTo-Json -Compress
+$parameters = $Arguments | ConvertFrom-Json
+if ($null -eq $parameters -or $parameters -isnot [pscustomobject]) { throw 'Arguments must be a JSON object' }
+$request = @{type='act';session_id=$state.session_id;state_id=$state.state_id;request_id=$requestId;action_id=$ActionId;arguments=$parameters} | ConvertTo-Json -Compress -Depth 12
 $pendingPath = Join-Path $recording.FullName 'menu-request.json'
 $tempPath = Join-Path $recording.FullName ("menu-request-$requestId.tmp")
 [IO.File]::WriteAllText($tempPath, $request, [Text.UTF8Encoding]::new($false))

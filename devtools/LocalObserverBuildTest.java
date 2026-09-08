@@ -31,6 +31,8 @@ public final class LocalObserverBuildTest {
         expect(!calls(bridge.getDeclaredMethod("tick")).toString().contains(".waitFor"),"no handshake/process wait on frame thread");
         calls=calls(pool.get("com.megacrit.cardcrawl.actions.common.EnableEndTurnButtonAction").getDeclaredMethod("update"));
         expect(find(calls,"GameStateListener.signalTurnStart")>=0,"real turn start bound");
+        calls=calls(pool.get("com.megacrit.cardcrawl.map.MapRoomNode").getDeclaredMethod("update"));
+        expect(find(calls,"MapRoomNodeHoverPatch.Insert")>=0 && find(calls,"java.lang.Boolean.getBoolean")>=0,"map selection hook explicitly gated to local play control");
         CtClass steam=pool.get("com.megacrit.cardcrawl.integrations.steam.SteamIntegration");
         for(CtBehavior method:steam.getDeclaredBehaviors())expect(!calls(method).toString().contains("steamworks"),"test integration cannot submit Steam records");
         for(String name:new String[]{"Metrics","BotDataUploader"}) {

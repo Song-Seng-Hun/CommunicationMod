@@ -51,6 +51,13 @@ public final class MenuControlSessionTest {
         reply("{\"type\":\"hello\",\"protocol_version\":2}");tick();state=tick();request=request(state,"partial-failure");
         check(reply(request.toString()).get("status").getAsString().equals("failed"),"partial effect failure reported");
         check(reply(request.toString()).get("code").getAsString().equals("DUPLICATE_REQUEST") && calls.get()==2,"failed effect cannot replay");
+        view=menu("COMBAT",true);JsonObject game=new JsonObject(),narrative=new JsonObject();
+        narrative.addProperty("render_frame",1);game.add("narrative",narrative);view.add("game_state",game);
+        session=type.getConstructor(Supplier.class,Supplier.class,boolean.class).newInstance(observe,actions,true);
+        check(reply("{\"type\":\"hello\",\"protocol_version\":2}").get("mode").getAsString().equals("play_control"),"explicit play mode");
+        tick();narrative.addProperty("render_frame",2);
+        check(tick().get("ready").getAsBoolean(),"diagnostic render counters must not prevent a stable decision");
+        narrative.addProperty("render_frame",3);check(tick()==null,"render counter alone retains decision state ID");
         System.out.println("PASS: menu v2 mode, two-frame stability, retained state IDs, localization, stale/manual/overlay/duplicate/argument guards");
     }
     private static JsonObject menu(String screen,boolean stable){JsonObject root=new JsonObject(),menu=new JsonObject();menu.addProperty("screen",screen);menu.addProperty("stable",stable);root.add("menu",menu);return root;}

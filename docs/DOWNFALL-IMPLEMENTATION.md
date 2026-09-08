@@ -265,6 +265,8 @@ Downfall support. Game/transport evidence is in the local launch log and the ses
 
 ## Whole-hand decision milestone (implementation boundary)
 
+The later local-play continuation below supersedes the earlier live-bridge boundary only for its explicitly verified subset.
+
 `COMBAT-READINESS.md` records the common full-hand gate: two matching completed
 frames, actual pending-work/turn/visibility checks, versioned UUID-based actions,
 live revalidation and consumption before mutation. Unstable ordinary hands are
@@ -272,3 +274,77 @@ withheld; forced standard selectors have a separate decision mode. Hermit positi
 indication uses the read-only UI predicate, only for stable hand rows. Unversioned
 combat mutations are denied instead of bypassing the snapshot token. Global safety
 holds remain active, and the live v2 bridge and actual gameplay are still unverified.
+
+## 2026-09-08 — Local play continuation (partial, opt-in)
+
+Added `-PlayControl`/`--play-control`, retaining passive and menu-only behavior and
+the legacy AutomationSafety hold. `RunUi` shares the passive public-information
+filter and offers explicit state-versioned Embark, ordinary event reading/choice,
+map-node selection, settled-hand cards/end turn and allowlisted tutorial pages.
+Unsupported selectors/screens stop; this is not all-content support. See
+`LOCAL-PLAY-CONTROL.md` for the local JSONL adapter and action boundaries.
+
+TDD findings: absent play adapter/Embark binding; absent real subprocess play
+flag; per-frame narrative diagnostic counter preventing stable decisions;
+missing standard and paginated tutorial handlers; Hermit's separately implemented
+two-page tutorial. Each missing binding had a failing check before implementation.
+Only `narrative.render_frame` is omitted from decision equality; text, page,
+cards, resources and all other observed changes still invalidate commands.
+Maven source encoding is explicitly UTF-8. Full preparation retains all existing
+privacy, keyword guard, dialogue/read/discuss, whole-hand, protocol, cache-lock,
+map helper and copied-runtime submission/hash regressions. No workers were used.
+
+Live intermediate checks (local copies, KOR): Embark returned applied and the next
+state entered the map as HERMIT; first map-node input entered MonsterRoom. The
+fresh profile began at the map without Neow, so Neow has not been verified.
+Initial combat was held by FTUE, not a stuck draw command. Standard tutorial pages
+1/2/3 were then observed at states 52/58/64 and advanced with their original input
+handler in `local-test-20260908-153948-405aeae9`. After that, Hermit's own tutorial
+appeared; unsupported handling correctly withheld combat actions. Its two-page
+handler was subsequently added without a compile-time Downfall class dependency.
+Tutorial illustrations remain unavailable, explicitly marked in the observation.
+
+No Steam install/preferences, normal saves, achievements or leaderboard submission
+settings were changed. Settings were copied from the pre-run **test** profile;
+all 36 preference files were hash-verified. Intermediate run saves/logs remain in
+their prior ignored test directories. This is a bytecode-isolated submission
+boundary, not an OS sandbox or a guarantee for unrelated additional mods.
+
+Final live check: `local-test-20260908-154902-28878ef7`, protocol session
+`86291c9c-a0e9-46e6-aee2-0491d3bf89c5`, recording
+`aa0bbce0-d52c-41b0-8778-a6d45790c396`, language KOR. The same compiled artifact
+passed `prepare-local-test.ps1` (`target/play-control-hermit-verification.log`).
+Observed progression and actual consequences:
+
+- Embark -> MAP state 36 -> MonsterRoom; standard tutorial pages 52/58/64,
+  then Hermit tutorial pages 80/86. Only the current page text was offered.
+- State 106: full six-card hand, energy 3, Snapshot at index 2 with dead-on true.
+  Memento use -> state 124, five cards, Snapshot index 1/dead-on false;
+  rightmost Strike -> state 142, four cards, Snapshot index 1/dead-on true,
+  enemy HP 48 -> 39 and energy 3 -> 2.
+- Snapshot -> state 162: enemy HP 30, player block 9, energy 1. The position
+  indicator agreed with the actual extra effect, not merely a mocked predicate.
+- Next Strike -> state 180: enemy HP 21, energy 0, only end-turn offered.
+  End turn -> state 230: turn 2, complete five-card hand, energy 3.
+- Enemy speech `내 힘은 상대가 없지!` reached narrative history with enemy name,
+  Korean language and turn context. The death line also arrived later but its
+  speaker remained `unknown`; attribution for that path is still incomplete.
+- On turn 3 the normal shuffle FtueTip appeared at state 302 and withheld the
+  hand; reading/confirming it resumed completed-hand observation at state 344.
+- Two final Strikes defeated Cultist. State 385: COMBAT_REWARD, room COMPLETE,
+  player HP 74/75, gold reward 14 and card reward. Reward actions are not connected,
+  so ready=false/actions=[] correctly stop here. No reward was selected.
+
+Read-only JSONL audit: 194 distinct recorded states, 23 applied results, 151
+partial-hand states with empty hands, 11 ready combat states with complete hands,
+173 combat states marking draw order hidden. No unready state exposed actions;
+no draw-pile card exposed hand_index. This audit supplements, not replaces, the
+permutation privacy regression. Client error log was empty and the game window
+was responding at the reward screen. Content localization warnings (missing
+Snecko/Awakened strings) were present and are not resolved by this milestone.
+
+Remaining: Neow/event reading and choices in live play; card-selection effects
+(e.g. Covet), potions, rewards, shop/rest/special screens, resume and complete runs;
+other character tutorials and systems; base/workshop environments. Only standalone
+Hermit normal first combat is live-verified here. No whole-run clear, whole-game
+support, screenshot/text comparison or all-combination validation is claimed.

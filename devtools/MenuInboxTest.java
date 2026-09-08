@@ -8,13 +8,14 @@ public final class MenuInboxTest {
     public static void main(String[] args)throws Exception {
         Path output=Files.createTempDirectory("menu-inbox-test-");
         Process child=new ProcessBuilder(new File(System.getProperty("java.home"),"bin/java.exe").toString(),"-Xmx64m","-cp",args[0],
-            "communicationmod.devclient.ObservationClient",output.toString(),"--menu-control").redirectError(ProcessBuilder.Redirect.INHERIT).start();
+            "communicationmod.devclient.ObservationClient",output.toString(),args.length>1?"--play-control":"--menu-control").redirectError(ProcessBuilder.Redirect.INHERIT).start();
         try {
             BufferedReader from=new BufferedReader(new InputStreamReader(child.getInputStream(),StandardCharsets.UTF_8));
             BufferedWriter to=new BufferedWriter(new OutputStreamWriter(child.getOutputStream(),StandardCharsets.UTF_8));
             await(()->from.ready() || !child.isAlive());
             String hello=from.readLine();check(hello!=null && hello.contains("hello"),"menu client must start and greet");
             String command="{\"type\":\"act\",\"session_id\":\"session\",\"state_id\":4,\"request_id\":\"menu-one\",\"action_id\":\"menu.play\",\"arguments\":{}}";
+            if(args.length>1)command=command.replace("menu.play","run.embark");
             Files.write(output.resolve("menu-request.json"),command.getBytes(StandardCharsets.UTF_8),StandardOpenOption.CREATE_NEW);
             await(()->from.ready() || !child.isAlive());check(command.equals(from.readLine()),"forward exactly one request");
             String reply="{\"type\":\"result\",\"request_id\":\"menu-one\",\"status\":\"applied\"}";

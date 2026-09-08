@@ -13,9 +13,11 @@ final class MenuRequestInbox implements AutoCloseable {
     private String pending;
     private JsonObject response;
     private int replyFailures;
+    private final boolean playControl;
 
-    MenuRequestInbox(Path output) {
+    MenuRequestInbox(Path output,boolean playControl) {
         this.output=output;
+        this.playControl=playControl;
         worker=new Thread(this::run,"comm-menu-inbox");worker.setDaemon(true);worker.start();
     }
     synchronized void reply(JsonObject message) {
@@ -52,7 +54,8 @@ final class MenuRequestInbox implements AutoCloseable {
         String line=new String(Files.readAllBytes(claimed),StandardCharsets.UTF_8);
         if(line.contains("\n") || line.contains("\r"))throw new IOException("One JSON line required");
         JsonObject command=new JsonParser().parse(line).getAsJsonObject();
-        if(!"act".equals(command.get("type").getAsString()) || !command.get("action_id").getAsString().startsWith("menu."))
+        String action=command.get("action_id").getAsString();
+        if(!"act".equals(command.get("type").getAsString()) || !(action.startsWith("menu.") || playControl && (action.startsWith("run.") || action.equals("acknowledge_event_reading"))))
             throw new IOException("Only explicit menu actions may enter this adapter");
         String id=command.get("request_id").getAsString();
         if(id.isEmpty() || id.length()>128)throw new IOException("Invalid request ID");
