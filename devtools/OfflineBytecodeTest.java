@@ -17,6 +17,17 @@ public final class OfflineBytecodeTest {
         for (CtBehavior behavior : integration.getDeclaredBehaviors()) {
             checkNoOnlineCalls(behavior.getMethodInfo2());
         }
+        for (CtMethod method : integration.getDeclaredMethods()) {
+            CtClass returns = method.getReturnType();
+            int expected = returns == CtClass.longType ? Opcode.LRETURN
+                : returns == CtClass.floatType ? Opcode.FRETURN
+                : returns == CtClass.doubleType ? Opcode.DRETURN : -1;
+            if (expected >= 0) {
+                byte[] code = method.getMethodInfo2().getCodeAttribute().getCode();
+                if ((code[code.length - 1] & 255) != expected)
+                    throw new AssertionError("Wrong typed return in " + method.getLongName());
+            }
+        }
         System.out.println("PASS: SteamIntegration executable code has no Steam/library/network calls");
         if (Boolean.getBoolean("test.original")) return;
         Class<?> transformer = Class.forName("OfflineBytecode");

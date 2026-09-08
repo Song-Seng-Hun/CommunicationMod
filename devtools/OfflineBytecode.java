@@ -71,6 +71,10 @@ public final class OfflineBytecode {
     private static String defaultBody(CtClass returns) {
         if (returns == CtClass.voidType) return "{ return; }";
         if (returns == CtClass.booleanType) return "{ return false; }";
+        // The bundled Javassist does not widen an integer literal for setBody.
+        if (returns == CtClass.longType) return "{ return 0L; }";
+        if (returns == CtClass.floatType) return "{ return 0.0f; }";
+        if (returns == CtClass.doubleType) return "{ return 0.0d; }";
         if (returns.isPrimitive()) return "{ return 0; }";
         return "{ return null; }";
     }

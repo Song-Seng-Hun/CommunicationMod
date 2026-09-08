@@ -184,6 +184,13 @@ Not validated: a real game window and captured gameplay, UI/JSON comparisons, al
 special screens, base/workshop variants. This is passive transport preparation,
 not live v2 action dispatch or completed Downfall support.
 
+The first actual window launch exposed a `VerifyError` in the copied SteamIntegration:
+the bundled Javassist compiled `return 0` as `ireturn` for `getGlobalStat(): long`.
+Use type-specific long/float/double zero literals in the shared transformer. The
+regression now checks the typed return instructions on the actual transformed methods;
+the full preparation pipeline passed after this fix. This was not exercised by
+the earlier initialization-only smoke check.
+
 ## Whole-hand decision milestone
 
 `COMBAT-READINESS.md` records the common full-hand gate: two matching completed
