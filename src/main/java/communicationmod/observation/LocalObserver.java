@@ -89,7 +89,8 @@ public final class LocalObserver {
             if(!directory.isDirectory())throw new IllegalStateException("Recording directory missing");
             ProcessBuilder builder=new ProcessBuilder(new File(System.getProperty("java.home"),"bin/java.exe").toString(),
                 "-Xmx64m","-Dfile.encoding=UTF-8","-cp",jar,"communicationmod.devclient.ObservationClient",logs);
-            if(Boolean.getBoolean("communicationmod.play_control"))builder.command().add("--play-control");
+            if(Boolean.getBoolean("communicationmod.mcp_control"))builder.command().add("--mcp-control");
+            else if(Boolean.getBoolean("communicationmod.play_control"))builder.command().add("--play-control");
             else if(Boolean.getBoolean("communicationmod.menu_control"))builder.command().add("--menu-control");
             builder.redirectError(ProcessBuilder.Redirect.appendTo(new File(directory,"client-errors.log")));
             client=builder.start();

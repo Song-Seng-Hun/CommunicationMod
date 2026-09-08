@@ -22,7 +22,7 @@ try {
     & javac '-J-Xmx256m' --release 8 -encoding UTF-8 -cp $cp -d $tools `
         "$PSScriptRoot\OfflineBytecode.java" "$PSScriptRoot\BuildLocalObserver.java" "$PSScriptRoot\LocalObserverLaunch.java" `
         "$PSScriptRoot\ObserverSessionTest.java" "$PSScriptRoot\ObserverClientTest.java" "$PSScriptRoot\LocalObserverBuildTest.java" "$PSScriptRoot\LocalObserverLaunchTest.java" "$PSScriptRoot\SteamUtilsStartupTest.java" `
-        "$PSScriptRoot\MenuControlSessionTest.java" "$PSScriptRoot\MenuUiBindingTest.java" "$PSScriptRoot\MenuInboxTest.java" "$PSScriptRoot\PlayUiBindingTest.java" "$PSScriptRoot\RewardUiBindingTest.java"
+        "$PSScriptRoot\MenuControlSessionTest.java" "$PSScriptRoot\MenuUiBindingTest.java" "$PSScriptRoot\MenuInboxTest.java" "$PSScriptRoot\PlayUiBindingTest.java" "$PSScriptRoot\RewardUiBindingTest.java" "$PSScriptRoot\HandSelectionPolicyTest.java" "$PSScriptRoot\HandSelectionBindingTest.java" "$PSScriptRoot\RewardPolicyTest.java" "$PSScriptRoot\McpBridgeTest.java" "$PSScriptRoot\McpRecordingTest.java"
     if ($LASTEXITCODE -ne 0) { throw 'Local observer tools compilation failed' }
     foreach ($test in @('ObserverSessionTest','LocalObserverLaunchTest','MenuControlSessionTest')) {
         & $java8 '-Xmx128m' -cp "$tools;$cp" $test
@@ -38,6 +38,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Play binding checks failed' }
     & $java8 '-Xmx128m' -cp "$tools;$cp" RewardUiBindingTest $game "$root\target\classes"
     if ($LASTEXITCODE -ne 0) { throw 'Reward binding checks failed' }
+    & $java8 '-Xmx128m' -cp "$tools;$cp" RewardPolicyTest
+    if ($LASTEXITCODE -ne 0) { throw 'Reward policy failed' }
+    & $java8 '-Xmx128m' -cp "$tools;$cp" HandSelectionPolicyTest
+    if ($LASTEXITCODE -ne 0) { throw 'Hand selection policy failed' }
+    & $java8 '-Xmx128m' -cp "$tools;$cp" HandSelectionBindingTest $game "$root\target\classes"
+    if ($LASTEXITCODE -ne 0) { throw 'Hand selection binding failed' }
+    & $java8 '-Xmx128m' -cp "$tools;$cp" McpBridgeTest
+    if ($LASTEXITCODE -ne 0) { throw 'MCP bridge checks failed' }
+    & $java8 '-Xmx128m' -cp "$tools;$cp" McpRecordingTest
+    if ($LASTEXITCODE -ne 0) { throw 'MCP recording checks failed' }
     & $java8 '-Xmx128m' -cp "$tools;$cp" MenuUiBindingTest $game "$root\target\classes"
     if ($LASTEXITCODE -ne 0) { throw 'Menu UI binding checks failed' }
     & $java8 '-Xmx384m' -cp "$tools;$cp" LocalObserverBuildTest $DownfallPath $prepared $mod

@@ -14,6 +14,7 @@ import java.util.*;
 public final class RunUi {
     private final MenuUi menu=new MenuUi(true);
     private final RewardUi rewards=new RewardUi();
+    private final HandSelectionUi handSelection=new HandSelectionUi();
     private List<ProtocolSession.Action> offered=Collections.emptyList();
     private boolean inMenu,reported;
 
@@ -34,6 +35,12 @@ public final class RunUi {
             if(CardCrawlGame.isPopupOpen || AbstractDungeon.isFadingOut || AbstractDungeon.fadeColor.a>0.01f || AbstractDungeon.player.isDead) return view;
             if(AbstractDungeon.screen==AbstractDungeon.CurrentScreen.FTUE) {
                 tutorial(view,status);
+            } else if(type.equals("HAND_SELECT")) {
+                Map<String,Object> decision=CombatObservation.observation();
+                if(!CombatObservation.inCombat())offered.addAll(handSelection.capture(view,status,null));
+                else if(Boolean.TRUE.equals(decision.get("ready")) && "selection".equals(decision.get("mode")))
+                    offered.addAll(handSelection.capture(view,status,(String)decision.get("decision_id")));
+                else status.addProperty("reason","selection_not_ready");
             } else if(CombatObservation.inCombat()) {
                 Map<String,Object> decision=CombatObservation.observation();
                 if(Boolean.TRUE.equals(decision.get("ready")) && "play".equals(decision.get("mode")))combat((String)decision.get("decision_id"));

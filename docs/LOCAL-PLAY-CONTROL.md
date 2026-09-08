@@ -26,11 +26,12 @@
 - 허밋의 자체 2페이지 `HermitTutorials`도 별도 허용 목록으로 연결합니다. 다운폴 클래스를 필수 컴파일 의존성으로 추가하지 않습니다. BaseMod `CustomMultiPageFtue`와 다른 캐릭터의 고유 안내는 아직 연결하지 않았습니다.
 - 표준 이벤트: 기존 본문 읽기 계약을 재사용합니다. `acknowledge_event_reading`에는 현재 `reading_id`와 내용을 설명하는 `commentary`가 필요합니다. 그 다음 실제 제공된 `run.event.*`를 사용합니다. 본문이 준비되지 않았거나 특수 렌더러라면 선택을 제공하지 않습니다.
 - 지도: 제공된 `run.map.x.y`만 선택합니다. 현재 UI의 후보 노드를 다시 확인하고 기존 지도 입력 경로를 사용합니다. 보스 진입은 아직 제공하지 않습니다.
-- 일반 전투 보상: `run.reward.<index>`로 GOLD/CARD 항목을 선택합니다. `reward_controls`에 현 언어의 표시 이름과 지원 여부를 제공하며, 수령 중/무시된 항목에는 행동이 없습니다. 다른 보상 유형은 미지원입니다.
+- 일반 전투 보상: `run.reward.<index>`로 표준 GOLD/STOLEN_GOLD/CARD/RELIC/POTION/EMERALD_KEY/SAPPHIRE_KEY 항목을 선택합니다. `reward_controls`에 표시 이름·지원 여부·현재 수령 가능 여부를 제공하며, 수령 중/무시된 항목에는 행동이 없습니다. 연결된 유물/열쇠는 `mutually_exclusive_with`로 표시합니다. 포션 슬롯이 없거나 소주가 있으면 포션 수령은 제공하지 않습니다. 사용자 정의 보상 클래스/종류는 미지원입니다. 확장한 종류는 실플레이 검증 전입니다.
 - 일반 카드 보상: 기존 `game_state.screen_state.cards`의 설명/키워드를 읽은 뒤 `run.card_reward.<uuid>` 또는 실제 활성화된 `run.card_reward.skip`을 사용합니다. 드래프트/발견/선택형 효과/코덱스/투표/터치 UI 등은 아직 연결하지 않습니다.
 - 보상을 모두 처리한 일반 MonsterRoom에서는 `run.reward.proceed`가 원래 진행 버튼을 누릅니다. 보스/이벤트의 특수 진행은 제외합니다.
-- `-PlayControl`에서만 메인 메뉴의 실제 `menu.resume_game`을 사용할 수 있습니다. 기존 테스트 저장을 복사해 재개할 때 사용하며, 저장 파일 자체를 바꾸거나 런을 포기하지 않습니다.
-- 전투: 완성된 손패와 동일한 결정 토큰을 확인한 뒤 `run.play.<uuid>.<target_index>`/`run.end_turn`을 한 번만 적용합니다. 대상을 행동 ID별로 나누며 인자는 비어 있습니다. 드로우/대기 행동/화면 전환 중에는 행동하지 않습니다. 강제 카드 선택 화면은 아직 연결하지 않았습니다.
+- `-PlayControl` 또는 새 `-McpControl`에서 메인 메뉴의 실제 `menu.resume_game`을 사용할 수 있습니다. 기존 테스트 저장을 복사해 재개할 때 사용하며, 저장 파일 자체를 바꾸거나 런을 포기하지 않습니다.
+- 전투: 완성된 손패와 동일한 결정 토큰을 확인한 뒤 `run.play.<uuid>.<target_index>`/`run.end_turn`을 한 번만 적용합니다. 대상을 행동 ID별로 나누며 인자는 비어 있습니다. 드로우/대기 행동/화면 전환 중에는 행동하지 않습니다.
+- 손패 선택: 표준 HAND_SELECT의 `run.hand.select.<uuid>`, `run.hand.deselect.<uuid>`, `run.hand.confirm`을 연결합니다. 선택 화면의 기존 카드 설명과 `selection_controls`의 현재 안내·개수 제한을 읽습니다. 전투 중에는 `selection` 결정 토큰을 사용하며 일반 카드 사용/턴 종료는 제공하지 않습니다. 선택 해제는 허밋 패치를 포함한 기존 게임 함수를 호출합니다. 터치/컨트롤러/사용자 정의 화면은 미지원이고, 격자 선택은 아직 연결하지 않았습니다. 손패 선택도 실플레이 검증 전입니다.
 - 특수 보상·상점·휴식·특수 선택·승리 등의 나머지 화면은 자동 진행하지 않습니다. 전체 지원/클리어를 의미하지 않습니다.
 
 이벤트 확인 인자의 형식 (ID/본문은 반드시 실제 최신 관찰에서 가져옵니다):
@@ -48,3 +49,7 @@
 `prepare-local-test.ps1`은 기존 정보/손패/이벤트/수신/파일 잠금 회귀 검사와 메뉴·플레이 전송,
 설치된 버튼/지도 훅 연결, 복사본의 제출 차단/해시 검증을 실행합니다.
 실제 실행 결과와 남은 항목은 `DOWNFALL-IMPLEMENTATION.md`의 날짜별 기록을 기준으로 봅니다.
+
+## MCP 제어
+
+새 에이전트 연동에는 `devtools/prepare-mcp-test.ps1`로 검사·빌드한 뒤 `devtools/start-local-test.ps1 -McpControl`을 사용합니다. 이 모드는 파일 명령함과 최신 상태 파일을 사용하지 않고 지속 연결된 MCP에서 현재 화면 정보만 반환합니다. 행동 한 번의 응답에 다음 안정 상태가 포함되며, 전체 덱·지도·지난 대사는 필요할 때 조회합니다. 설정과 시간 초과 처리 규칙은 `mcp-server/README.md`, 실제 측정 범위는 `MCP-LIVE-VERIFICATION.md`를 참고합니다. 기존 파일 제어 모드의 검증/재현 경로는 유지합니다.

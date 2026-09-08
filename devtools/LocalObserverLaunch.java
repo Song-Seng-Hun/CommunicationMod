@@ -7,7 +7,7 @@ import java.util.*;
 public final class LocalObserverLaunch {
     private static final String[] FILES={"desktop-1.0-modded.jar","package/BaseMod-modded.jar","package/StSLib-modded.jar","package/EvilWithin-modded.jar","CommunicationMod.jar"};
     public static void main(String[] args)throws Exception {
-        if(args.length>1 || (args.length==1 && !args[0].equals("--check") && !args[0].equals("--smoke") && !args[0].equals("--menu-control") && !args[0].equals("--play-control")))throw new IllegalArgumentException("Only --check, --smoke, --menu-control or --play-control supported");
+        if(args.length>1 || (args.length==1 && !args[0].equals("--check") && !args[0].equals("--smoke") && !args[0].equals("--menu-control") && !args[0].equals("--play-control") && !args[0].equals("--mcp-control")))throw new IllegalArgumentException("Unknown local launch mode");
         Path root=Paths.get("").toRealPath();
         Properties report=verify(root);
         if(args.length==1 && args[0].equals("--check")){System.out.println("PASS: prepared and installed JAR hashes match the test manifest");return;}
@@ -17,7 +17,9 @@ public final class LocalObserverLaunch {
         if(!smoke)Files.createDirectories(records);
         System.setProperty("communicationmod.smoke",Boolean.toString(smoke));
         System.setProperty("communicationmod.observer",Boolean.toString(!smoke));
-        boolean play=args.length==1 && args[0].equals("--play-control");
+        boolean mcp=args.length==1 && args[0].equals("--mcp-control");
+        System.setProperty("communicationmod.mcp_control",Boolean.toString(mcp));
+        boolean play=mcp || args.length==1 && args[0].equals("--play-control");
         System.setProperty("communicationmod.play_control",Boolean.toString(play));
         System.setProperty("communicationmod.menu_control",Boolean.toString(play || args.length==1 && args[0].equals("--menu-control")));
         System.setProperty("communicationmod.client.jar",root.resolve("CommunicationMod.jar").toString());

@@ -8,9 +8,10 @@ import java.nio.file.*;
 /** Passive recording client. stdout is exclusively protocol JSONL, stderr is diagnostic. */
 public final class ObservationClient {
     public static void main(String[] args) throws Exception {
-        if (args.length<1 || args.length>2 || (args.length==2 && !args[1].equals("--menu-control") && !args[1].equals("--play-control"))) throw new IllegalArgumentException("New recording directory and optional --menu-control/--play-control required");
+        if (args.length<1 || args.length>2 || (args.length==2 && !args[1].equals("--menu-control") && !args[1].equals("--play-control") && !args[1].equals("--mcp-control"))) throw new IllegalArgumentException("New recording directory and optional control mode required");
         Path output=Paths.get(args[0]).toAbsolutePath();
         Files.createDirectories(output);
+        if(args.length==2 && args[1].equals("--mcp-control")){mcp(output);return;}
         SnapshotCache cache=new SnapshotCache(output);
         try (BufferedReader input=new BufferedReader(new InputStreamReader(System.in,StandardCharsets.UTF_8));
              OutputStream transcript=Files.newOutputStream(output.resolve("observations.jsonl"),StandardOpenOption.CREATE_NEW)) {
@@ -33,6 +34,22 @@ public final class ObservationClient {
                 }
             }
             } finally {if(inbox!=null)inbox.close();}
+        }
+    }
+
+    /** MCP mode: no request-file polling or per-frame snapshot file. Recording is bounded, optional evidence. */
+    private static void mcp(Path output)throws Exception {
+        try(McpBridge bridge=new McpBridge(output,line->{System.out.println(line);System.out.flush();});
+            BufferedReader input=new BufferedReader(new InputStreamReader(System.in,StandardCharsets.UTF_8));
+            McpRecording transcript=new McpRecording(Files.newOutputStream(output.resolve("observations.jsonl"),StandardOpenOption.CREATE_NEW),64L*1024*1024)) {
+            System.out.println("{\"type\":\"hello\",\"protocol_version\":2}");System.out.flush();
+            String line;
+            while((line=input.readLine())!=null){
+                if(line.length()>1024*1024)throw new IOException("Oversized observation");
+                JsonObject message=new JsonParser().parse(line).getAsJsonObject();bridge.publish(message);
+                String key="state".equals(message.get("type").getAsString())?message.get("session_id")+"/"+message.get("state_id"):"";
+                transcript.append(line,key);
+            }
         }
     }
 

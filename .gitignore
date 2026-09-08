@@ -17,3 +17,5 @@ hs_err_pid*
 out/
 CommunicationMod.iml
 .mtj.tmp/
+mcp-server/node_modules/
+mcp-server/dist/

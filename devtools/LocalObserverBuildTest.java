@@ -23,6 +23,7 @@ public final class LocalObserverBuildTest {
         expect(observer>find(calls,"CombatObservation.completeFrame") && observer>find(calls,"DialogueObservation.completeFrame"),"capture after completed frames");
         expect(observer>=0,"live observer tick installed");
         expect(find(calls(pool.get("com.megacrit.cardcrawl.screens.CardRewardScreen").getDeclaredMethod("cardSelectUpdate")),"RewardUi.hover")>=0,"scoped card reward hover hook installed");
+        expect(find(calls(pool.get("com.megacrit.cardcrawl.screens.select.HandCardSelectScreen").getDeclaredMethod("updateSelectedCards")),"HandSelectionUi.hover")>=0,"scoped hand deselection hook installed");
         CtClass bridge=pool.get("communicationmod.observation.LocalObserver");
         for(CtBehavior method:bridge.getDeclaredBehaviors()) {
             List<String> bound=calls(method);

@@ -57,6 +57,12 @@ public final class BuildLocalObserver {
             }
         });
         CtMethod render=game.getDeclaredMethod("render");
+        take(pool,changed,"com.megacrit.cardcrawl.screens.select.HandCardSelectScreen").getDeclaredMethod("updateSelectedCards").instrument(new javassist.expr.ExprEditor(){
+            public void edit(javassist.expr.MethodCall call)throws CannotCompileException {
+                if(call.getClassName().equals("com.megacrit.cardcrawl.helpers.Hitbox") && call.getMethodName().equals("update"))
+                    call.replace("{$proceed($$);communicationmod.observation.HandSelectionUi.hover($0);}");
+            }
+        });
         take(pool,changed,"com.megacrit.cardcrawl.screens.CardRewardScreen").getDeclaredMethod("cardSelectUpdate").instrument(new javassist.expr.ExprEditor(){
             public void edit(javassist.expr.MethodCall call)throws CannotCompileException {
                 if(call.getClassName().equals("com.megacrit.cardcrawl.cards.AbstractCard") && call.getMethodName().equals("updateHoverLogic"))

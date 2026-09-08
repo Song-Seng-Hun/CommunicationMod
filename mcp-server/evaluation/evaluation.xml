@@ -1,0 +1,12 @@
+<evaluation>
+  <qa_pair><question>Use only the frozen-evaluation-v1 fixture. After reading the current state, page through the deck with limit 3. How many copies including upgrades share the ID of the first attack in the hand? Answer an integer.</question><answer>4</answer></qa_pair>
+  <qa_pair><question>In frozen-evaluation-v1, identify the card at the center of the complete hand, then find its matching UUID in the paginated deck. Return that card's Korean name only.</question><answer>조준</answer></qa_pair>
+  <qa_pair><question>In frozen-evaluation-v1, compare the current hand's first card with every deck copy of its ID. What is the largest displayed damage among those copies? Answer an integer.</question><answer>9</answer></qa_pair>
+  <qa_pair><question>In frozen-evaluation-v1, inspect the current state and the public piles context. Can their evidence establish the exact next draw despite the draw pile containing an upgraded card? Answer True or False.</question><answer>False</answer></qa_pair>
+  <qa_pair><question>In frozen-evaluation-v1, match deck UUIDs to discard-pile UUIDs. How many discarded cards are skills, excluding curses? Answer an integer.</question><answer>1</answer></qa_pair>
+  <qa_pair><question>In frozen-evaluation-v1, inspect the current state and full public map, paging with limit 2. How many nodes marked R are above the lowest map row? Answer an integer.</question><answer>2</answer></qa_pair>
+  <qa_pair><question>In frozen-evaluation-v1, compare current narration with its on-demand history. What is the earliest no-longer-displayed utterance? Return its exact Korean text only.</question><answer>보석을 대신 두고 왔다.</answer></qa_pair>
+  <qa_pair><question>In frozen-evaluation-v1, locate the hand's center card, then retrieve its full deck entry by UUID. Return the keyword title that explains its positional effect.</question><answer>정중앙</answer></qa_pair>
+  <qa_pair><question>In frozen-evaluation-v1, inspect the current state and request fixture-choice without issuing an action. Is there an applied receipt whose state precedes the current state? Answer True or False.</question><answer>True</answer></qa_pair>
+  <qa_pair><question>In frozen-evaluation-v1, compare every card in the paginated deck with all three on-demand off-hand piles. How many deck UUIDs remain outside those piles? Answer an integer.</question><answer>5</answer></qa_pair>
+</evaluation>
