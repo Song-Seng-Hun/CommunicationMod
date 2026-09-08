@@ -180,9 +180,10 @@ launch manifest checks, full foundation regression and packaged initialization
 without a game window. First clean initialization logged missing BaseMod console
 history but completed successfully. Evidence: local `target/local-observer-*.log`.
 
-Not validated: a real game window and captured gameplay, UI/JSON comparisons, all
-special screens, base/workshop variants. This is passive transport preparation,
-not live v2 action dispatch or completed Downfall support.
+At initial preparation, a real game window and captured gameplay were not yet
+validated. The live startup follow-up below supersedes the window/transport part
+only; UI/JSON comparisons, special screens and base/workshop variants remain open.
+This is not live v2 action dispatch or completed Downfall support.
 
 The first actual window launch exposed a `VerifyError` in the copied SteamIntegration:
 the bundled Javassist compiled `return 0` as `ireturn` for `getGlobalStat(): long`.
@@ -197,6 +198,32 @@ skips that native callback allocation; SteamInputHelper already skips its initia
 when Steam is unavailable, and clientUtils disposal is null-checked. Mouse/keyboard
 remain the intended controls for this profile. `SteamUtilsStartupTest` reproduces the
 old allocation and checks its removal as part of the full preparation command.
+
+### Live recording and snapshot-cache recovery (2026-09-08)
+
+The game reached a responding `Modded Slay the Spire` window and exchanged real v2
+observations. The first recording client then exited when Windows denied replacing
+`latest-state.json`; the process holding that file was not identified. A subprocess
+regression using `NOSHARE_DELETE` reproduced the same AccessDeniedException before
+the fix. Snapshot write/move IOException is now contained separately from the
+authoritative JSONL write: no blocking retries, next-state recovery, bounded stderr.
+Transcript write failures and the 64 MiB cap still stop the recorder explicitly.
+
+Both actual Windows locking and temporary-file write failure tests pass through 40
+consecutive failed updates without transcript loss, then recover to the newest
+state. The complete `prepare-local-test.ps1` regression passed with the packaged
+client (`target/observer-cache-fix-verification.log`). The previous test window was
+closed; its remaining windowless JVM alone was stopped after a graceful-exit timeout.
+The test profile was copied to the fresh runtime, with all 36 preference files
+hash-verified unchanged; original Steam files/saves were not changed.
+
+Live follow-up in `local-test-20260908-143445-9e80238b`: a 3-second Windows no-delete
+lock on the actual recording cache preserved state 121 while JSONL grew from 76,575
+to 83,527 bytes. Releasing the lock recovered to state 133 after 11 failed cache
+updates, with one warning and one recovery line. Both game and recording client
+remained alive; the game window responded. This verifies real menu observation
+transport (`ENG`, `in_game=false`, `observation_only`), not combat readiness,
+localized gameplay/UI correspondence or full Downfall compatibility.
 
 ## Whole-hand decision milestone
 
