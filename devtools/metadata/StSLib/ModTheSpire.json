@@ -1,0 +1,10 @@
+{
+  "modid": "stslib",
+  "name": "StSLib",
+  "author_list": ["kioeht"],
+  "description": "A collection of keywords and mechanics for other Slay the Spire mods to use.",
+  "version": "2.12.0",
+  "sts_version": "12-18-2022",
+  "mts_version": "3.24.0",
+  "dependencies": ["basemod"]
+}

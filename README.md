@@ -1,6 +1,19 @@
 # CommunicationMod
 Slay the Spire mod that provides a protocol for allowing another process to control the game
 
+## Fork development status: automation temporarily disabled
+
+Account-record submission permission has been revoked. This branch now refuses
+game/Steam development launches (including `-SmokeTest`) and agent commands until
+native Steam submission blocking and save/cloud isolation are verified. There is
+no override flag. This is a fail-closed hold, **not** a working offline sandbox.
+Manual Steam gameplay and already-running/older copied artifacts are not changed.
+
+See [implementation and acceptance ledger](docs/DOWNFALL-IMPLEMENTATION.md) and
+[v2 protocol core](docs/PROTOCOL-V2.md). The v2 core is currently headless-tested,
+not connected to gameplay. Setup and v1 protocol instructions below are retained
+as historical reference, not instructions to bypass the safety hold.
+
 ## Requirements
 
 - Slay the Spire
@@ -18,6 +31,33 @@ command=python C\:\\Path\\To\\Script\\main.py
 ```
 
 ## What does this mod do?
+
+### Draw pile visibility (this fork)
+
+`game_state.combat_state.draw_pile` always includes the remaining cards, but no
+longer reveals their actual draw order without **Frozen Eye**. The accompanying
+`draw_pile_order_visible` boolean is checked on every state update:
+
+- `false`: the array uses deterministic display ordering (card ID, then canonical
+  serialized card fields). Array positions **do not mean draw positions**. This
+  is not intended to reproduce the UI's exact visual sorting.
+- `true`: the existing bottom-to-top array order is preserved; the **last** card
+  is the next card drawn. This matches the information available with Frozen Eye.
+
+Card fields and duplicate counts are preserved. Only the outgoing list is sorted;
+the live pile and game RNG are untouched. The rule is shared by base-game and
+Downfall characters, matching the installed Downfall draw-pile screen's relic
+check. Other mods' custom partial-reveal mechanics are not automatically inferred.
+Choice-screen indexes and the order of the hand/discard/exhaust piles are unchanged.
+This change addresses draw-pile order, not a full audit of all player-hidden data.
+The older full-state example below predates this additional boolean.
+
+Run `./devtools/verify-draw-pile-visibility.ps1` for the headless regression checks
+and build, or add `-UpdateDevelopmentRuntime` to refresh the local development
+mod JAR. Neither command overwrites the Steam installation. Restart the development
+game to load the new JAR; an already running process is not hot-patched.
+
+### Process protocol
 
 CommunicationMod launches a specified process and communicates with this process through stdin and stdout, with the following protocol:
 

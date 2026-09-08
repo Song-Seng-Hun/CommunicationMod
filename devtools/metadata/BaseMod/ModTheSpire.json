@@ -1,0 +1,10 @@
+{
+  "modid": "basemod",
+  "name": "BaseMod",
+  "author_list": ["kioeht", "test447"],
+  "description": "Unofficial modding API for Slay the Spire. Also a Dev Console.",
+  "version": "5.56.0",
+  "sts_version": "12-18-2022",
+  "mts_version": "3.30.0",
+  "dependencies": []
+}

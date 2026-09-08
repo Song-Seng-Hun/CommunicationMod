@@ -1,0 +1,10 @@
+{
+  "modid": "EvilWithin",
+  "name": "EvilWithin",
+  "author_list": ["The Downfall Collab Team"],
+  "description": "Downfall is a full-featured Expansion for Slay the Spire.",
+  "version": "6.0.20",
+  "sts_version": "2.0",
+  "mts_version": "3.8.0",
+  "dependencies": ["basemod", "stslib"]
+}

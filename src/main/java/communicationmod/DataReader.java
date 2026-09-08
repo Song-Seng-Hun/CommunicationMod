@@ -5,9 +5,16 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.BlockingQueue;
 
 public class DataReader implements Runnable{
+
+    private static final int MAX_LINE_BYTES = 1024 * 1024;
 
     private final BlockingQueue<String> queue;
     private final InputStream stream;
@@ -21,31 +28,42 @@ public class DataReader implements Runnable{
     }
 
     public void run() {
-        while (!Thread.currentThread().isInterrupted()) {
-            StringBuilder inputBuffer = new StringBuilder();
-            try {
-                while (true) {
-                    int nextChar = this.stream.read();
-                    if (nextChar == -1) {
-                        continue;
-                    } else if (nextChar == 0 || nextChar == '\n') {
-                        break;
-                    }
-                    inputBuffer.append((char) nextChar);
+        try (BufferedInputStream input = new BufferedInputStream(stream)) {
+            while (!Thread.currentThread().isInterrupted()) {
+                String line = readLine(input);
+                if (line == null) return;
+                if (!line.isEmpty()) {
+                    if (verbose) logger.info("Received message: " + line);
+                    queue.put(line);
                 }
-                if (inputBuffer.length() > 0) {
-                    if (verbose) {
-                        logger.info("Received message: " + inputBuffer.toString());
-                    }
-                    queue.put(inputBuffer.toString());
-                }
-            } catch(IOException e){
-                logger.error("Message could not be received from child process. Shutting down reading thread.");
-                Thread.currentThread().interrupt();
-            } catch (InterruptedException e) {
-                logger.info("Communications reading thread interrupted.");
-                Thread.currentThread().interrupt();
             }
+        } catch (IOException e) {
+            logger.error("Transport input closed or invalid; reading stopped.", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
+    }
+
+    private static String readLine(InputStream input) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        while (!Thread.currentThread().isInterrupted()) {
+            int next = input.read();
+            if (next == -1) {
+                if (bytes.size() != 0) throw new IOException("Unterminated JSON-line record");
+                return null;
+            }
+            if (next == '\n') {
+                byte[] data = bytes.toByteArray();
+                int length = data.length;
+                if (length > 0 && data[length - 1] == '\r') length--;
+                return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(data, 0, length)).toString();
+            }
+            if (next == 0 || bytes.size() >= MAX_LINE_BYTES) throw new IOException("Invalid or oversized JSON-line record");
+            bytes.write(next);
+        }
+        return null;
     }
 }

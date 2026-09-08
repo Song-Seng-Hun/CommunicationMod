@@ -21,6 +21,7 @@ import com.megacrit.cardcrawl.random.Random;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.*;
 import communicationmod.patches.InputActionPatch;
+import communicationmod.safety.AutomationSafety;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -31,6 +32,7 @@ public class CommandExecutor {
     private static final Logger logger = LogManager.getLogger(CommandExecutor.class.getName());
 
     public static boolean executeCommand(String command) throws InvalidCommandException {
+        AutomationSafety.requireAutomationAllowed();
         command = command.toLowerCase();
         String [] tokens = command.split("\\s+");
         if(tokens.length == 0) {

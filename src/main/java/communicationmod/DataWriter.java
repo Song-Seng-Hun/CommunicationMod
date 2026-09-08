@@ -5,6 +5,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.BlockingQueue;
 
 public class DataWriter implements Runnable {
@@ -28,15 +29,15 @@ public class DataWriter implements Runnable {
                 if (verbose) {
                     logger.info("Sending message: " + message);
                 }
-                stream.write(message.getBytes());
+                stream.write(message.getBytes(StandardCharsets.UTF_8));
                 stream.write('\n');
                 stream.flush();
             } catch (InterruptedException e) {
                 logger.info("Communications writing thread interrupted.");
                 Thread.currentThread().interrupt();
             } catch (IOException e) {
-                logger.error("Message could not be sent to child process: " + message);
-                e.printStackTrace();
+                logger.error("Transport output failed; writing stopped.", e);
+                return;
             }
         }
     }
