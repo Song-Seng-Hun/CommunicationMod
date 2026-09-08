@@ -680,7 +680,9 @@ public class ChoiceScreenUtils {
 
     public static boolean bossNodeAvailable() {
         MapRoomNode currMapNode = AbstractDungeon.getCurrMapNode();
-        return (currMapNode.y == 14 || (AbstractDungeon.id.equals(TheEnding.ID) && currMapNode.y == 2));
+        return communicationmod.compat.MapChoicePolicy.bossAvailable(
+            communicationmod.compat.DownfallMapCoordinates.bossUiRow(currMapNode),
+            TheEnding.ID.equals(AbstractDungeon.id));
     }
 
     public static ArrayList<String> getMapScreenChoices() {
@@ -698,34 +700,19 @@ public class ChoiceScreenUtils {
     }
 
     public static ArrayList<MapRoomNode> getMapScreenNodeChoices() {
-        ArrayList<MapRoomNode> choices = new ArrayList<>();
-        MapRoomNode currMapNode = AbstractDungeon.getCurrMapNode();
-        ArrayList<ArrayList<MapRoomNode>> map = AbstractDungeon.map;
-        if(!AbstractDungeon.firstRoomChosen) {
-            for(MapRoomNode node : map.get(0)) {
-                if (node.hasEdges()) {
-                    choices.add(node);
-                }
-            }
-        } else {
-            for (ArrayList<MapRoomNode> rows : map) {
-                for (MapRoomNode node : rows) {
-                    if (node.hasEdges()) {
-                        boolean normalConnection = currMapNode.isConnectedTo(node);
-                        boolean wingedConnection = currMapNode.wingedIsConnectedTo(node);
-                        if (normalConnection || wingedConnection) {
-                            choices.add(node);
-                        }
-                    }
-                }
-            }
-        }
+        if (!communicationmod.compat.DownfallMapCoordinates.isSupported()) return new ArrayList<>();
+        ArrayList<MapRoomNode> choices = communicationmod.compat.MapChoicePolicy.choices(
+            AbstractDungeon.map, AbstractDungeon.firstRoomChosen, AbstractDungeon.getCurrMapNode(),
+            communicationmod.compat.DownfallMapCoordinates::firstUiRow, MapRoomNode::hasEdges,
+            MapRoomNode::isConnectedTo, MapRoomNode::wingedIsConnectedTo);
+        // A failing callback must not leave a partially collected list actionable.
+        if (!communicationmod.compat.DownfallMapCoordinates.isSupported()) choices.clear();
         return choices;
     }
 
     public static void makeMapChoice(int choice) {
         MapRoomNode currMapNode = AbstractDungeon.getCurrMapNode();
-        if(currMapNode.y == 14 || (AbstractDungeon.id.equals(TheEnding.ID) && currMapNode.y == 2)) {
+        if(bossNodeAvailable()) {
             if(choice == 0) {
                 DungeonMapPatch.doBossHover = true;
                 return;

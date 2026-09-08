@@ -25,13 +25,17 @@
 | Protocol v2 core | Version/session/state/action IDs, validation, replay rejection, invalidation, local-only failures | Headless unit and fixture pipe tests; not connected to gameplay |
 | Transport | UTF-8, LF/CRLF, 1 MiB input bound, EOF termination, invalid-input/output failure shutdown | Real reader/writer thread tests; legacy command dispatch remains held off |
 | Existing fixes | Hidden draw order policy and null keyword tooltip guard retained | Existing focused headless regressions; gameplay not verified |
-| Native Steam/cloud isolation | Not implemented | Blocks game/agent launch and Steam Play integration |
+| Public descriptions | Cached card text, dynamic variable values, relic/potion/power text and player stance | Pure text/privacy tests and installed-bytecode binding checks; character-break/CN cache decoding and displayed cost explicitly incomplete; custom rendering/getter purity and gameplay unverified |
+| Downfall map coordinates | Optional adapter calls Downfall's actual first-node and boss UI helpers; graph connections remain the game's own normal/Flight/boot checks | Pure graph and installed-bytecode binding checks; real reverse-map/boss/act/endless play not yet verified |
+| Offline bytecode preparation | Pinned four JAR hashes; new nonlaunchable copies; Steam/native entrypoints and LibGDX HTTP/socket/browser boundaries disabled; active metrics senders disabled | Java 8 transformation and artifact checks; original packaged bootstrap preserved byte-for-byte; NOT full native/OS/save/cloud isolation |
+| Native Steam/cloud isolation | Storage/direct-upload bytecode audit completed; runtime isolation not verified | Still blocks game/agent launch and Steam Play integration |
 | Base/workshop environments | Missing in the examined Steam library | Need legitimate installed game and normal MTS/BaseMod/StSLib/Downfall artifacts |
 
 ## Remaining ordered work
 
-1. Audit native Steam initialization/callbacks, achievement/stat/score writes,
-   remote storage, game save paths, and prepackaged initializer/patch ordering.
+1. Use the static findings in `OFFLINE-STORAGE-AUDIT.md` and prepared offline artifacts
+   to implement and verify the remaining process-wide network/native-library boundary,
+   separate writable storage/configuration, and actual cloud exclusion.
    Implement a separate verified offline runtime with game and library hashes bound
    to verification. Keep the unconditional launch/automation hold until it passes.
    Never interpret an environment property or a user-editable "verified" JSON as proof.
@@ -60,10 +64,74 @@
 - `devtools/verify-launch-safety.ps1`: no game classpath; ensures launch remains blocked.
 - `devtools/runtime-inventory.ps1`: read-only ZIP inventory as JSON stdout.
 - `devtools/verify-runtime-inventory.ps1`: temporary fixture archives under target.
+- `devtools/verify-offline-bytecode.ps1`: Steam and HTTP transformation checks plus
+  path/hash rejection fixtures, no game execution. `-PrepareArtifacts` additionally
+  creates NEW nonlaunchable copies under `target/offline-prepared-<id>` and validates
+  their executable bytecode. It does not activate them or lift any safety hold.
 - `devtools/verify-protocol.ps1`: protocol core and fixture pipe tests, no Steam.
 - `devtools/verify-transport.ps1`: actual reader/writer tests; invalid-input errors in the log are expected test cases.
+- `devtools/verify-public-descriptions.ps1`: pure Java 8 text/privacy checks and static
+  installed-renderer/binding verification; never initializes game objects.
+- `devtools/verify-map-compatibility.ps1`: pure graph fixtures and static optional
+  adapter/dispatch checks against the built mod and installed Downfall helper signatures.
 - Existing keyword and draw-pile verification scripts: headless build/regression only.
 
 The old `build-and-run-downfall.ps1`, including `-SmokeTest`, now deliberately
 fails with `COMM-SAFETY-BLOCK`. Older already-running games/previously copied JARs
 are not hot-patched by source edits. Steam settings and real saves are unchanged.
+
+## Offline preparation evidence and limits (2026-09-08)
+
+- Against the pinned standalone desktop JAR, regression first rejected the original
+  SteamIntegration constructor's `SteamAPI.loadLibraries` call, then the original
+  native method and active two-argument `Metrics.sendPost` method. Transformed checks pass.
+- 347 Steam native entrypoints are removed from the prepared desktop JAR (6 in the
+  neutral SteamAPI and 341 further native methods). Steam initialization remains false;
+  other native writes throw. The shared Steam library loader is disabled too.
+- SteamIntegration cloud deletion, achievements, stats, scores and presence methods
+  no longer call Steam. LibGDX HTTP reports failure, sockets throw, URI opening returns
+  false. Both metrics sendPost overloads, upload workers and BotDataUploader are disabled.
+  Existing local-history collection/saving is preserved.
+- Prepared manifests have no Main-Class or Class-Path. Original packaged launcher
+  class bytes are preserved, including embedded mod metadata and initializer order;
+  no MTS core patching or game initialization runs during preparation.
+- These are known Java-boundary protections, not an OS sandbox. Direct Java networking
+  outside LibGDX, other native libraries, actual save/config write paths, Steam Auto-Cloud,
+  additional mods, and actual runtime classpath loading still require verification.
+  None of this authorizes game launch; the unconditional holds remain.
+- The inspected system identifies as Windows 11 Home Insider Preview. No callable
+  WindowsSandbox/Get-VM/VBoxManage/vmrun was found. Optional-feature inspection requires
+  Windows administrator elevation and was not completed; no OS feature was enabled.
+- Base game desktop JAR and workshop directory remain absent at the inspected paths.
+  All three-environment and actual gameplay acceptance rows therefore remain incomplete.
+
+## Observation and map scope (2026-09-08)
+
+Card descriptions come from existing `DescriptionLine.text`, not a rerun of card
+description/modifier hooks or powers. Variables present in these cached lines are
+resolved with BaseMod's `isModified ? value : modifiedBaseValue` policy. Unknown
+variables remain literal with `description_complete=false`; missing/hidden/flipped
+card descriptions do not expose new text/values. Existing legacy identity/cost fields
+are unchanged; this is not a complete hidden-information audit.
+
+`Settings.lineBreakViaCharacter` selects a different cached encoding: damage can be
+bare `D`, while block/magic can be `!B!!`/`!M!!`. This encoding is currently withheld
+with `cn_cached_encoding_unsupported`, not falsely marked decoded. Displayed cost is
+also explicitly unavailable. Custom render-time hooks, cache freshness, upgrade popups,
+and arbitrary extension getter purity remain unverified. Description completeness
+only concerns cached text/token resolution, not complete/pixel-identical UI support.
+
+The map adapter calls `FlipMap$FirstRoom.isValidFirstNode` and
+`FlipMap$BossStuff.compatibleGetARealY` when EvilWithin is loaded. This reuses evil-mode,
+invalid-act, actual startY and ending-map rules rather than hardcoding reversed rows.
+Displayed choices and actual boss dispatch share `bossNodeAvailable`. Missing/failing
+optional bindings disable map choices and emit a single local diagnostic; no base-map
+fallback is used when a loaded Downfall adapter fails. Base play has no symbolic
+Downfall dependency. Real gameplay and adapter failure injection remain unverified.
+
+## Resource discipline after interrupted run
+
+The user requested fewer subagents after PC overload. Resume work locally without
+new worker fan-out; run builds/tests sequentially. Map and description verification
+JVMs use bounded heaps. Do not assume other user-owned sessions may be terminated.
+Full compatibility remains the task, not the status of this partial milestone.

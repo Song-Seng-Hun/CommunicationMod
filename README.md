@@ -14,6 +14,18 @@ See [implementation and acceptance ledger](docs/DOWNFALL-IMPLEMENTATION.md) and
 not connected to gameplay. Setup and v1 protocol instructions below are retained
 as historical reference, not instructions to bypass the safety hold.
 
+Offline preparation now blocks the audited Steam and LibGDX upload surfaces in
+new, nonlaunchable local JAR copies. Run `devtools/verify-offline-bytecode.ps1`
+for headless checks; `-PrepareArtifacts` also builds and checks those copies.
+This does **not** establish process/native/save/cloud isolation or enable gameplay.
+See [storage and direct-upload audit](docs/OFFLINE-STORAGE-AUDIT.md).
+
+The fork also adds partial cached UI descriptions/dynamic values and stance data,
+plus optional Downfall map-coordinate helpers for first-room and boss choices.
+These have headless/binding checks, **not** actual gameplay acceptance. Character-break
+description encoding, effective displayed cost, custom render hooks, and the remaining
+Downfall mechanics are not marked fully supported. See the acceptance ledger for gaps.
+
 ## Requirements
 
 - Slay the Spire
