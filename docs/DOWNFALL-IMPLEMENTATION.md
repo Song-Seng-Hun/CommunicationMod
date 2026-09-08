@@ -25,7 +25,7 @@
 | Protocol v2 core | Version/session/state/action IDs, validation, replay rejection, invalidation, local-only failures | Headless unit and fixture pipe tests; not connected to gameplay |
 | Transport | UTF-8, LF/CRLF, 1 MiB input bound, EOF termination, invalid-input/output failure shutdown | Real reader/writer thread tests; legacy command dispatch remains held off |
 | Existing fixes | Hidden draw order policy and null keyword tooltip guard retained | Existing focused headless regressions; gameplay not verified |
-| Public descriptions | Cached card text, dynamic variable values, relic/potion/power text and player stance | Pure text/privacy tests and installed-bytecode binding checks; character-break/CN cache decoding and displayed cost explicitly incomplete; custom rendering/getter purity and gameplay unverified |
+| Public descriptions | Cached card text, dynamic variable values, localized keyword/standard extra hover tooltips, language marker, relic/potion/power text and player stance | Pure text/tooltip/privacy tests and installed-bytecode binding checks; character-break/CN cache, StSLib render-only tooltip extensions and displayed cost explicitly incomplete; custom rendering/getter purity and gameplay unverified |
 | Downfall map coordinates | Optional adapter calls Downfall's actual first-node and boss UI helpers; graph connections remain the game's own normal/Flight/boot checks | Pure graph and installed-bytecode binding checks; real reverse-map/boss/act/endless play not yet verified |
 | Offline bytecode preparation | Pinned four JAR hashes; new nonlaunchable copies; Steam/native entrypoints and LibGDX HTTP/socket/browser boundaries disabled; active metrics senders disabled | Java 8 transformation and artifact checks; original packaged bootstrap preserved byte-for-byte; NOT full native/OS/save/cloud isolation |
 | Native Steam/cloud isolation | Storage/direct-upload bytecode audit completed; runtime isolation not verified | Still blocks game/agent launch and Steam Play integration |
@@ -135,3 +135,14 @@ The user requested fewer subagents after PC overload. Resume work locally withou
 new worker fan-out; run builds/tests sequentially. Map and description verification
 JVMs use bounded heaps. Do not assume other user-owned sessions may be terminated.
 Full compatibility remains the task, not the status of this partial milestone.
+
+## Card and keyword text milestone (2026-09-08)
+
+See `CARD-TEXT-OBSERVATIONS.md` for payload fields, source contracts, bounds and
+remaining coverage. Exact card keyword keys now resolve against the game's current
+localized dictionary. Standard CustomCard and modifier hover providers add detached
+text; missing/null/linkage failures remain explicit without leaking exception detail.
+Hidden cards never enter these getters. StSLib render-time additions remain marked
+unsupported, and CN card-cache decoding is still withheld. New tooltip fields are
+included in draw-order permutation regressions. Runtime/online safety holds stay in
+place; code verification does not constitute installed or live-game acceptance.

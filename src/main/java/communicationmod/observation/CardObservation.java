@@ -42,6 +42,8 @@ public final class CardObservation {
         }
         observation.put("description_source", "cached_ui_lines");
         observation.put("description_rendering", "plain_text_snapshot_icons_preserved");
+        observation.put("text_language", Settings.language == null ? "unknown" : Settings.language.name());
+        CardTooltips.addTo(observation, card, visible);
         // getCost/freeToPlay contain Downfall and StSLib hooks. Do not label the old
         // costForTurn field as the effective displayed cost or invoke unaudited hooks.
         observation.put("displayed_cost_complete", false);

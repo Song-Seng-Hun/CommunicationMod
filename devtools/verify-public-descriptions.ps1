@@ -8,13 +8,17 @@ if (-not $Java) { $Java = Join-Path $DownfallPath 'jre\bin\java.exe' }
 $out = Join-Path ([IO.Path]::GetTempPath()) ('public-description-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $out | Out-Null
 $pure = Join-Path $root 'src\main\java\communicationmod\observation\PublicDescription.java'
-$sources = @("$PSScriptRoot\PublicDescriptionTest.java")
+$sources = @("$PSScriptRoot\PublicDescriptionTest.java", "$PSScriptRoot\PublicTooltipsTest.java")
 if (Test-Path -LiteralPath $pure) { $sources += $pure }
+$tooltips = Join-Path $root 'src\main\java\communicationmod\observation\PublicTooltips.java'
+if (Test-Path -LiteralPath $tooltips) { $sources += $tooltips }
 & javac '-J-Xmx256m' --release 8 -encoding UTF-8 -d $out @sources
 if ($LASTEXITCODE -ne 0) { throw 'Pure test compilation failed' }
 # Deliberately exclude every installed game/mod jar from the execution classpath.
 & $Java '-Xmx256m' '-Dfile.encoding=UTF-8' -cp $out PublicDescriptionTest
 if ($LASTEXITCODE -ne 0) { throw 'Public description assertions failed' }
+& $Java '-Xmx256m' '-Dfile.encoding=UTF-8' -cp $out PublicTooltipsTest
+if ($LASTEXITCODE -ne 0) { throw 'Public tooltip assertions failed' }
 if ($PureOnly) { return }
 $binding = Join-Path $root 'src\main\java\communicationmod\observation\CardObservation.java'
 if (-not (Test-Path -LiteralPath $binding)) { throw 'ASSERT: actual card observation binding is missing' }
@@ -65,8 +69,28 @@ foreach ($member in @('cardDynamicVariableMap', 'DynamicVariable.isModified:', '
     Require $bound ([regex]::Escape($member)) "compiled observer must use $member"
 }
 Require $bound 'Settings.lineBreakViaCharacter:' 'CN cache policy must be selected using the actual rendering mode'
+Require $bound 'CardTooltips.addTo:' 'card tooltip binding missing'
+Require $bound 'Settings.language:' 'snapshot must identify the current game language'
 if ($bound -match '(?:putfield|putstatic)|(?:Method .*\.(?:initializeDescription|updateDescription|applyPowers|calculateCardDamage|onCreateDescription):)') {
     throw 'ASSERT: observer contains state writes or prohibited recomputation'
+}
+$tipBinding = Disassemble "$compileOut;$cp" 'communicationmod.observation.CardTooltips'
+foreach ($member in @('AbstractCard.keywords:', 'GameDictionary.keywords:', 'TipHelper.capitalize:',
+    'CustomCard.getCustomTooltips:', 'CustomCard.getCustomTooltipsTop:',
+    'CardModifierManager.modifiers:', 'AbstractCardModifier.additionalTooltips:',
+    'TooltipInfo.title:', 'TooltipInfo.description:', 'PublicTooltips.collect:')) {
+    Require $tipBinding ([regex]::Escape($member)) "compiled tooltip observer must use $member"
+}
+if ($tipBinding -match '(?:putfield|putstatic)|(?:Method .*\.(?:initializeDescription|updateDescription|applyPowers|calculateCardDamage|onCreateDescription|render|use):)') {
+    throw 'ASSERT: tooltip observer contains state writes or prohibited recomputation'
+}
+$tipHelper = Disassemble $cp 'com.megacrit.cardcrawl.helpers.TipHelper'
+Require $tipHelper 'GameDictionary.keywords:' 'installed hover renderer dictionary changed'
+Require $tipHelper 'BaseMod.getKeywordProper:' 'installed hover renderer proper-name policy changed'
+$fakeKeywords = Disassemble $cp 'basemod.patches.com.megacrit.cardcrawl.helpers.TipHelper.FakeKeywords'
+foreach ($member in @('CustomCard.getCustomTooltips:', 'CustomCard.getCustomTooltipsTop:',
+    'AbstractCardModifier.additionalTooltips:', 'TooltipInfo.title:', 'TooltipInfo.description:')) {
+    Require $fakeKeywords ([regex]::Escape($member)) "installed hover renderer must use $member"
 }
 $converter = Disassemble "$compileOut;$cp" 'communicationmod.GameStateConverter'
 Require $converter 'CardObservation.addTo:' 'card converter binding missing'

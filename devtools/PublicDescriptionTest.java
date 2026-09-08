@@ -32,6 +32,8 @@ public final class PublicDescriptionTest {
         equal(render("#rRed #gGreen #bBlue #yGold NL ONLY NLword [E]", values::get).get("description"),
             "Red Green Blue Gold\nONLY NLword [E]");
         equal(render("", values::get).get("description_complete"), true);
+        equal(render("[#ffcc00]보석[] [#00ff00ff]강화[] [E] [mod:Icon]", values::get).get("description"),
+            "보석 강화 [E] [mod:Icon]");
         equal(render(null, values::get).get("description_complete"), false);
         equal(render(null, values::get).get("description"), "");
         int[] calls = {0};
@@ -116,6 +118,14 @@ public final class PublicDescriptionTest {
             card.put("id", "same"); card.put("uuid", "same");
             final int value = i;
             for (Map.Entry<?, ?> entry : render("!D! !unknown!", key -> key.equals("D") ? value : null).entrySet())
+                card.put((String)entry.getKey(), entry.getValue());
+            Map<String, String> tip = new LinkedHashMap<>();
+            tip.put("title", "변형 효과"); tip.put("description", "공개된 수치 " + value);
+            Function<String, Map<String, String>> lookup = key -> tip;
+            Method tooltipProjection = Class.forName("communicationmod.observation.PublicTooltips").getMethod(
+                "collect", boolean.class, List.class, Function.class, Map.class);
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>)tooltipProjection.invoke(null, true,
+                    Arrays.asList("변형"), lookup, Collections.emptyMap())).entrySet())
                 card.put((String)entry.getKey(), entry.getValue());
             cards.add(card);
         }

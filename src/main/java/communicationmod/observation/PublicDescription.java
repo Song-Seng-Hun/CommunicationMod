@@ -72,7 +72,8 @@ public final class PublicDescription {
             matcher.appendReplacement(output, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(output);
-        text = output.toString().replaceAll("#[rgbypw]", "")
+        text = output.toString().replaceAll("\\[#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?\\]|\\[\\]", "")
+            .replaceAll("#[rgbypw]", "")
             .replaceAll("(?<!\\S)NL(?!\\S)", "\n")
             .replaceAll("[ \\t]*\\n[ \\t]*", "\n").trim();
         if (text.length() > MAX_TEXT) {
