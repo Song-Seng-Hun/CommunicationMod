@@ -33,6 +33,8 @@ import com.megacrit.cardcrawl.shop.StoreRelic;
 import com.megacrit.cardcrawl.ui.buttons.LargeDialogOptionButton;
 import com.megacrit.cardcrawl.ui.panels.EnergyPanel;
 import communicationmod.patches.UpdateBodyTextPatch;
+import communicationmod.observation.CardObservation;
+import communicationmod.observation.PublicDescription;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -649,6 +651,7 @@ public class GameStateConverter {
         jsonCard.put("has_target", card.target== AbstractCard.CardTarget.SELF_AND_ENEMY || card.target == AbstractCard.CardTarget.ENEMY);
         jsonCard.put("exhausts", card.exhaust);
         jsonCard.put("ethereal", card.isEthereal);
+        CardObservation.addTo(jsonCard, card);
         return jsonCard;
     }
 
@@ -735,6 +738,13 @@ public class GameStateConverter {
         jsonPlayer.put("powers", convertCreaturePowersToJson(player));
         jsonPlayer.put("energy", EnergyPanel.totalCount);
         jsonPlayer.put("block", player.currentBlock);
+        if (player.stance != null) {
+            HashMap<String, Object> stance = new HashMap<>();
+            stance.put("id", player.stance.ID);
+            stance.put("name", player.stance.name);
+            stance.putAll(PublicDescription.format(player.stance.description, key -> null));
+            jsonPlayer.put("stance", stance);
+        }
         ArrayList<Object> orbs = new ArrayList<>();
         for(AbstractOrb orb : player.orbs) {
             orbs.add(convertOrbToJson(orb));
@@ -785,6 +795,7 @@ public class GameStateConverter {
             json_power.put("id", power.ID);
             json_power.put("name", power.name);
             json_power.put("amount", power.amount);
+            json_power.putAll(PublicDescription.format(power.description, key -> null));
             Object damage = getFieldIfExists(power, "damage");
             if (damage != null) {
                 json_power.put("damage", (int)damage);
@@ -843,6 +854,7 @@ public class GameStateConverter {
         jsonRelic.put("id", relic.relicId);
         jsonRelic.put("name", relic.name);
         jsonRelic.put("counter", relic.counter);
+        jsonRelic.putAll(PublicDescription.format(relic.description, key -> null));
         return jsonRelic;
     }
 
@@ -861,6 +873,7 @@ public class GameStateConverter {
         HashMap<String, Object> jsonPotion = new HashMap<>();
         jsonPotion.put("id", potion.ID);
         jsonPotion.put("name", potion.name);
+        jsonPotion.putAll(PublicDescription.format(potion.description, key -> null));
         boolean canUse = potion.canUse();
         boolean canDiscard = potion.canDiscard();
         if (potion instanceof PotionSlot) {
