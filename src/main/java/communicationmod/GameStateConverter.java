@@ -32,7 +32,7 @@ import com.megacrit.cardcrawl.shop.StorePotion;
 import com.megacrit.cardcrawl.shop.StoreRelic;
 import com.megacrit.cardcrawl.ui.buttons.LargeDialogOptionButton;
 import com.megacrit.cardcrawl.ui.panels.EnergyPanel;
-import communicationmod.patches.UpdateBodyTextPatch;
+import communicationmod.observation.DialogueObservation;
 import communicationmod.observation.CardObservation;
 import communicationmod.observation.PublicDescription;
 
@@ -146,6 +146,7 @@ public class GameStateConverter {
             state.put("combat_state", getCombatState());
         }
         state.put("screen_state", getScreenState());
+        state.put("narrative", DialogueObservation.snapshot());
 
         HashMap<String, Boolean> keys = new HashMap<>();
         keys.put("ruby", Settings.hasRubyKey);
@@ -214,7 +215,8 @@ public class GameStateConverter {
                 }
                 options.add(json_button);
             }
-            state.put("body_text", removeTextFormatting(UpdateBodyTextPatch.bodyText));
+            state.put("body_text", DialogueObservation.eventBody());
+            state.put("body_text_source", "rendered_dialog_words");
         } else {
             for (String misc_option : ChoiceScreenUtils.getEventScreenChoices()) {
                 HashMap<String, Object> json_button = new HashMap<>();

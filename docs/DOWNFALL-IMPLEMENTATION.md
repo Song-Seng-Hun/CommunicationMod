@@ -26,6 +26,7 @@
 | Transport | UTF-8, LF/CRLF, 1 MiB input bound, EOF termination, invalid-input/output failure shutdown | Real reader/writer thread tests; legacy command dispatch remains held off |
 | Existing fixes | Hidden draw order policy and null keyword tooltip guard retained | Existing focused headless regressions; gameplay not verified |
 | Public descriptions | Cached card text, dynamic variable values, localized keyword/standard extra hover tooltips, language marker, relic/potion/power text and player stance | Pure text/tooltip/privacy tests and installed-bytecode binding checks; character-break/CN cache, StSLib render-only tooltip extensions and displayed cost explicitly incomplete; custom rendering/getter purity and gameplay unverified |
+| Dialogue/situation | Rendered speech/event words, known-origin speaker labels, bounded recent history and public situation; final-frame publication and known overlay filtering | JDK tests and actual-method insertion plus generated render-order fixture; custom renderers, pixel occlusion, actual patch loading/gameplay unverified |
 | Downfall map coordinates | Optional adapter calls Downfall's actual first-node and boss UI helpers; graph connections remain the game's own normal/Flight/boot checks | Pure graph and installed-bytecode binding checks; real reverse-map/boss/act/endless play not yet verified |
 | Offline bytecode preparation | Pinned four JAR hashes; new nonlaunchable copies; Steam/native entrypoints and LibGDX HTTP/socket/browser boundaries disabled; active metrics senders disabled | Java 8 transformation and artifact checks; original packaged bootstrap preserved byte-for-byte; NOT full native/OS/save/cloud isolation |
 | Native Steam/cloud isolation | Storage/direct-upload bytecode audit completed; runtime isolation not verified | Still blocks game/agent launch and Steam Play integration |
@@ -72,6 +73,8 @@
 - `devtools/verify-transport.ps1`: actual reader/writer tests; invalid-input errors in the log are expected test cases.
 - `devtools/verify-public-descriptions.ps1`: pure Java 8 text/privacy checks and static
   installed-renderer/binding verification; never initializes game objects.
+- `devtools/verify-dialogue-observation.ps1`: pure history/word visibility tests,
+  installed-method patch insertion and generated JDK render-order fixture; no game execution.
 - `devtools/verify-map-compatibility.ps1`: pure graph fixtures and static optional
   adapter/dispatch checks against the built mod and installed Downfall helper signatures.
 - Existing keyword and draw-pile verification scripts: headless build/regression only.
@@ -146,3 +149,12 @@ Hidden cards never enter these getters. StSLib render-time additions remain mark
 unsupported, and CN card-cache decoding is still withheld. New tooltip fields are
 included in draw-order permutation regressions. Runtime/online safety holds stay in
 place; code verification does not constitute installed or live-game acceptance.
+
+## Dialogue milestone
+
+`DIALOGUE-OBSERVATIONS.md` describes the new `narrative` contract. Capture excludes
+constructor/action message text and records only successfully rendered words through
+known paths. Event body output no longer reads the pre-reveal update cache. Known
+overlays/fades suppress new capture; custom occlusion remains explicitly unverified.
+History and notification rates are bounded. Existing action/online launch gates are
+unchanged. The milestones above remain partial until actual offline UI acceptance.
