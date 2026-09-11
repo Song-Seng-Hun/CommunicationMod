@@ -67,3 +67,6 @@ node .\mcp-server\scripts\live-client.mjs
 ```
 
 Enter `{"name":"sts_get_state","arguments":{"wait_ms":8000}}`. Each further JSON line is exactly one MCP request. `{"benchmark":true}` performs 50 read-only cached-state calls and measures response sizes; it makes no gameplay decision. Never run this client concurrently with another controller. See `docs/MCP-LIVE-VERIFICATION.md` for measured scope and remaining limitations.
+# ChatGPT Chat mode
+
+For the separate ChatGPT tunnel connection, use [CHAT-MODE.md](../docs/CHAT-MODE.md). Run `devtools/chat-tunnel.ps1 -Operation Prepare` to verify the local stdio target before account registration.
