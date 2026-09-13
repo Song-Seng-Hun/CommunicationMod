@@ -9,6 +9,7 @@ Copy-Item -LiteralPath "$root\plugin\downfall-agent" -Destination $parent -Recur
 $package = Join-Path $parent 'downfall-agent'
 New-Item -ItemType Directory -Path "$package\server" | Out-Null
 Copy-Item -Path "$root\mcp-server\dist\*.js" -Destination "$package\server"
+Copy-Item -LiteralPath "$root\mcp-server\dist\guidance-bundle.json" -Destination "$package\server"
 Copy-Item -LiteralPath "$root\mcp-server\package.json","$root\mcp-server\package-lock.json" -Destination "$package\server"
 Copy-Item -LiteralPath "$PSScriptRoot\manage-plugin-game.ps1" -Destination "$package\scripts\manage-plugin-game.ps1"
 Push-Location "$package\server"

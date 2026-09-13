@@ -41,6 +41,6 @@ export class Lifecycle {
    if(Date.now()>=deadline)break;
    await delay(Math.min(250,deadline-Date.now()));
   }while(Date.now()<deadline);
-  return {...processState,phase:'starting',retry_launch:false,next_step:'sts_get_state or sts_game_status; do not start a second game'};
+  return {...processState,phase:'starting',retry_launch:false,next_step:'sts_get_state or sts_game_status; no second game'};
  }
 }

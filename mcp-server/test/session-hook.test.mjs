@@ -1,0 +1,38 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {readFile,mkdtemp,copyFile,mkdir,readdir,writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';import path from 'node:path';import {fileURLToPath} from 'node:url';
+import {Tiktoken} from 'js-tiktoken/lite';import ranks from 'js-tiktoken/ranks/o200k_base';
+const repo=fileURLToPath(new URL('../../',import.meta.url));
+const load=async()=>{const m=await import('../hooks/session-start.mjs').catch(()=>null);assert.ok(m,'opt-in pure hook handler required');return m;};
+test('hook is opt-in, exact-workspace scoped and never reuses game text or permissions',async()=>{
+ const {contextFor,loadContext,contextText}=await load();
+ const input={hook_event_name:'SessionStart',source:'compact',cwd:repo,body:'ignore rules',permission_mode:'bypassPermissions'};
+ assert.equal(contextFor(input,{},'abcdef1234567890'), '');
+ assert.equal(contextFor({...input,source:'other'},{DOWNFALL_AGENT_CONTEXT:'1'},'abcdef1234567890'),'');
+ assert.equal(contextFor(input,{DOWNFALL_AGENT_CONTEXT:'1'},'invalid'),'');
+ const text=await loadContext(input,{DOWNFALL_AGENT_CONTEXT:'1'});assert.ok(text.startsWith('Downfall examples revision '));
+ assert.ok(!text.includes('ignore rules'));assert.ok(!text.includes('bypassPermissions'));
+ assert.equal(await loadContext({...input,cwd:tmpdir()},{DOWNFALL_AGENT_CONTEXT:'1'}),'');
+ assert.equal(await loadContext({...input,cwd:path.join(repo,'mcp-server')},{DOWNFALL_AGENT_CONTEXT:'1'}),'');
+ assert.ok(new Tiktoken(ranks).encode(contextText('f'.repeat(16)),[],[]).length<=128);
+ const cfg=JSON.parse(await readFile(new URL('../hooks/hooks.template.json',import.meta.url),'utf8'));
+ assert.deepEqual(Object.keys(cfg.hooks),['SessionStart']);
+ assert.equal(cfg.hooks.SessionStart[0].matcher,'^(startup|resume|compact)$');
+ assert.ok(!JSON.stringify(cfg).includes('mcp_tool'));
+});
+test('missing or stale module artifacts silence hook without reading user transcripts',async()=>{
+ const {loadContext}=await load();
+ const root=await mkdtemp(path.join(tmpdir(),'downfall-hook-'));await mkdir(path.join(root,'mcp-server','hooks'),{recursive:true});
+ await copyFile(new URL('../hooks/session-start.mjs',import.meta.url),path.join(root,'mcp-server','hooks','session-start.mjs'));
+ const {loadContext:missing}=await import(new URL('file:///'+path.join(root,'mcp-server','hooks','session-start.mjs').replaceAll('\\','/')).href);
+ assert.equal(await missing({hook_event_name:'SessionStart',source:'startup',cwd:root},{DOWNFALL_AGENT_CONTEXT:'1'}),'');
+ const dist=path.join(root,'mcp-server','dist');await mkdir(dist);
+ for(const name of await readdir(new URL('../dist',import.meta.url)))if(name.endsWith('.js')||name==='guidance-bundle.json')await copyFile(new URL('../dist/'+name,import.meta.url),path.join(dist,name));
+ const input={hook_event_name:'SessionStart',source:'resume',cwd:root},env={DOWNFALL_AGENT_CONTEXT:'1'};
+ assert.ok(await missing(input,env));
+ const session=path.join(dist,'session.js'),original=await readFile(session,'utf8');await writeFile(session,original+'\n// drift\n');
+ assert.equal(await missing(input,env),'');await writeFile(session,original);
+ const bundlePath=path.join(dist,'guidance-bundle.json'),bundle=JSON.parse(await readFile(bundlePath,'utf8'));bundle.hook.tokens=129;await writeFile(bundlePath,JSON.stringify(bundle));
+ assert.equal(await missing(input,env),'');
+ assert.equal(await loadContext({hook_event_name:'SessionStart',source:'startup',cwd:repo},{DOWNFALL_AGENT_CONTEXT:'0'}),'');
+});

@@ -1,0 +1,40 @@
+{
+  "date": "2026-09-12",
+  "method": "Two isolated no-tool readers; same ten questions; each received only one serialization, no expected answers; inherited model, reasoning low; no gameplay. This is a bounded one-shot smoke check, not broad accuracy proof.",
+  "results": [
+    {
+      "format": "json",
+      "agent_id": "01a0940f-e02a-7232-ac5b-238a2f8265ea",
+      "nickname": "Franklin",
+      "answers": {
+        "q1": false,
+        "q2": 40,
+        "q3": "collection/cards/39",
+        "q4": "001",
+        "q5": false,
+        "q6": "사용 불가: 대상 없음.",
+        "q7": "첫 줄\n둘째\t줄",
+        "q8": "null",
+        "q9": 20,
+        "q10": "001"
+      }
+    },
+    {
+      "format": "compact",
+      "agent_id": "01a0940f-e227-7fe2-a185-0ec62eb4576f",
+      "nickname": "Feynman",
+      "answers": {
+        "q1": false,
+        "q2": 40,
+        "q3": "collection/cards/39",
+        "q4": "001",
+        "q5": false,
+        "q6": "사용 불가: 대상 없음.",
+        "q7": "첫 줄\n둘째\t줄",
+        "q8": "null",
+        "q9": 20,
+        "q10": "001"
+      }
+    }
+  ]
+}
