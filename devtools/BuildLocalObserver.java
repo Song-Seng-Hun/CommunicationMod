@@ -57,6 +57,31 @@ public final class BuildLocalObserver {
             }
         });
         CtMethod render=game.getDeclaredMethod("render");
+        render.insertBefore("{communicationmod.observation.CardCostObservation.beginFrame();}");
+        final int[] costHooks={0};
+        take(pool,changed,"com.megacrit.cardcrawl.cards.AbstractCard").getDeclaredMethod("renderEnergy").instrument(new javassist.expr.ExprEditor(){
+            public void edit(javassist.expr.MethodCall call)throws CannotCompileException {
+                if(call.getClassName().endsWith("RenderFixSwitches$RenderEnergySwitch") && call.getMethodName().equals("Insert")) {
+                    costHooks[0]++;
+                    call.replace("{ $_=$proceed($$);communicationmod.observation.CardCostObservation.rendered($1,$3); }");
+                }
+            }
+        });
+        if(costHooks[0]!=1)throw new CannotCompileException("Expected final post-modifier energy renderer");
+        final int[] upgradeHooks={0};
+        take(pool,changed,"com.megacrit.cardcrawl.cards.AbstractCard").getDeclaredMethod("update").instrument(new javassist.expr.ExprEditor(){
+            public void edit(javassist.expr.MethodCall call)throws CannotCompileException {
+                if(call.getMethodName().equals("Postfix") && (call.getClassName().endsWith("$SelectMultiUpgrade") || call.getClassName().endsWith("$SelectBranchedUpgrade"))) {
+                    upgradeHooks[0]++;
+                    call.replace("{communicationmod.observation.NativeUiInput.afterHitbox($1.hb);$proceed($$);}");
+                }
+            }
+        });
+        if(upgradeHooks[0]!=2)throw new CannotCompileException("Expected both installed upgrade choice handlers");
+        take(pool,changed,"com.megacrit.cardcrawl.helpers.Hitbox").getDeclaredMethod("update",new CtClass[0])
+            .insertAfter("{communicationmod.observation.NativeUiInput.afterHitbox(this);}");
+        take(pool,changed,"com.megacrit.cardcrawl.screens.select.GridCardSelectScreen").getDeclaredMethod("updateCardPositionsAndHoverLogic")
+            .insertAfter("{communicationmod.observation.GridSelectionUi.hover(this);}");
         take(pool,changed,"com.megacrit.cardcrawl.screens.select.HandCardSelectScreen").getDeclaredMethod("updateSelectedCards").instrument(new javassist.expr.ExprEditor(){
             public void edit(javassist.expr.MethodCall call)throws CannotCompileException {
                 if(call.getClassName().equals("com.megacrit.cardcrawl.helpers.Hitbox") && call.getMethodName().equals("update"))
@@ -94,7 +119,7 @@ public final class BuildLocalObserver {
         MapDrawingPatch.Node.Raw(take(pool,changed,"com.megacrit.cardcrawl.map.MapRoomNode").getDeclaredMethod("update"));
         MapDrawingPatch.Boss.Raw(take(pool,changed,"com.megacrit.cardcrawl.map.DungeonMap").getDeclaredMethod("update"));
         DialogueRenderPatch.Frame.Raw(render);CombatReadinessPatch.Frame.Raw(render);
-        render.insertAfter("{ communicationmod.observation.LocalObserver.tick(); }");
+        render.insertAfter("{ communicationmod.observation.CardCostObservation.completeFrame(); communicationmod.observation.LocalObserver.tick(); }");
         game.getDeclaredMethod("dispose").insertBefore("{ communicationmod.observation.LocalObserver.close(); }");
         CtMethod reset=game.getDeclaredMethod("startOver",new CtClass[0]);
         MapDrawingPatch.Reset.Raw(reset);

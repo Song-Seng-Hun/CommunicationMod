@@ -15,8 +15,9 @@ import java.util.Map;
  * initializeDescription already applies CardModifierOnCreateDescription to the UI cache.
  * Reading that cache avoids replaying description hooks or recomputing game statistics.
  * Extension value getters have the same read-only contract expected by the renderer.
- * Custom render hooks, dynamic-text refresh, alternate costs and upgrade-popup previews
- * are outside this bounded observation. No rendering/initialization methods are invoked.
+ * Custom render hooks, dynamic-text refresh and alternate costs are outside this
+ * bounded observation. No rendering/initialization methods are invoked here.
+ * CardUpgradeObservation separately initializes detached next-upgrade preview copies.
  */
 public final class CardObservation {
     private CardObservation() { }
@@ -44,10 +45,9 @@ public final class CardObservation {
         observation.put("description_rendering", "plain_text_snapshot_icons_preserved");
         observation.put("text_language", Settings.language == null ? "unknown" : Settings.language.name());
         CardTooltips.addTo(observation, card, visible);
-        // getCost/freeToPlay contain Downfall and StSLib hooks. Do not label the old
-        // costForTurn field as the effective displayed cost or invoke unaudited hooks.
-        observation.put("displayed_cost_complete", false);
-        observation.put("displayed_cost_unavailable_reason", "patched_cost_rendering_not_evaluated");
+        // Read only a value actually emitted by the native renderer in this completed frame.
+        CardCostObservation.addTo(observation,card);
+        observation.putAll(CharacterResources.cardDetails(card));
         target.putAll(observation);
     }
 
