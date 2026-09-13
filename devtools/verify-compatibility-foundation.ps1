@@ -21,6 +21,7 @@ $mod = Join-Path $root 'target\CommunicationMod.jar'
 & "$PSScriptRoot\verify-dialogue-observation.ps1" -DownfallPath $DownfallPath
 & "$PSScriptRoot\verify-combat-readiness.ps1" -DownfallPath $DownfallPath
 & "$PSScriptRoot\verify-map-compatibility.ps1" -DownfallPath $DownfallPath
+& "$PSScriptRoot\verify-map-planner.ps1" -DownfallPath $DownfallPath
 & javac --release 8 -cp $game -d $tests "$PSScriptRoot\SafetyWiringTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Safety wiring test compilation failed' }
 & $java8 -cp "$tests;$game" SafetyWiringTest $mod

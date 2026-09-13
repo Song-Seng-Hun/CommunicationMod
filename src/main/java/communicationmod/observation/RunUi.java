@@ -33,6 +33,9 @@ public final class RunUi {
             status.addProperty("game_screen",AbstractDungeon.screen.name());
             status.addProperty("scope","partial_local_run_control");
             if(CardCrawlGame.isPopupOpen || AbstractDungeon.isFadingOut || AbstractDungeon.fadeColor.a>0.01f || AbstractDungeon.player.isDead) return view;
+            if(type.equals("MAP")&&communicationmod.map.MapDrawing.blocksNavigation()) {
+                status.addProperty("reason","human_editing_map");return view;
+            }
             if(AbstractDungeon.screen==AbstractDungeon.CurrentScreen.FTUE) {
                 tutorial(view,status);
             } else if(type.equals("HAND_SELECT")) {
@@ -61,18 +64,35 @@ public final class RunUi {
                     }
                 }
                 if(offered.isEmpty())status.addProperty("reason","event_text_not_ready_or_unsupported_renderer");
-            } else if(type.equals("MAP") && !ChoiceScreenUtils.bossNodeAvailable()) {
-                if(!AbstractDungeon.dungeonMapScreen.clicked && !communicationmod.patches.MapRoomNodeHoverPatch.doHover) {
-                    List<MapRoomNode> nodes=ChoiceScreenUtils.getMapScreenNodeChoices();
-                    for(int i=0;i<nodes.size();i++) {
-                        final int index=i;MapRoomNode node=nodes.get(i);
-                        offered.add(simple("run.map."+node.x+"."+node.y,"x="+node.x+", y="+node.y+" ("+node.getRoom().getMapSymbol()+")",()->{
-                            List<MapRoomNode> fresh=ChoiceScreenUtils.getMapScreenNodeChoices();
-                            if(index>=fresh.size() || fresh.get(index)!=node || AbstractDungeon.dungeonMapScreen.clicked)throw new IllegalArgumentException("Map changed");
-                            ChoiceScreenUtils.makeMapChoice(index);
+            } else if(type.equals("MAP")) {
+                offered.addAll(communicationmod.map.MapDrawing.actions());
+                final MapRoomNode origin=AbstractDungeon.getCurrMapNode();
+                final Object map=AbstractDungeon.map;
+                if(!communicationmod.compat.DownfallMapCoordinates.isSupported()) {
+                    status.addProperty("reason",communicationmod.compat.DownfallMapCoordinates.getUnsupportedReason());
+                } else if(!mapInputPending()) {
+                    if(ChoiceScreenUtils.bossNodeAvailable()) {
+                        offered.add(simple("run.map.boss",AbstractDungeon.bossKey==null?"boss":AbstractDungeon.bossKey,()->{
+                            requireMapUnchanged(origin,map);
+                            if(!ChoiceScreenUtils.bossNodeAvailable())throw new IllegalArgumentException("Boss entry changed");
+                            ChoiceScreenUtils.makeMapChoice(0);
                         }));
+                    } else {
+                        List<MapRoomNode> nodes=ChoiceScreenUtils.getMapScreenNodeChoices();
+                        for(int i=0;i<nodes.size();i++) {
+                            final int index=i;MapRoomNode node=nodes.get(i);
+                            offered.add(simple("run.map."+node.x+"."+node.y,"x="+node.x+", y="+node.y+" ("+node.getRoom().getMapSymbol()+")",()->{
+                                requireMapUnchanged(origin,map);
+                                List<MapRoomNode> fresh=ChoiceScreenUtils.getMapScreenNodeChoices();
+                                if(ChoiceScreenUtils.bossNodeAvailable() || index>=fresh.size() || fresh.get(index)!=node)throw new IllegalArgumentException("Map changed");
+                                ChoiceScreenUtils.makeMapChoice(index);
+                            }));
+                        }
                     }
-                }
+                    if(!communicationmod.compat.DownfallMapCoordinates.isSupported()) {
+                        offered.clear();status.addProperty("reason",communicationmod.compat.DownfallMapCoordinates.getUnsupportedReason());
+                    }
+                } else status.addProperty("reason","map_input_pending_or_not_ready");
             } else status.addProperty("reason","unsupported_run_screen");
             status.addProperty("stable",!offered.isEmpty());return view;
         } catch(RuntimeException | LinkageError failure) {
@@ -82,6 +102,20 @@ public final class RunUi {
         }
     }
     public List<ProtocolSession.Action> actions(){return inMenu?menu.actions():new ArrayList<>(offered);}
+
+    private static boolean mapInputPending() {
+        return AbstractDungeon.screen!=AbstractDungeon.CurrentScreen.MAP
+            || AbstractDungeon.getCurrRoom()==null
+            || AbstractDungeon.getCurrRoom().phase!=com.megacrit.cardcrawl.rooms.AbstractRoom.RoomPhase.COMPLETE
+            || AbstractDungeon.dungeonMapScreen.clicked
+            || communicationmod.patches.MapRoomNodeHoverPatch.doHover
+            || communicationmod.patches.DungeonMapPatch.doBossHover;
+    }
+
+    private static void requireMapUnchanged(MapRoomNode origin,Object map) {
+        if(mapInputPending() || AbstractDungeon.getCurrMapNode()!=origin || AbstractDungeon.map!=map
+            || !communicationmod.compat.DownfallMapCoordinates.isSupported())throw new IllegalArgumentException("Map changed");
+    }
 
     private void tutorial(JsonObject view,JsonObject status) {
         com.megacrit.cardcrawl.ui.FtueTip tip=AbstractDungeon.ftue;

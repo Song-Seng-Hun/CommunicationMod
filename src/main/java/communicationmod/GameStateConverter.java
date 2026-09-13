@@ -141,6 +141,7 @@ public class GameStateConverter {
         state.put("potions", potions);
 
         state.put("map", convertMapToJson());
+        state.put("map_plan", communicationmod.map.MapDrawing.observation());
         if(CommandExecutor.isChooseCommandAvailable()) {
             state.put("choice_list", ChoiceScreenUtils.getCurrentChoiceList());
         }

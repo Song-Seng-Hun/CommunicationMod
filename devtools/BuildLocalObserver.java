@@ -75,10 +75,29 @@ public final class BuildLocalObserver {
                     call.replace("{$proceed($$);if(java.lang.Boolean.getBoolean(\"communicationmod.play_control\")){communicationmod.patches.MapRoomNodeHoverPatch.Insert(this);}}");
             }
         });
+        final int[] bossHooks={0};
+        take(pool,changed,"com.megacrit.cardcrawl.map.DungeonMap").getDeclaredMethod("update").instrument(new javassist.expr.ExprEditor(){
+            public void edit(javassist.expr.MethodCall call)throws CannotCompileException {
+                if(call.getClassName().equals("com.megacrit.cardcrawl.helpers.Hitbox") && call.getMethodName().equals("update")) {
+                    bossHooks[0]++;
+                    call.replace("{$proceed($$);if(java.lang.Boolean.getBoolean(\"communicationmod.play_control\")){communicationmod.patches.DungeonMapPatch.Insert(this);}}");
+                }
+            }
+        });
+        if(bossHooks[0]!=1)throw new CannotCompileException("Expected exactly one boss hitbox update, found "+bossHooks[0]);
+        CtClass mapScreen=take(pool,changed,"com.megacrit.cardcrawl.screens.DungeonMapScreen");
+        MapDrawingPatch.Update.Raw(mapScreen.getDeclaredMethod("update"));
+        MapDrawingPatch.Render.Raw(mapScreen.getDeclaredMethod("render"));
+        MapDrawingPatch.Mouse.Raw(mapScreen.getDeclaredMethod("updateMouse"));
+        MapDrawingPatch.Scroll.Raw(mapScreen.getDeclaredMethod("updateYOffset"));
+        MapDrawingPatch.Controller.Raw(mapScreen.getDeclaredMethod("updateControllerInput"));
+        MapDrawingPatch.Node.Raw(take(pool,changed,"com.megacrit.cardcrawl.map.MapRoomNode").getDeclaredMethod("update"));
+        MapDrawingPatch.Boss.Raw(take(pool,changed,"com.megacrit.cardcrawl.map.DungeonMap").getDeclaredMethod("update"));
         DialogueRenderPatch.Frame.Raw(render);CombatReadinessPatch.Frame.Raw(render);
         render.insertAfter("{ communicationmod.observation.LocalObserver.tick(); }");
         game.getDeclaredMethod("dispose").insertBefore("{ communicationmod.observation.LocalObserver.close(); }");
         CtMethod reset=game.getDeclaredMethod("startOver",new CtClass[0]);
+        MapDrawingPatch.Reset.Raw(reset);
         DialogueRenderPatch.Reset.Raw(reset);reset.insertBefore("{communicationmod.GameStateListener.resetStateVariables();}");
         raw(pool,changed,"Talk","com.megacrit.cardcrawl.actions.animations.TalkAction","update");
         raw(pool,changed,"Neow","com.megacrit.cardcrawl.neow.NeowEvent","talk");

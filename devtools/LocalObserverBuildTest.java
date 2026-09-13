@@ -35,6 +35,17 @@ public final class LocalObserverBuildTest {
         expect(find(calls,"GameStateListener.signalTurnStart")>=0,"real turn start bound");
         calls=calls(pool.get("com.megacrit.cardcrawl.map.MapRoomNode").getDeclaredMethod("update"));
         expect(find(calls,"MapRoomNodeHoverPatch.Insert")>=0 && find(calls,"java.lang.Boolean.getBoolean")>=0,"map selection hook explicitly gated to local play control");
+        calls=calls(pool.get("com.megacrit.cardcrawl.map.DungeonMap").getDeclaredMethod("update"));
+        expect(count(calls,"DungeonMapPatch.Insert")==1 && find(calls,"java.lang.Boolean.getBoolean")>=0,
+            "boss selection hook installed once and explicitly gated to local play control");
+        expect(find(calls,"DungeonMapPatch.Insert")>find(calls,"Hitbox.update") &&
+            find(calls,"DungeonMapPatch.Insert")<find(calls,"DungeonMap.updateReticle"),
+            "boss input injected after hitbox refresh and before native click handling");
+        CtClass mapScreen=pool.get("com.megacrit.cardcrawl.screens.DungeonMapScreen");
+        expect(find(calls(mapScreen.getDeclaredMethod("update")),"MapDrawing.beforeUpdate")==0,"drawing owns input before native map update");
+        expect(find(calls(mapScreen.getDeclaredMethod("render")),"MapDrawing.render")>=0,"map drawing rendered in copied runtime");
+        for(String method:new String[]{"updateMouse","updateYOffset","updateControllerInput"})
+            expect(find(calls(mapScreen.getDeclaredMethod(method)),"MapDrawing.blocksNavigation")>=0,"editor input guard "+method);
         CtClass steam=pool.get("com.megacrit.cardcrawl.integrations.steam.SteamIntegration");
         for(CtBehavior method:steam.getDeclaredBehaviors())expect(!calls(method).toString().contains("steamworks"),"test integration cannot submit Steam records");
         for(String name:new String[]{"Metrics","BotDataUploader"}) {
