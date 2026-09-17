@@ -29,9 +29,10 @@ test('public pinned path keeps stale protection and resolves short action aliase
 test('public action arguments omit pinned constants and the session restores them before dispatch',async()=>{
  const {GameSession}=await import('../dist/session.js');const sent=[],parameters={type:'object',additionalProperties:false,properties:{map_id:{type:'string',const:'map-9'},revision:{type:'integer',const:4},nodes:{type:'array'}},required:['map_id','revision','nodes']};
  const g=new GameSession(x=>sent.push(x));g.receive(state(1,true,[{id:'run.map.plan',parameters}]));g.present(g.current());
+ assert.throws(()=>g.actPresented({action_id:'a0',request_id:'missing',arguments:{}},100),/Missing required action arguments: nodes/);assert.equal(sent.length,0,'missing public args must fail before bridge dispatch');
  const pending=g.actPresented({action_id:'a0',request_id:'map',arguments:{nodes:['1,2','2,3']}},1000);
  assert.deepEqual(sent[0].arguments,{nodes:['1,2','2,3'],map_id:'map-9',revision:4});assert.equal(sent[0].action_id,'run.map.plan');
  g.receive({type:'result',request_id:'map',status:'applied'});g.receive(state(2));await pending;g.close();
  const bad=new GameSession(()=>{});bad.receive(state(1,true,[{id:'run.map.plan',parameters}]));bad.present(bad.current());
- assert.throws(()=>bad.actPresented({action_id:'a0',request_id:'bad',arguments:{map_id:'stale',nodes:[]}},100),/Fixed action parameter/);bad.close();
+ assert.throws(()=>bad.actPresented({action_id:'a0',request_id:'bad',arguments:{map_id:'stale',nodes:[]}},100),/Unexpected action argument: map_id/);bad.close();
 });
