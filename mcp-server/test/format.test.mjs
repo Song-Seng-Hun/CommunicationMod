@@ -7,7 +7,7 @@ import {decode} from '@toon-format/toon';
 import {Tiktoken} from 'js-tiktoken/lite';
 import ranks from 'js-tiktoken/ranks/o200k_base';
 import {formatContext} from '../dist/format.js';
-import {readContext} from '../dist/context.js';
+import {readContext,decision} from '../dist/context.js';
 import {performanceState} from '../evaluation/performance-fixtures.mjs';
 import {workflows} from '../evaluation/economy-workflows.mjs';
 import {data as readingData,expected} from '../evaluation/format-reading.mjs';
@@ -33,6 +33,12 @@ test('uniform context directory uses smaller lossless labeled TOON without dupli
  assert.ok(tokens(text)<=tokens(original)*0.9);
  assert.ok(tokens(original)-tokens(text)>=16);
  assert.ok(tokens(JSON.stringify(result))<tokens(JSON.stringify({content:[{type:'text',text:original}]})));
+});
+
+test('default combat decision also benefits from lossless TOON tables',async()=>{
+ const s={session_id:'s',state_id:1,ready:true,actions:Array.from({length:6},(_,i)=>({id:`run.play.${i}`,label:`카드 ${i}`,parameters:{}})),observation:{game_state:{screen_type:'NONE',current_hp:42,max_hp:70,gold:50,combat_state:{hand_complete:true,turn:3,player:{current_hp:42,max_hp:70,energy:3,block:4},hand:Array.from({length:6},(_,i)=>({uuid:`u${i}`,id:`c${i}`,name:`카드 ${i}`,cost:i%3,type:i%2?'SKILL':'ATTACK',is_playable:true,description:`효과 ${i}.`,displayed_cost_complete:true,cost_components_complete:true})),monsters:Array.from({length:3},(_,i)=>({name:`적 ${i}`,current_hp:20+i,max_hp:30,block:0,intent:'ATTACK',move_adjusted_damage:6,move_hits:1}))}}}};
+ const data=decision(s);delete data.view_id;const json=JSON.stringify(data),result=await formatContext(data,'compact'),text=result.content[0].text;
+ assert.match(text,/^TOON:/);assert.equal(JSON.stringify(restore(text)),json);assert.ok(tokens(text)<=tokens(json)*0.9);assert.ok(Buffer.byteLength(text,'utf8')<Buffer.byteLength(json,'utf8'));
 });
 
 test('small, non-tabular and oversized responses retain exact JSON text',async()=>{
