@@ -46,6 +46,7 @@ test('large default decisions remain comfortably below Antigravity inline limit'
  s.observation.game_state.combat_state={hand_complete:true,player:{energy:3,block:7},hand:Array.from({length:10},(_,i)=>({name:`카드 ${i}`,cost:i%4,type:i%2?'SKILL':'ATTACK',is_playable:true,description:'피해 6.'})),monsters:Array.from({length:5},(_,i)=>({name:`적 ${i}`,current_hp:20,intent:'ATTACK',move_adjusted_damage:6}))};
  const view=current.decision(s);assert.ok(bytes(view)<5000,`decision ${bytes(view)} bytes`);
  assert.equal(view.session_id,undefined);assert.equal(view.state_id,undefined);assert.equal(view.connection,undefined);assert.equal(view.ready,undefined);
+ assert.deepEqual(view.actions.map(a=>a.id),Array.from({length:12},(_,i)=>`a${i}`));assert.ok(!JSON.stringify(view).includes('run.play.'));
 });
 
 test('hidden state identity invalidates view hash but is never model-visible',()=>{
@@ -56,8 +57,8 @@ test('hidden state identity invalidates view hash but is never model-visible',()
 });
 
 test('action summaries omit empty parameter/ref boilerplate but preserve real argument refs',()=>{
- const s=performanceState(1,'NONE');s.actions=[{id:'run.x',label:'선택',parameters:{}}];assert.deepEqual(current.decision(s).actions[0],{id:'run.x',label:'선택'});
- s.actions=[{id:'run.y',label:'대상',parameters:{target_index:1}}];const a=current.decision(s).actions[0];assert.equal(a.parameters_ref,'actions/0/parameters');assert.equal(current.readContext(s,[a.parameters_ref]).fragments[0].data.target_index,1);
+ const s=performanceState(1,'NONE');s.actions=[{id:'run.x',label:'선택',parameters:{}}];assert.deepEqual(current.decision(s).actions[0],{id:'a0',label:'선택'});
+ s.actions=[{id:'run.y',label:'대상',parameters:{target_index:1}}];const a=current.decision(s).actions[0];assert.equal(a.id,'a0');assert.equal(a.parameters_ref,'actions/0/parameters');assert.equal(current.readContext(s,[a.parameters_ref]).fragments[0].data.target_index,1);
 });
 
 test('multi-card reads share one bounded response budget',()=>{
