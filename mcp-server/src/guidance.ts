@@ -13,12 +13,13 @@ const cleanProse=(text:string)=>text
  .replace(/No current IDs\/refs for context/gi,'No current refs for context')
  .replace(/current IDs\/refs/gi,'current refs');
 function publicCapsule(source:Capsule):Capsule {
- const capsule:any=structuredClone(source);
- delete capsule.revision;
+ const capsule:any=structuredClone(source);delete capsule.revision;
  for(const [key,binding] of Object.entries(capsule.bindings as Record<string,{source:string}>))if(['current.session_id','current.state_id'].includes(binding.source))delete capsule.bindings[key];
- for(const call of capsule.calls as Array<{arguments:Record<string,unknown>}>){delete call.arguments.session_id;delete call.arguments.state_id;}
- for(const key of ['when','not_when','requires','expect','stop'])capsule[key]=cleanProse(capsule[key]);
- return capsule as Capsule;
+ for(const call of capsule.calls as Array<{tool:string;arguments:Record<string,unknown>}>){
+  delete call.arguments.session_id;delete call.arguments.state_id;
+  if(call.tool==='sts_act'){delete call.arguments.request_id;delete call.arguments.wait_ms;}
+ }
+ for(const key of ['when','not_when','requires','expect','stop'])capsule[key]=cleanProse(capsule[key]);return capsule as Capsule;
 }
 export function exampleFragment(capsule:Capsule):Obj {return {ref:'guidance/'+capsule.id,data:publicCapsule(capsule)};}
 const active=new Map<string,{capability:Capability;revision:string}>();
@@ -36,28 +37,23 @@ export interface GuidanceSelection {summary:Obj;directory:Obj;capsules:Map<strin
 export function selectGuidance(state:Obj,scope:{screen:string;roots:Obj;unsupported:boolean}):GuidanceSelection|undefined {
  if(typeof state.session_id!=='string'||!state.session_id||!Number.isSafeInteger(state.state_id)||Number(state.state_id)<0)return;
  const ids=new Set<string>(),add=(values?:Set<string>)=>{for(const value of values??[])ids.add(value);};
- const connection=obj(state.connection),pending=!!connection.pending_request_id;
- const blocked=state.ready!==true || pending || (typeof connection.status==='string' && connection.status!=='connected') || scope.unsupported;
+ const connection=obj(state.connection),pending=!!connection.pending_request_id,blocked=state.ready!==true||pending||(typeof connection.status==='string'&&connection.status!=='connected')||scope.unsupported;
  if(blocked)add(specials.get(pending?'pending':'unready'));
  else{
-  add(specials.get('ready'));add(screens.get(scope.screen));for(const root of Object.keys(scope.roots))add(rootsIndex.get(root));
-  let empty=false,parameters=false;
+  add(specials.get('ready'));add(screens.get(scope.screen));for(const root of Object.keys(scope.roots))add(rootsIndex.get(root));let empty=false,parameters=false;
   for(const value of list(scope.roots.actions)){
    const a=obj(value);if(typeof a.id!=='string')continue;let matched=actionsIndex.get(a.id);
-   if(!matched)for(let i=a.id.lastIndexOf('.');i>=0;i=a.id.lastIndexOf('.',i-1)){matched=actionsIndex.get(a.id.slice(0,i+1));if(matched || i===0)break;}
+   if(!matched)for(let i=a.id.lastIndexOf('.');i>=0;i=a.id.lastIndexOf('.',i-1)){matched=actionsIndex.get(a.id.slice(0,i+1));if(matched||i===0)break;}
    add(matched);if(a.parameters!==null&&typeof a.parameters==='object'&&!Array.isArray(a.parameters)){if(Object.keys(a.parameters).length)parameters=true;else empty=true;}
   }
   if(empty)add(specials.get('empty_parameters'));if(parameters)add(specials.get('parameters'));
  }
  const selected=[...ids].map(id=>active.get(id)!).filter(x=>x&&x.capability.gate.special!=='bootstrap'&&(!blocked||x.capability.id.startsWith('recovery.'))).sort((a,b)=>a.capability.priority-b.capability.priority||(a.capability.id<b.capability.id?-1:1));
- if(!selected.length)return;
- const directory:Obj=Object.create(null),capsules=new Map<string,Capsule>();
+ if(!selected.length)return;const directory:Obj=Object.create(null),capsules=new Map<string,Capsule>();
  for(const {capability:c} of selected){const cases:Obj=Object.create(null);for(const capsule of c.cases){cases[capsule.case]={title:capsule.case};capsules.set('guidance/'+capsule.id,capsule);}directory[c.id]=cases;}
  return {summary:{ref:'guidance/'+selected[0].capability.id+'/normal'},directory,capsules};
 }
 export function guidanceFragment(selection:GuidanceSelection|undefined,ref:string,offset:number):Obj|undefined {
- if(!selection)unavailable();if(ref==='guidance')return;
- if(!/^guidance\/[a-z][a-z0-9.-]*(?:\/(?:normal|incomplete|exception))?$/.test(ref))return unavailable();
- const parts=ref.split('/');if(!Object.hasOwn(selection!.directory,parts[1]))return unavailable();if(parts.length===2)return;
- const capsule=selection!.capsules.get(ref);if(!capsule)return unavailable();if(offset!==0)throw new Error('Example offset must be 0; capsule is atomic.');return exampleFragment(capsule);
+ if(!selection)unavailable();if(ref==='guidance')return;if(!/^guidance\/[a-z][a-z0-9.-]*(?:\/(?:normal|incomplete|exception))?$/.test(ref))return unavailable();
+ const parts=ref.split('/');if(!Object.hasOwn(selection!.directory,parts[1]))return unavailable();if(parts.length===2)return;const capsule=selection!.capsules.get(ref);if(!capsule)return unavailable();if(offset!==0)throw new Error('Example offset must be 0; capsule is atomic.');return exampleFragment(capsule);
 }
