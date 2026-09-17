@@ -41,7 +41,7 @@ Use `sts_act` for one offered action. Send only its `action_id` and required gam
 | `parameters_ref` present | Read that ref for arguments; follow child refs only if needed. |
 | Several needed refs | Batch 1–8 refs in `sts_get_context`. Different `offset` values require separate calls. Multiple card refs may return summaries; read one card ref alone for full detail. |
 | Selected card | Use its explicit ref. A single-card read can return full descriptions, keywords and upgrade details. |
-| Format | Default JSON for ordinary reads. Use `response_format:"compact"` only for large list/directory pages when it materially reduces tokens. |
+| Format | State/action/context responses automatically use lossless TOON only when it is materially smaller; otherwise they remain JSON. Do not request a format just to optimize size. Use `response_format:"json"` only when literal JSON syntax is specifically needed. |
 
 Routine reads need no repeated plan or narration. Preserve required progress updates, event explanations and risky-action confirmations. Reduced calls never justify guessed facts, automatic destructive approval or uncertain-command replay.
 
