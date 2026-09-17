@@ -33,6 +33,15 @@ export function publicParameterSchema(value:unknown):Obj {
  return schema;
 }
 
+/** Fail locally for obvious public-schema mistakes so malformed actions never occupy the bridge single-flight slot. */
+export function assertPublicArguments(schemaValue:unknown,argumentsValue:unknown):Obj {
+ const schema=publicParameterSchema(schemaValue),args=clone(obj(argumentsValue)),properties=obj(schema.properties),required=requiredKeys(schema);
+ const missing=[...required].filter(key=>!Object.hasOwn(args,key));
+ if(missing.length)throw new Error('Missing required action arguments: '+missing.join(', '));
+ if(schema.additionalProperties===false)for(const key of Object.keys(args))if(!Object.hasOwn(properties,key))throw new Error('Unexpected action argument: '+key);
+ return args;
+}
+
 /** Reinsert only required fixed parameters from the exact action schema selected in the pinned state. */
 export function injectFixedArguments(schemaValue:unknown,argumentsValue:unknown):Obj {
  const schema=obj(schemaValue),out=clone(obj(argumentsValue)),properties=obj(schema.properties),required=requiredKeys(schema);
