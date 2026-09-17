@@ -8,6 +8,7 @@ const hash=(v:string)=>createHash('sha256').update(v).digest('hex');
 const unavailable=()=>{throw new Error('Reference not available in current state.');};
 const cleanProse=(text:string)=>text.replace(/same current session\/state;?\s*/gi,'').replace(/current session\/state and\s*/gi,'').replace(/Stale required IDs\/refs/gi,'Stale refs').replace(/No current IDs\/refs for context/gi,'No current refs for context').replace(/current IDs\/refs/gi,'current refs').replace(/whether its view_id changed/gi,'whether the visible decision changed').replace(/omit known_view and recover it/gi,'request a full refresh').replace(/\bview_id\b/gi,'visible decision').replace(/\bknown_view\b/gi,'delta baseline').replace(/current map_id\/revision/gi,'pinned current map state').replace(/map_id\/revision/gi,'map state').replace(/current event_reading\.reading_id/gi,'pinned current event page').replace(/\breading_id\b/gi,'pinned event page').replace(/current decision_id/gi,'pinned current combat decision').replace(/\bdecision_id\b/gi,'pinned combat decision');
 const bindNames=(value:unknown,out=new Set<string>()):Set<string>=>{if(value&&typeof value==='object'&&!Array.isArray(value)&&Object.hasOwn(value,'$bind')){const key=(value as Obj).$bind;if(typeof key==='string')out.add(key);return out;}if(Array.isArray(value))for(const child of value)bindNames(child,out);else if(value&&typeof value==='object')for(const child of Object.values(value as Obj))bindNames(child,out);return out;};
+const cleanBindingSource=(source:string)=>source.replace(/agent\.commentary_already_presented_to_user_for_current\.event_reading\.reading_id/g,'agent.commentary_already_presented_for_pinned_event_page').replace(/current\.event_reading\.reading_id/g,'pinned_event_page');
 function publicCapsule(source:Capsule):Capsule {
  const capsule:any=structuredClone(source);delete capsule.revision;
  for(const call of capsule.calls as Array<{tool:string;arguments:Record<string,unknown>}>){
@@ -18,7 +19,9 @@ function publicCapsule(source:Capsule):Capsule {
   }
   if(call.tool==='sts_get_state')delete call.arguments.known_view;
  }
- const used=new Set<string>();for(const call of capsule.calls)bindNames(call.arguments,used);for(const key of Object.keys(capsule.bindings))if(!used.has(key))delete capsule.bindings[key];for(const key of ['when','not_when','requires','expect','stop'])capsule[key]=cleanProse(capsule[key]);return capsule as Capsule;
+ const used=new Set<string>();for(const call of capsule.calls)bindNames(call.arguments,used);
+ for(const key of Object.keys(capsule.bindings))if(!used.has(key))delete capsule.bindings[key];else if(typeof capsule.bindings[key]?.source==='string')capsule.bindings[key].source=cleanBindingSource(capsule.bindings[key].source);
+ for(const key of ['when','not_when','requires','expect','stop'])capsule[key]=cleanProse(capsule[key]);return capsule as Capsule;
 }
 export function exampleFragment(capsule:Capsule):Obj {return {ref:'guidance/'+capsule.id,data:publicCapsule(capsule)};}
 const active=new Map<string,{capability:Capability;revision:string}>();
