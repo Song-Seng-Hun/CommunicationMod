@@ -64,30 +64,31 @@ public final class ProtocolSession {
 
     private String act(JsonObject request) {
         final String requestId;
+        try { requestId = string(request, "request_id"); }
+        catch (RuntimeException malformed) { return error("INVALID_MESSAGE"); }
         final String actionId;
         final JsonObject arguments;
         final long expectedState;
         try {
-            if (!string(request, "session_id").equals(sessionId)) return error("SESSION_MISMATCH");
-            requestId = string(request, "request_id");
+            if (!string(request, "session_id").equals(sessionId)) return error(requestId, "SESSION_MISMATCH");
             actionId = string(request, "action_id");
             expectedState = integer(request, "state_id");
             JsonElement args = request.get("arguments");
-            if (args == null || !args.isJsonObject()) return error("INVALID_ARGUMENTS");
+            if (args == null || !args.isJsonObject()) return error(requestId, "INVALID_ARGUMENTS");
             arguments = args.getAsJsonObject();
-        } catch (RuntimeException malformed) { return error("INVALID_MESSAGE"); }
-        if (consumedRequests.contains(requestId)) return error("DUPLICATE_REQUEST");
-        if (expectedState != stateId) return error("STALE_STATE");
-        if (!ready) return error("NOT_READY");
+        } catch (RuntimeException malformed) { return error(requestId, "INVALID_MESSAGE"); }
+        if (consumedRequests.contains(requestId)) return error(requestId, "DUPLICATE_REQUEST");
+        if (expectedState != stateId) return error(requestId, "STALE_STATE");
+        if (!ready) return error(requestId, "NOT_READY");
         Action action = actions.get(actionId);
-        if (action == null) return error("UNKNOWN_ACTION");
-        if (consumedRequests.size() >= MAX_REQUESTS) return error("SESSION_LIMIT");
+        if (action == null) return error(requestId, "UNKNOWN_ACTION");
+        if (consumedRequests.size() >= MAX_REQUESTS) return error(requestId, "SESSION_LIMIT");
         try { action.validate.accept(copy(arguments)); }
-        catch (IllegalArgumentException invalid) { return error("INVALID_ARGUMENTS"); }
+        catch (IllegalArgumentException invalid) { return error(requestId, "INVALID_ARGUMENTS"); }
         catch (RuntimeException failure) {
             report(failure);
             invalidate();
-            return error("VALIDATION_FAILED");
+            return error(requestId, "VALIDATION_FAILED");
         }
         // Consume before the callback: a partially applied failing action must not replay.
         consumedRequests.add(requestId);
@@ -162,7 +163,13 @@ public final class ProtocolSession {
     }
 
     private String error(String code) {
+        return error(null, code);
+    }
+
+    /** Correlate action failures so the outer single-flight bridge can always release its pending lock. */
+    private String error(String requestId, String code) {
         JsonObject object = envelope("error");
+        if (requestId != null && !requestId.isEmpty()) object.addProperty("request_id", requestId);
         object.addProperty("code", code);
         return object.toString();
     }
