@@ -24,13 +24,12 @@ test('stale or missing guidance artifact disables examples only; native rules st
   }
   const api=await import(pathToFileURL(path.join(temp,'context.js')).href);
   const s={session_id:'s',state_id:1,ready:true,actions:[{id:'run.shop.card.a',parameters:{}}],observation:{game_state:{screen_type:'SHOP_SCREEN',current_hp:7}}};
-  const view=api.decision(s);assert.equal(view.player.current_hp,7);
-  assert.ok(api.readContext(s,['rules']).fragments.length);
+  const view=api.decision(s);assert.equal(view.player.current_hp,7);assert.ok(api.readContext(s,['rules']).fragments.length);
   if(mode==='one-capability'){
-   assert.ok(view.guidance);const rows=api.readContext(s,['guidance']).fragments[0].toc;
-   assert.ok(rows.every(x=>!x.ref.startsWith('guidance/shop')));
+   assert.ok(view.toc.some(x=>x.ref==='guidance'));assert.equal(view.guidance,undefined);
+   const rows=api.readContext(s,['guidance']).fragments[0].toc;assert.ok(rows.every(x=>!x.ref.startsWith('guidance/shop')));
   }else{
-   assert.equal(view.guidance,undefined);assert.throws(()=>api.readContext(s,['guidance']),/not available/);
+   assert.ok(!view.toc.some(x=>x.ref==='guidance'));assert.equal(view.guidance,undefined);assert.throws(()=>api.readContext(s,['guidance']),/not available/);
   }
  }
 });
