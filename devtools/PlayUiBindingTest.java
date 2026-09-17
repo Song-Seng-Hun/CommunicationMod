@@ -15,6 +15,9 @@ public final class PlayUiBindingTest {
         check(!calls.contains("CommandExecutor.executeCommand"),"legacy executor remains blocked");
         check(calls.contains("FtueTip.update"),"tutorial acknowledgement uses the original button handler");
         check(calls.contains("MultiPageFtue.update"),"first combat uses its distinct paginated tutorial handler");
+        String potionCalls=calls(p.get("communicationmod.observation.PotionUi")).toString();
+        check(potionCalls.contains("CombatObservation.invalidate"),"successful combat potion must rearm a fresh stable decision");
+        check(!potionCalls.contains("CommandExecutor.executePotionCommand")&&!potionCalls.contains("CommandExecutor.executeCommand"),"MCP potion path must stay on native UI handlers");
         javassist.bytecode.ConstPool constants=run.getClassFile2().getConstPool();boolean hermit=false;
         for(int i=1;i<constants.getSize();i++)if(constants.getTag(i)==javassist.bytecode.ConstPool.CONST_String && "hermit.util.HermitTutorials".equals(constants.getStringInfo(i)))hermit=true;
         check(hermit,"Hermit tutorial must have an explicit optional allowlist entry");
@@ -22,7 +25,7 @@ public final class PlayUiBindingTest {
         CtClass button=p.get("com.megacrit.cardcrawl.ui.buttons.ConfirmButton");for(String f:new String[]{"isHidden","current_x","target_x","buttonText"})button.getDeclaredField(f);
         p.get("com.megacrit.cardcrawl.screens.charSelect.CharacterSelectScreen").getDeclaredMethod("updateButtons");
         if(args.length>2){CtClass h=p.get("hermit.util.HermitTutorials");for(String f:new String[]{"txt1","txt2","LABEL","currentSlot","scrollTimer","screen"})h.getDeclaredField(f);h.getDeclaredMethod("update");}
-        System.out.println("PASS: installed Embark signatures, shared public filter, whole-hand claim and no legacy dispatch");
+        System.out.println("PASS: installed Embark signatures, shared public filter, potion rearm, whole-hand claim and no legacy dispatch");
     }
     private static List<String> calls(CtClass c)throws Exception{List<String> out=new ArrayList<>();for(CtBehavior b:c.getDeclaredBehaviors())b.instrument(new ExprEditor(){public void edit(MethodCall m){out.add(m.getClassName()+"."+m.getMethodName());}});return out;}
     private static void check(boolean yes,String message){if(!yes)throw new AssertionError(message);}
