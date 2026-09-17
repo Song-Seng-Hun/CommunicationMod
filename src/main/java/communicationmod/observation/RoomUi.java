@@ -34,7 +34,7 @@ public final class RoomUi {
             // normal game update open SHOP_SCREEN. This is also the proven legacy `choose shop` path.
             if(merchant!=null && !MerchantPatch.visitMerchant)actions.add(action("run.shop.enter",Merchant.NAMES[0],null,"play",()->room.merchant==merchant && !AbstractDungeon.isScreenUp && !MerchantPatch.visitMerchant,
                 ()->MerchantPatch.visitMerchant=true));
-            proceed(actions,"run.room.proceed");
+            shopProceed(actions,room);
         } else if(type.equals("SHOP_SCREEN"))shop(view,actions);
         else if(type.equals("BOSS_REWARD"))boss(view,actions);
         else if(type.equals("CHEST")) {
@@ -114,6 +114,14 @@ public final class RoomUi {
                 ()->NativeUiInput.click(cancel.hb,()->NativeUiInput.invoke(owner,"updateCancelButton"))));
     }
     private static AbstractChest chest(){AbstractRoom room=AbstractDungeon.getCurrRoom();return room instanceof TreasureRoomBoss?((TreasureRoomBoss)room).chest:room instanceof TreasureRoom?((TreasureRoom)room).chest:null;}
+    private static void shopProceed(List<ProtocolSession.Action> actions,ShopRoom room) {
+        ProceedButton button=AbstractDungeon.overlayMenu.proceedButton;
+        Hitbox hb=(Hitbox)NativeUiInput.field(button,"hb");
+        if(hb.clicked || hb.clickStarted)return;
+        actions.add(action("run.room.proceed",(String)NativeUiInput.field(button,"label"),null,"play",
+            ()->AbstractDungeon.getCurrRoom()==room && AbstractDungeon.overlayMenu.proceedButton==button && !AbstractDungeon.isScreenUp && !hb.clicked && !hb.clickStarted,
+            ()->{button.show();hb.clicked=true;}));
+    }
     static void proceed(List<ProtocolSession.Action> actions,String id) {
         ProceedButton button=AbstractDungeon.overlayMenu.proceedButton;
         if(NativeUiInput.visible(button))actions.add(action(id,(String)NativeUiInput.field(button,"label"),null,"play",()->AbstractDungeon.overlayMenu.proceedButton==button && NativeUiInput.visible(button),
