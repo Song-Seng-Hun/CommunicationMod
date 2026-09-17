@@ -10,7 +10,7 @@ const child=(ref:string,key:string)=>ref+'/'+encodeURIComponent(key);
 const size=(v:unknown)=>Array.isArray(v)||typeof v==='string'?v.length:Object.keys(obj(v)).length;
 const bytes=(v:unknown)=>Buffer.byteLength(JSON.stringify(v),'utf8');
 const provenance=new Set(['description_source','description_rendering','tooltips_source','tooltips_rendering','render_frame']);
-const nativeKeys=new Set(['class','act','floor','ascension_level','current_hp','max_hp','gold','keys','relics','potions','screen_type','screen_state','deck','map','map_plan','combat_state','mechanics','narrative','seed','choice_list']);
+const nativeKeys=new Set(['screen_name','is_screen_up','screen_type','room_phase','action_phase','current_action','room_type','current_hp','max_hp','floor','act','act_boss','gold','seed','class','ascension_level','relics','potions','keys','deck','map','map_plan','combat_state','mechanics','narrative','screen_state','choice_list','compact_state','context_truncated']);
 const controlKeys=['tutorial','selection_controls','reward_controls','card_reward_header','potion_controls','rest_controls','shop_controls','reward_navigation','card_selection_controls'];
 const knownObservationKeys=new Set(['in_game','game_state','combat_decision','menu',...controlKeys]);
 const mapPlanKeys=['route_author','route_count','current_node','next_planned_node','status','editing'];
@@ -157,6 +157,22 @@ function publicScreen(value:unknown):Obj {
 function publicMapPlan(value:unknown):Obj {
  return pick(obj(value),['route_author','route','route_count','planned_start','current_node','next_planned_node','status','stroke_count','editing']);
 }
+function publicDialogueEntry(value:unknown,currentOnly=false):Obj {
+ const v=obj(value),out:Obj={};
+ for(const key of ['text','speaker_type','speaker_name','text_language'])if(v[key]!=null)out[key]=v[key];
+ const context={...obj(v.context)};delete context.room_visit;delete context.channel;if(Object.keys(context).length)out.context=context;
+ if(!currentOnly&&v.currently_displayed===true)out.currently_displayed=true;
+ if(!currentOnly&&v.currently_displayed===false)out.currently_displayed=false;
+ if(typeof v.visible_text==='string'&&v.visible_text&&v.visible_text!==v.text)out.visible_text=v.visible_text;
+ if(v.text_truncated===true)out.text_truncated=true;
+ return out;
+}
+function publicHistory(value:unknown):Obj {
+ const v=obj(value),out:Obj={},entries=list(v.entries).map(row=>publicDialogueEntry(row,false));if(entries.length)out.entries=entries;
+ if(typeof v.dropped_entries==='number'&&v.dropped_entries>0)out.dropped_entries=v.dropped_entries;
+ const reasons=list(v.unavailable_reasons).filter(reason=>reason!=='custom_renderers_not_verified'&&reason!=='pixel_occlusion_not_verified');if(reasons.length)out.unavailable_reasons=reasons;
+ return out;
+}
 function sanitizeControlTree(value:unknown,actionAliases:Map<string,string>,depth=0):unknown {
  if(depth>24)return value;if(Array.isArray(value))return value.map(item=>sanitizeControlTree(item,actionAliases,depth+1));
  if(value&&typeof value==='object'){
@@ -199,6 +215,8 @@ function publicResolve(roots:Obj,ref:string):unknown {
  }
  if(ref==='screen'||ref.startsWith('screen/'))return resolve({screen:publicScreen(roots.screen)},ref);
  if(ref==='map_plan'||ref.startsWith('map_plan/'))return resolve({map_plan:publicMapPlan(roots.map_plan)},ref);
+ if(ref==='history'||ref.startsWith('history/'))return resolve({history:publicHistory(roots.history)},ref);
+ if(ref==='dialogue'||ref.startsWith('dialogue/'))return resolve({dialogue:list(roots.dialogue).map(row=>publicDialogueEntry(row,true))},ref);
  const root=ref.split('/')[0];if(controlKeys.includes(root)&&Object.hasOwn(roots,root))return resolve({[root]:sanitizeControlTree(roots[root],actionMap)},ref);
  return resolve(roots,ref);
 }
@@ -229,6 +247,10 @@ function fragment(ref:string,value:unknown,offset:number,limit:number,budget=240
  }
  if(typeof value==='string'){let end=Math.min(value.length,offset+1600);while(bytes({ref,text:value.slice(offset,end)})>pageBudget&&end>offset+1)end=offset+Math.floor((end-offset)*.8);if(end<value.length&&/[\uD800-\uDBFF]/.test(value[end-1]))end--;const out:Obj={ref,text:value.slice(offset,end)};if(end<value.length)out.next_offset=end;return out;}
  if(value===null||typeof value!=='object')return {ref,value};
+ if(Array.isArray(value)){
+  const total=value.length,end=Math.min(total,offset+limit),slice=value.slice(offset,end);
+  if(slice.every(item=>scalar(item,240))){const out:Obj={ref,total,items:[]},items=out.items as unknown[];let i=offset;for(;i<end;i++){items.push(value[i]);if(bytes(out)>pageBudget){items.pop();break;}}if(i<total)out.next_offset=i;return out;}
+ }
  const array=Array.isArray(value),fields=array?value.slice(offset,offset+limit).map((v,i)=>[String(offset+i),v] as const):Object.entries(obj(value)).filter(([key])=>!provenance.has(key)),total=array?value.length:fields.length,out:Obj={ref};if(array)out.total=total;
  const data:Obj=Object.create(null),toc:Obj[]=[];let i=offset;for(;i<Math.min(total,offset+limit);i++){const [key,item]=fields[array?i-offset:i],path=child(ref,key);if(path.length>512||['__proto__','constructor','prototype'].includes(key)){out.information_complete=false;out.unavailable_reason='field_reference_budget_or_unsupported_key';continue;}
   if(!array&&(item===null||['number','boolean'].includes(typeof item)||typeof item==='string'&&item.length<=240))data[key]=item;else toc.push(entry(path,item,array?undefined:key));if(bytes({...out,data,toc})>pageBudget){delete data[key];if(toc.at(-1)?.ref===path)toc.pop();if(i===offset){out.information_complete=false;out.unavailable_reason='field_budget_exceeded';i++;}break;}}
