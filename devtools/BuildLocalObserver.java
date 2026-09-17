@@ -80,6 +80,21 @@ public final class BuildLocalObserver {
         if(upgradeHooks[0]!=2)throw new CannotCompileException("Expected both installed upgrade choice handlers");
         take(pool,changed,"com.megacrit.cardcrawl.helpers.Hitbox").getDeclaredMethod("update",new CtClass[0])
             .insertAfter("{communicationmod.observation.NativeUiInput.afterHitbox(this);}");
+
+        // The copied local runtime does not run arbitrary @SpirePatch annotations from
+        // CommunicationMod.jar. Mirror MerchantPatch's first-Hitbox locator here so
+        // run.shop.enter is consumed on the game's normal Merchant.update frame.
+        final int[] merchantHitboxes={0};
+        take(pool,changed,"com.megacrit.cardcrawl.shop.Merchant").getDeclaredMethod("update").instrument(new javassist.expr.ExprEditor(){
+            public void edit(javassist.expr.MethodCall call)throws CannotCompileException {
+                if(call.getClassName().equals("com.megacrit.cardcrawl.helpers.Hitbox") && call.getMethodName().equals("update")) {
+                    if(merchantHitboxes[0]++==0)
+                        call.replace("{$proceed($$);if(java.lang.Boolean.getBoolean(\"communicationmod.play_control\")){communicationmod.patches.MerchantPatch.consume(this);}}");
+                }
+            }
+        });
+        if(merchantHitboxes[0]<1)throw new CannotCompileException("Expected merchant hitbox update");
+
         take(pool,changed,"com.megacrit.cardcrawl.screens.select.GridCardSelectScreen").getDeclaredMethod("updateCardPositionsAndHoverLogic")
             .insertAfter("{communicationmod.observation.GridSelectionUi.hover(this);}");
         take(pool,changed,"com.megacrit.cardcrawl.screens.select.HandCardSelectScreen").getDeclaredMethod("updateSelectedCards").instrument(new javassist.expr.ExprEditor(){
@@ -131,7 +146,8 @@ public final class BuildLocalObserver {
         CtClass speech=take(pool,changed,"com.megacrit.cardcrawl.vfx.SpeechTextEffect");
         DialogueRenderPatch.SpeechCreated.Raw(speech.getDeclaredConstructor(new CtClass[]{CtClass.floatType,CtClass.floatType,CtClass.floatType,pool.get("java.lang.String"),pool.get("com.megacrit.cardcrawl.ui.DialogWord$AppearEffect")}));
         for(String kind:new String[]{"Generic","Room"}) {
-            String owner="com.megacrit.cardcrawl.events."+kind+"EventDialog";
+            String owner="com.megacrit.cardcrawl.events."+kind+"EventEventDialog";
+            owner="com.megacrit.cardcrawl.events."+kind+"EventDialog";
             raw(pool,changed,kind+"Render",owner,"render");
             CtMethod body=take(pool,changed,owner).getDeclaredMethod("updateBodyText",new CtClass[]{pool.get("java.lang.String"),pool.get("com.megacrit.cardcrawl.ui.DialogWord$AppearEffect")});
             hook(kind+"Body",body);
