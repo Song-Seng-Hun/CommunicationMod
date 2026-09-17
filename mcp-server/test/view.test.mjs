@@ -17,3 +17,11 @@ test('current dialogue remains, duplicate event prose and old dialogue are on de
  const v=focus(state);assert.equal(v.narrative.history_count,1);assert.equal(v.narrative.entries.length,2);assert.equal(v.narrative.entries[0].event_reading_ref,true);assert.equal(v.narrative.entries[0].text,undefined);assert.equal(v.narrative.entries[1].text,'상인 인사');assert.equal(v.narrative.entries[1].visible_text,undefined);
  assert.equal(section(state,'history',0,10).data.entries[0].text,'지난 대사');
 });
+test('large card choice screens stay compact and expose paginated full details',async()=>{
+ const {focus,section}=await import('../dist/view.js');
+ const cards=Array.from({length:20},(_,i)=>({uuid:`uuid-${i}`,id:`Card${i}`,name:`카드 ${i}`,upgrades:i%2,rarity:'COMMON',type:'SKILL',cost:1,description:`카드 ${i}의 상세 설명 `.repeat(20),tooltips:[{title:'키워드',description:'상세 툴팁 '.repeat(10)}]}));
+ const state={session_id:'s',state_id:7,ready:true,actions:cards.map((_,i)=>({id:`choose.${i}`,label:`카드 ${i}`,parameters:{index:i}})),observation:{game_state:{screen_type:'GRID',current_hp:50,max_hp:70,gold:120,deck:cards,screen_state:{cards,selected_cards:[],num_cards:1,for_purge:true,for_upgrade:false,for_transform:false,confirm_up:false}}}};
+ const view=focus(state);assert.equal(view.deck,undefined);assert.equal(view.deck_count,20);assert.equal(view.screen_state.cards.length,20);assert.equal(view.screen_state.cards[0].description,undefined);assert.equal(view.screen_state.cards[0].uuid,undefined);assert.equal(view.screen_state.details_on_demand.section,'screen');assert.ok(JSON.stringify(view).length<5000,JSON.stringify(view).length);
+ const page=section(state,'screen',0,30);assert.equal(page.total,20);assert.equal(page.items.length,6);assert.equal(page.next_offset,6);assert.match(page.items[0].value.description,/상세 설명/);assert.equal(page.items[0].collection,'cards');
+ const deck=section(state,'deck',0,100);assert.equal(deck.items.length,12);assert.equal(deck.next_offset,12);
+});
