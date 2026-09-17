@@ -26,9 +26,9 @@ This plugin controls a prepared local test copy, not the original Steam executab
 
 ## Efficient play
 
-`sts_get_state` pins the exact state shown to this MCP client. Session/state identity and delta hashes stay inside the server. `sts_get_context` and `sts_act` automatically use the pin. A stale pin is rejected and requires a fresh `sts_get_state`.
+`sts_get_state` pins the exact state shown to this MCP client. Session/state identity, delta hashes, native action IDs, and fixed action constants stay inside the server. `sts_get_context` and `sts_act` automatically use that pin. A stale pin is rejected and requires a fresh `sts_get_state`.
 
-Use `sts_act` for one offered action. Send only its `action_id` and required gameplay `arguments`. The server creates request IDs and action timeouts internally. Its returned next state replaces a redundant `sts_get_state` when sufficient. Read full localized card/keyword descriptions and current resources only when needed. Fetch deck/map/piles/history only when relevant. `event_reading.body_ref` points to the current event body; follow `next_offset` only when it is present.
+Use `sts_act` for one offered action. Send only its short `action_id` and gameplay `arguments` that remain in the public parameter schema. The server restores pinned constants such as current map identity/revision or event-reading identity, creates request IDs, and owns action timeouts internally. Its returned next state replaces a redundant `sts_get_state` when sufficient. Read full localized card/keyword descriptions and current resources only when needed. Fetch deck/map/piles/history only when relevant. `event_reading.body_ref` points to the current event body; follow `next_offset` only when it is present.
 
 | Situation | Next call rule |
 | --- | --- |
@@ -38,7 +38,7 @@ Use `sts_act` for one offered action. Send only its `action_id` and required gam
 | Full summary needed again | `sts_get_state({refresh:true})`. |
 | State changed or stale pin rejected | Refresh state, then reconfirm dynamic cost, resources, targets, playability and action availability. |
 | Action has no `parameters_ref` | Call it with empty/default `arguments`; this does not mean gameplay evidence is sufficient. |
-| `parameters_ref` present | Read that ref for arguments; follow child refs only if needed. |
+| `parameters_ref` present | Read that ref and send only the remaining public gameplay arguments. Fixed constants omitted there are supplied by the server. |
 | Several needed refs | Batch 1–8 refs in `sts_get_context`. Different `offset` values require separate calls. Multiple card refs may return summaries; read one card ref alone for full detail. |
 | Selected card | Use its explicit ref. A single-card read can return full descriptions, keywords and upgrade details. |
 | Format | State/action/context responses automatically use lossless TOON only when it is materially smaller; otherwise they remain JSON. Do not request a format just to optimize size. Use `response_format:"json"` only when literal JSON syntax is specifically needed. |
@@ -47,7 +47,7 @@ Routine reads need no repeated plan or narration. Preserve required progress upd
 
 Never play from an unready or incomplete hand. Preserve hidden draw order unless the public observation says it is visible. Unsupported screens and incomplete information require stopping/diagnosis, not guessed clicks or console mutations.
 
-Present event body, situation and choices before `acknowledge_event_reading`, with its observed `reading_id` and meaningful commentary; discuss result pages too. Do not acknowledge silently or fabricate missing text.
+Present the current event body, situation and choices before `acknowledge_event_reading`, then send meaningful commentary. The server binds the acknowledgement to the pinned event page. Discuss result pages too; do not acknowledge silently or fabricate missing text.
 
 `unknown` / `applied_waiting` does not mean failure: use the returned `request_id` with `sts_get_request`; never replay an uncertain action. Normal successful actions do not expose request IDs. A new game session may require reconnecting the MCP server after resolving an old pending outcome; never restart the game to obtain different results.
 
