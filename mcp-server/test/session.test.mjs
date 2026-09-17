@@ -18,11 +18,11 @@ test('timeout is unknown, no replay; disconnect strips ready actions',async()=>{
  assert.equal(answer.outcome,'unknown');assert.equal(count,1);assert.throws(()=>g.act({session_id:'s',state_id:1,action_id:'run.x',request_id:'r2',arguments:{}},10),/busy/i);
  g.close();assert.equal(g.current().ready,false);assert.deepEqual(g.current().actions,[]);
 });
-test('public pinned path keeps stale protection without caller-supplied session/state IDs',async()=>{
+test('public pinned path keeps stale protection and resolves short action aliases',async()=>{
  const {GameSession}=await import('../dist/session.js');const sent=[];const g=new GameSession(x=>sent.push(x));g.receive(state(1));
  assert.throws(()=>g.assertPresented(),/presented state/i);g.present(g.current());
- const pending=g.actPresented({action_id:'run.x',request_id:'pin-1',arguments:{}},1000);assert.equal(sent[0].session_id,'s');assert.equal(sent[0].state_id,1);
+ const pending=g.actPresented({action_id:'a0',request_id:'pin-1',arguments:{}},1000);assert.equal(sent[0].session_id,'s');assert.equal(sent[0].state_id,1);assert.equal(sent[0].action_id,'run.x');
  g.receive({type:'result',request_id:'pin-1',status:'applied'});g.receive(state(2));const answer=await pending;assert.equal(answer.outcome,'applied');
  assert.throws(()=>g.assertPresented(),/stale/i,'old pin must not silently follow a newer state');
- g.present(g.current());assert.equal(g.assertPresented().state_id,2);g.close();
+ g.present(g.current());assert.equal(g.assertPresented().state_id,2);assert.throws(()=>g.actPresented({action_id:'a9',request_id:'bad-alias',arguments:{}},100),/not offered/i);g.close();
 });
