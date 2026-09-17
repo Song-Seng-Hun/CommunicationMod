@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {obj,list,type Obj} from './view.js';
 import {selectGuidance,guidanceFragment} from './guidance.js';
 import {groupEquivalentCards} from './hand-dedupe.js';
+import {actionAlias,publicParameterSchema} from './action-projection.js';
 
 const pick=(o:Obj,keys:string[]):Obj=>Object.fromEntries(keys.filter(k=>k in o).map(k=>[k,o[k]]));
 const present=(v:unknown)=>v!=null && (Array.isArray(v)?v.length>0:typeof v==='object'?Object.keys(obj(v)).length>0:true);
@@ -12,15 +13,15 @@ const provenance=new Set(['description_source','description_rendering','tooltips
 const nativeKeys=new Set(['class','act','floor','ascension_level','current_hp','max_hp','gold','keys','relics','potions','screen_type','screen_state','deck','map','map_plan','combat_state','mechanics','narrative','seed','choice_list']);
 const controlKeys=['tutorial','selection_controls','reward_controls','card_reward_header','potion_controls','rest_controls','shop_controls','reward_navigation','card_selection_controls'];
 const knownObservationKeys=new Set(['in_game','game_state','combat_decision','menu',...controlKeys]);
-const mapPlanKeys=['map_id','revision','route_author','current_node','next_planned_node','status','editing'];
+const mapPlanKeys=['route_author','route_count','current_node','next_planned_node','status','editing'];
 const mapViewKeys=['ready','screen','connection'];
 const mechanicsZeroNoise=new Set(['temporary_hp','max_orb_slots']);
 const rules:Record<string,string>={
  act:'Use only offered actions from the current state. Read needed referenced details. One action per call; never replay unknown/applied_waiting. Refresh state after stale rejection.',
  cost:'The scalar cost is the current card.costForTurn energy cost and must be considered for ordinary cards, including Snecko-randomized costs. Use displayed_cost_text and cost_components to qualify X/alternate-resource/special costs. Read target_playability and unplayable_reason before playing.',
  upgrade:'Before acquisition or upgrade, read offered card upgrade_preview and relevant keyword details. Only next standard upgrade, not random/event/relic outcomes. Read selected_after before separate branch/tree confirmation.',
- event:'Read and present current event body, situation and choices before acknowledgement. Supply observed reading_id and meaningful commentary; discuss result pages. Do not silently acknowledge incomplete text.',
- map:'Map planning draws route, never moves character. Use offered map_id/revision and node IDs; stale revisions rejected. Native edges only, not predicted travel powers.',
+ event:'Read and present current event body, situation and choices before acknowledgement. Send meaningful commentary; the server pins the current reading identity. Discuss result pages too. Do not silently acknowledge incomplete text.',
+ map:'Map planning draws route, never moves character. Send only observed node IDs; the server pins map identity and revision. Native edges only, not predicted travel powers.',
  reward:'Read reward_navigation before leaving: unclaimed rewards may be abandoned. Never auto-discard potion for space; discarding: separate destructive choice.'
 };
 interface Scope {screen:string;combat:boolean;roots:Obj;unsupported:boolean;}
@@ -93,20 +94,22 @@ function mechanicsDecisionSummary(value:unknown):Obj {
  if(incomplete)out.mechanics_incomplete=true;
  return out;
 }
-const actionAlias=(index:number)=>'a'+index;
 function publicAction(value:unknown,index:number):Obj {
  const action=obj(value),out:Obj={id:actionAlias(index)};
  if(typeof action.label==='string'){out.label=action.label.slice(0,160);if(action.label.length>160)out.label_truncated=true;}
- const parameters=action.parameters,objectParameters=parameters!==null&&typeof parameters==='object'&&!Array.isArray(parameters);
- if(objectParameters&&Object.keys(parameters as Obj).length)out.parameters_ref=child('actions/'+index,'parameters');
+ const parameters=publicParameterSchema(action.parameters);if(Object.keys(parameters).length)out.parameters_ref=child('actions/'+index,'parameters');
  return out;
 }
+const aliases=(actions:unknown[])=>new Map(actions.map((value,index)=>[String(obj(value).id),actionAlias(index)]));
 function refSummary(value:unknown,ref:string,keys?:string[]):Obj {return {ref,...inlineSummary(value,keys)};}
-function controlSummary(value:unknown,ref:string):Obj {
- const v=obj(value),out:Obj={ref};
+function controlSummary(value:unknown,actionAliases:Map<string,string>):Obj {
+ const v=obj(value),out:Obj={};
  for(const [key,item] of Object.entries(v)){
-  if(key==='id'||provenance.has(key)||item==null)continue;
-  if(key==='available'&&item===true)continue;
+  if(provenance.has(key)||item==null)continue;
+  if((key==='id'||key==='action_id')&&typeof item==='string'&&actionAliases.has(item)){out.action=actionAliases.get(item);continue;}
+  if(key==='mutually_exclusive_with'&&typeof item==='string'&&actionAliases.has(item)){out[key]=actionAliases.get(item);continue;}
+  if(['available','supported','claimable','can_use','can_discard'].includes(key)&&item===true)continue;
+  if(['pending','ignored','disabled','requires_target'].includes(key)&&item===false)continue;
   if(key.endsWith('_complete')&&item===true)continue;
   if(scalar(item,160))out[key]=item;
  }
@@ -122,8 +125,7 @@ function monsterSummary(value:unknown,index:number):Obj {
 }
 function eventOptionSummary(value:unknown,index:number):Obj {
  const v=obj(value),out:Obj={ref:'screen/event_reading/options/'+index};
- if(typeof v.text==='string')out.text=v.text.slice(0,240);
- if(v.disabled===true)out.disabled=true;if(Number.isInteger(v.choice_index))out.choice_index=v.choice_index;return out;
+ if(typeof v.text==='string')out.text=v.text.slice(0,240);if(v.disabled===true)out.disabled=true;return out;
 }
 function offerSummary(value:unknown,index:number,screen:string):Obj {
  const v=obj(value),out:Obj={ref:'screen/cards/'+index};
@@ -138,6 +140,34 @@ function offerSummary(value:unknown,index:number,screen:string):Obj {
  }
  return out;
 }
+function publicEventReading(value:unknown):Obj {
+ const v=obj(value),out:Obj={};
+ for(const key of ['phase','page_role'])if(typeof v[key]==='string')out[key]=v[key];
+ if(typeof v.body_text==='string')out.body_text=v.body_text;
+ if(v.text_complete===false)out.text_complete=false;
+ if(typeof v.unavailable_reason==='string'&&v.unavailable_reason)out.unavailable_reason=v.unavailable_reason;
+ const options=list(v.options).map((row,i)=>eventOptionSummary(row,i));if(options.length)out.options=options;
+ return out;
+}
+function publicScreen(value:unknown):Obj {
+ const source=obj(value),out=structuredClone(source) as Obj;delete out.event_id;delete out.body_text_source;
+ if(present(source.event_reading)){delete out.body_text;out.event_reading=publicEventReading(source.event_reading);}
+ return out;
+}
+function publicMapPlan(value:unknown):Obj {
+ return pick(obj(value),['route_author','route','route_count','planned_start','current_node','next_planned_node','status','stroke_count','editing']);
+}
+function sanitizeControlTree(value:unknown,actionAliases:Map<string,string>,depth=0):unknown {
+ if(depth>24)return value;if(Array.isArray(value))return value.map(item=>sanitizeControlTree(item,actionAliases,depth+1));
+ if(value&&typeof value==='object'){
+  const out:Obj={};for(const [key,item] of Object.entries(obj(value))){
+   if((key==='id'||key==='action_id')&&typeof item==='string'&&actionAliases.has(item)){out.action=actionAliases.get(item);continue;}
+   if(key==='mutually_exclusive_with'&&typeof item==='string'&&actionAliases.has(item)){out[key]=actionAliases.get(item);continue;}
+   out[key]=sanitizeControlTree(item,actionAliases,depth+1);
+  }return out;
+ }
+ return value;
+}
 function entry(ref:string,value:unknown,title?:string):Obj {
  const v=obj(value),out:Obj={ref},leaf=ref.split('/').at(-1)??ref,label=String(title??v.name??v.label??v.title??v.id??leaf).slice(0,64);
  if(label!==ref&&label!==leaf)out.title=label;if(Array.isArray(value)||typeof value==='string')out.count=size(value);
@@ -148,13 +178,22 @@ function resolve(roots:Obj,ref:string):unknown {
   if(!key||['__proto__','constructor','prototype'].includes(key)||value===null||typeof value!=='object'||!Object.hasOwn(value,key)||(Array.isArray(value)&&!/^(0|[1-9]\d*)$/.test(key)))throw new Error('Reference not available in current state.');value=(value as Obj)[key];}return value;
 }
 function publicResolve(roots:Obj,ref:string):unknown {
- if(ref==='actions')return list(roots.actions).map(publicAction);
- const match=/^actions\/(0|[1-9]\d*)(?:\/(.*))?$/.exec(ref);
- if(!match)return resolve(roots,ref);
- const index=Number(match[1]),actions=list(roots.actions);if(index>=actions.length)throw new Error('Reference not available in current state.');
- const rest=match[2];if(!rest)return publicAction(actions[index],index);
- if(rest==='parameters'||rest.startsWith('parameters/'))return resolve(roots,ref);
- throw new Error('Reference not available in current state.');
+ const actions=list(roots.actions),actionMap=aliases(actions);
+ if(ref==='actions')return actions.map(publicAction);
+ const actionMatch=/^actions\/(0|[1-9]\d*)(?:\/(.*))?$/.exec(ref);
+ if(actionMatch){
+  const index=Number(actionMatch[1]);if(index>=actions.length)throw new Error('Reference not available in current state.');const action=obj(actions[index]),rest=actionMatch[2];
+  if(!rest)return publicAction(action,index);
+  if(rest==='parameters'||rest.startsWith('parameters/')){
+   const parameters=publicParameterSchema(action.parameters);if(!Object.keys(parameters).length)throw new Error('Reference not available in current state.');
+   return resolve({parameters},rest);
+  }
+  throw new Error('Reference not available in current state.');
+ }
+ if(ref==='screen'||ref.startsWith('screen/'))return resolve({screen:publicScreen(roots.screen)},ref);
+ if(ref==='map_plan'||ref.startsWith('map_plan/'))return resolve({map_plan:publicMapPlan(roots.map_plan)},ref);
+ const root=ref.split('/')[0];if(controlKeys.includes(root)&&Object.hasOwn(roots,root))return resolve({[root]:sanitizeControlTree(roots[root],actionMap)},ref);
+ return resolve(roots,ref);
 }
 const cardRef=(ref:string)=>/^(?:(?:hand|deck|screen\/cards|collection\/cards|combat_collection\/cards)\/\d+|card_in_play)$/.test(ref);
 function cardSummary(ref:string,value:unknown,budget:number,forceDetails=true):Obj {
@@ -178,7 +217,7 @@ function fragment(ref:string,value:unknown,offset:number,limit:number,budget=240
   const stringFits=(text:string)=>{const encoded=Buffer.byteLength(JSON.stringify(text),'utf8');return encoded<=remaining&&spend(encoded);};const omitted=(v:unknown)=>v===undefined||typeof v==='function'||typeof v==='symbol';
   const clean=(v:unknown,arrayItem=false):unknown=>{if(typeof v==='string')return stringFits(v)?v:exceeded;if(v===null||typeof v!=='object')return spend(omitted(v)?(arrayItem?4:0):Buffer.byteLength(JSON.stringify(v),'utf8'))?v:exceeded;if(!spend(2))return exceeded;
    if(Array.isArray(v)){if(Math.max(0,2*v.length-1)>remaining)return exceeded;const out:unknown[]=[];out.length=v.length;for(let i=0;i<v.length;i++){if(i>0&&!spend(1))return exceeded;const item=clean(v[i],true);if(item===exceeded)return exceeded;if(i in v)out[i]=item;}return out;}
-   const source=obj(v),out:Obj={};let fields=0;for(const key in source){if(!Object.hasOwn(source,key)||provenance.has(key))continue;const value=source[key];if(!omitted(value)&&((fields++>0&&!spend(1))||!stringFits(key)||!spend(1)))return exceeded;const item=clean(value);if(item===exceeded)return exceeded;Object.defineProperty(out,key,{value:item,enumerable:true,writable:true,configurable:true});}return out;};
+   const source=obj(v),out:Obj={};let fields=0;for(const key in source){if(!Object.hasOwn(source,key)||provenance.has(key))continue;const item=source[key];if(!omitted(item)&&((fields++>0&&!spend(1))||!stringFits(key)||!spend(1)))return exceeded;const cleaned=clean(item);if(cleaned===exceeded)return exceeded;Object.defineProperty(out,key,{value:cleaned,enumerable:true,writable:true,configurable:true});}return out;};
   const data=clean(value);if(data!==exceeded){card.data=data;if(bytes(card)<=pageBudget)return card;}return cardSummary(ref,value,pageBudget,true);
  }
  if(typeof value==='string'){let end=Math.min(value.length,offset+1600);while(bytes({ref,text:value.slice(offset,end)})>pageBudget&&end>offset+1)end=offset+Math.floor((end-offset)*.8);if(end<value.length&&/[\uD800-\uDBFF]/.test(value[end-1]))end--;const out:Obj={ref,text:value.slice(offset,end)};if(end<value.length)out.next_offset=end;return out;}
@@ -217,7 +256,7 @@ export function decision(state:Obj):Obj {
   if(typeof stanceName==='string'&&stanceName)player.stance=stanceName;
   Object.assign(player,mechanicsDecisionSummary(roots.mechanics));if(Object.keys(player).length)out.player=player;
  }
- const actions=list(roots.actions);out.actions=actions.slice(0,12).map(publicAction);if(actions.length>12)out.actions_more='actions';
+ const actions=list(roots.actions),actionMap=aliases(actions);out.actions=actions.slice(0,12).map(publicAction);if(actions.length>12)out.actions_more='actions';
  if(combat){
   const complete=handVisible(c,o),hand=complete?list(roots.hand):[],monsters=list(roots.monsters),shownHand=hand.slice(0,10);
   const groupedHand=hand.length<=10?groupEquivalentCards(shownHand):shownHand.map((value,index)=>({value,index,copies:1}));
@@ -226,18 +265,24 @@ export function decision(state:Obj):Obj {
   const combatOut:Obj={hand:groupedHand.map((group,i)=>{const summary=flatCardSummary('hand/'+group.index,group.value,perCard,false);if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);if(group.copies>1)summary.copies=group.copies;return summary;}),monsters:monsters.slice(0,8).map(monsterSummary)};
   if(!complete)combatOut.hand_complete=false;out.combat=combatOut;Object.assign(combatOut,inlineSummary(roots.combat));if(hand.length>10)combatOut.hand_more='hand';if(monsters.length>8)combatOut.monsters_more='monsters';
  }
- if(roots.screen){const screenState=inlineSummary(roots.screen,['body_text','event_id','event_name','for_upgrade']);if(Object.keys(screenState).length)out.screen_state=screenState;}
- if(screen==='EVENT'&&present(obj(roots.screen).event_reading)){const reading=obj(obj(roots.screen).event_reading);out.event_reading={...inlineSummary(reading,['reading_id','body_complete','options_complete','status']),body_ref:'screen/event_reading/body_text',options:list(reading.options).slice(0,12).map(eventOptionSummary)};}
- for(const key of ['rest_controls','reward_controls'])if(roots[key])out[key]=list(roots[key]).slice(0,12).map((value,i)=>controlSummary(value,child(key,String(i))));
+ if(roots.screen){
+  const screenValue=obj(roots.screen),keys=screen==='EVENT'&&present(screenValue.event_reading)?['event_name','for_upgrade']:['body_text','event_name','for_upgrade'],screenState=inlineSummary(screenValue,keys);if(Object.keys(screenState).length)out.screen_state=screenState;
+ }
+ if(screen==='EVENT'&&present(obj(roots.screen).event_reading)){
+  const reading=publicEventReading(obj(roots.screen).event_reading),summary:Obj={body_ref:'screen/event_reading/body_text'};
+  for(const key of ['phase','page_role','text_complete','unavailable_reason'])if(Object.hasOwn(reading,key))summary[key]=reading[key];
+  const options=list(reading.options);if(options.length)summary.options=options.slice(0,12);out.event_reading=summary;
+ }
+ for(const key of ['rest_controls','reward_controls'])if(roots[key])out[key]=list(roots[key]).slice(0,12).map(value=>controlSummary(value,actionMap));
  if(['SHOP_SCREEN','CARD_REWARD','GRID','BOSS_REWARD'].includes(screen)&&Array.isArray(obj(roots.screen).cards))out.offers=list(obj(roots.screen).cards).slice(0,12).map((value,i)=>offerSummary(value,i,screen));
- for(const key of ['reward_navigation','selection_controls','card_selection_controls'])if(roots[key]){const summary=inlineSummary(roots[key]);if(Object.keys(summary).length)out[key]=summary;}if(roots.map_plan)out.map_plan=inlineSummary(roots.map_plan,mapPlanKeys);
+ for(const key of ['reward_navigation','selection_controls','card_selection_controls'])if(roots[key]){const summary=inlineSummary(roots[key]);if(Object.keys(summary).length)out[key]=summary;}if(roots.map_plan){const summary=inlineSummary(publicMapPlan(roots.map_plan),mapPlanKeys);if(Object.keys(summary).length)out.map_plan=summary;}
  const menu=obj(roots.menu);if(roots.menu&&(state.ready!==true||menu.reason!==undefined)){const summary=inlineSummary(roots.menu,['reason','game_screen']);if(Object.keys(summary).length)out.menu=summary;}
  const skip=new Set(['combat','menu']);if(actions.length<=12)skip.add('actions');out.toc=Object.entries(roots).filter(([ref])=>!skip.has(ref)).map(([ref,value])=>entry(ref,value,ref));
  const guidance=selectGuidance(state,current);if(guidance)list(out.toc).push({ref:'guidance'});return trimDecision(out,roots,actions);
 }
 function mapDecision(state:Obj):Obj {
  const o=obj(state.observation),g=obj(o.game_state),screen=String(obj(o.menu).screen??g.screen_type??'unavailable');if(state.ready===true&&list(state.actions).some(a=>typeof obj(a).id!=='string')){const full=decision(state);return {...pick(full,mapViewKeys),map_plan:full.map_plan??{status:'unavailable'}};}
- const plan=screen==='MAP'&&Object.keys(g).length&&present(g.map_plan)&&g.map_plan;return {...decisionHeader(state,screen),map_plan:plan?inlineSummary(plan,mapPlanKeys):{status:'unavailable'}};
+ const plan=screen==='MAP'&&Object.keys(g).length&&present(g.map_plan)&&g.map_plan;return {...decisionHeader(state,screen),map_plan:plan?inlineSummary(publicMapPlan(plan),mapPlanKeys):{status:'unavailable'}};
 }
 export function conditionalDecision(state:Obj,knownView?:string,mode:'decision'|'map_plan'='decision'):Obj {
  const view=mode==='map_plan'?mapDecision(state):decision(state),viewId=createHash('sha256').update(mode+'|'+String(state.session_id)+'|'+String(state.state_id)+'|'+JSON.stringify(view)).digest('hex').slice(0,24);if(knownView===viewId)return {view_id:viewId,unchanged:true};return {...view,view_id:viewId};
