@@ -108,6 +108,21 @@ public final class ProtocolSession {
         return result.toString();
     }
 
+    /** Stable semantic identity for offered actions; used by screen sessions to invalidate stale action sets. */
+    public static String actionKey(List<Action> offered) {
+        Objects.requireNonNull(offered);
+        JsonArray rows = new JsonArray();
+        for (Action action : offered) {
+            if (action == null) throw new IllegalArgumentException("Null action");
+            JsonObject row = new JsonObject();
+            row.addProperty("id", action.id);
+            row.addProperty("label", action.label);
+            row.add("parameters", copy(action.parameters));
+            rows.add(row);
+        }
+        return rows.toString();
+    }
+
     /** Caller must supply only player-visible data and already legal UI actions. */
     public String publish(JsonObject runtime, JsonObject observation, List<Action> offered,
                           boolean stable, String support) {
