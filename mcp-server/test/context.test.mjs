@@ -59,6 +59,23 @@ test('hand TOC exposes current turn cost without opening each card',async()=>{
  assert.equal(page.toc[1].ref,'hand/1');assert.equal(page.toc[1].title,'수비');assert.equal(page.toc[1].cost,3);
  assert.ok(JSON.stringify(page).length<2400);
 });
+test('multi-card detail reads share one inline budget instead of spilling to output.txt',async()=>{
+ const {readContext}=await api(),s=state('NONE');
+ s.actions=[{id:'run.play.a.0',label:'카드',parameters:{}}];
+ const heavy=(i,cost)=>({id:'c'+i,uuid:'u'+i,name:'긴 카드 '+i,type:'SKILL',upgrades:i%2,cost,is_playable:true,displayed_cost_text:String(cost),displayed_cost_complete:true,
+  description:'다음 턴까지 피해량을 감소시키고 여러 추가 효과를 적용합니다. '.repeat(25),
+  cost_components:[{resource:'energy',displayed_amount:cost,kind:'fixed',free_to_play_once:false}],
+  tooltips:Array.from({length:5},(_,n)=>({title:'키워드'+n,description:'아주 긴 툴팁 설명 '.repeat(20)})),
+  displayed_values:{B:9,D:14,M:2},unresolved_keywords:['방어도','소멸','취약']});
+ s.observation.game_state.combat_state={hand_complete:true,hand:[heavy(0,0),heavy(1,3),heavy(2,1),heavy(3,2)],monsters:[],player:{energy:3},draw_pile:[]};
+ const result=readContext(s,['hand/0','hand/1','hand/2','hand/3']);
+ assert.ok(Buffer.byteLength(JSON.stringify(result),'utf8')<4300);
+ assert.equal(result.fragments.length,4);
+ for(let i=0;i<4;i++){
+  assert.equal(result.fragments[i].format,'card_summary');assert.equal(result.fragments[i].data.cost,[0,3,1,2][i]);
+  assert.equal(result.fragments[i].details_required,true);assert.equal(result.fragments[i].data.name,'긴 카드 '+i);
+ }
+});
 test('native choice screen and in-combat selection retain current controls',async()=>{
  const {decision,readContext}=await api(),s=state('NONE');s.ready=false;s.observation.menu={screen:'REST',game_screen:'NONE'};
  s.observation.rest_controls=[{description:'회복',available:false}];
