@@ -41,7 +41,7 @@ foreach ($test in @('CardPlayObservationTest','PlayerMechanicsTest')) {
     & $java '-Xmx128m' '-Dfile.encoding=UTF-8' -cp "$compiled;$out;$game" $test $compiled
     if ($LASTEXITCODE -ne 0) { throw "$test failed" }
 }
-foreach ($mode in @('reward','grid','room','potion','information','upgrade-choice')) {
+foreach ($mode in @('reward','grid','room','map','potion','information','upgrade-choice')) {
     & $java '-Xmx128m' -cp "$out;$game" RunUsabilityBindingTest $mode $game $compiled
     if ($LASTEXITCODE -ne 0) { throw "Run usability $mode binding failed" }
 }
