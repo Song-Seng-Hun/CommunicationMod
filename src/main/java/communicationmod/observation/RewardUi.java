@@ -37,11 +37,12 @@ public final class RewardUi {
             boolean supported=RewardPolicy.claimable(item.type.name(),item.getClass()==RewardItem.class,false,false,true);
             String id="run.reward."+i,label=GameStateConverter.removeTextFormatting(item.text);
             JsonObject row=new JsonObject();row.addProperty("id",id);row.addProperty("label",label);
+            row.addProperty("kind",item.type.name().toLowerCase(Locale.ROOT));
             row.addProperty("supported",supported);row.addProperty("pending",item.isDone);row.addProperty("ignored",item.ignoreReward);rows.add(row);
             row.addProperty("claimable",claimable(item));
             if(item.type==RewardItem.RewardType.POTION && !potionSlot())row.addProperty("unavailable_reason","potion_slots_full_or_sozu");
             if(item.relicLink!=null){int linked=items.indexOf(item.relicLink);if(linked>=0)row.addProperty("mutually_exclusive_with","run.reward."+linked);}
-            if(claimable(item))add(id,label,()->{
+            if(claimable(item))add(id,"claim: "+label,()->{
                 check(AbstractDungeon.CurrentScreen.COMBAT_REWARD,owner,AbstractDungeon.combatRewardScreen);
                 List<RewardItem> fresh=AbstractDungeon.combatRewardScreen.rewards;
                 if(index>=fresh.size() || fresh.get(index)!=item || !claimable(item))throw new IllegalArgumentException("Reward changed");
