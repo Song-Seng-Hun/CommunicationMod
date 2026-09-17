@@ -21,7 +21,9 @@ public final class RunUsabilityBindingTest {
             check(calls(p,"communicationmod.observation.RunUi").contains("GridSelectionUi.capture"),"grid route");
         } else if(mode.equals("room")) {
             String calls=calls(p,"communicationmod.observation.RoomUi");
-            for(String expected:new String[]{"NativeUiInput.click","AbstractCampfireOption.update","Merchant.update","AbstractChest.update","BossRelicSelectScreen.update"})check(calls.contains(expected),expected);
+            for(String expected:new String[]{"NativeUiInput.click","AbstractCampfireOption.update","AbstractChest.update","BossRelicSelectScreen.update"})check(calls.contains(expected),expected);
+            check(!calls.contains("Merchant.update"),"merchant entry must wait for the normal game update");
+            check(fieldWrites(p,"communicationmod.observation.RoomUi").contains("communicationmod.patches.MerchantPatch.visitMerchant"),"merchant entry queues native merchant patch");
             check(!calls.contains("CommandExecutor.executeCommand")&&!calls.contains("loseGold")&&!calls.contains("gainGold"),"native UI only");
             check(calls(p,"communicationmod.observation.RunUi").contains("RoomUi.capture"),"room route");
             check(calls.contains("PotionUi.idle"),"human potion UI blocks every room action");
@@ -53,6 +55,10 @@ public final class RunUsabilityBindingTest {
     static String calls(ClassPool p,String name)throws Exception {
         CtClass c;try{c=p.get(name);}catch(NotFoundException missing){throw new AssertionError("Missing UI adapter: "+name,missing);}
         List<String> calls=new ArrayList<>();for(CtBehavior b:c.getDeclaredBehaviors())b.instrument(new ExprEditor(){public void edit(MethodCall m){calls.add(m.getClassName()+"."+m.getMethodName());}});return calls.toString();
+    }
+    static String fieldWrites(ClassPool p,String name)throws Exception {
+        CtClass c;try{c=p.get(name);}catch(NotFoundException missing){throw new AssertionError("Missing UI adapter: "+name,missing);}
+        List<String> fields=new ArrayList<>();for(CtBehavior b:c.getDeclaredBehaviors())b.instrument(new ExprEditor(){public void edit(FieldAccess f){if(f.isWriter())fields.add(f.getClassName()+"."+f.getFieldName());}});return fields.toString();
     }
     static void check(boolean ok,String message){if(!ok)throw new AssertionError(message);}
 }
