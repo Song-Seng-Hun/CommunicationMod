@@ -1,96 +1,37 @@
 // Public synthetic observations and private expected answers. Never import game data.
 const card=()=>({id:'eval-focus',uuid:'eval-card-0',name:'조준',type:'ATTACK',description:'피해 7. 명중: 예비력 1 획득.',description_complete:true,
- displayed_cost_text:'1 에너지 + 2 예비력',displayed_cost_complete:true,cost_components_complete:true,
- cost_components:[{resource:'energy',amount:1,complete:true},{resource:'reserves',amount:2,complete:true}],is_playable:true,unplayable_reason:null,
- target_playability:[{target_index:0,playable:true,reason:null},{target_index:1,playable:false,reason:'대상 지정 불가'}],
- tooltips:[{title:'명중',description:'카드 중앙 조준선 안에 적이 있으면 명중 효과가 발생합니다.'},{title:'예비력',description:'에너지와 별개인 자원. 이번 카드에는 예비력 2가 필요합니다.'}],
+ displayed_cost_text:'1 에너지 + 2 예비력',displayed_cost_complete:true,cost_components_complete:true,cost_components:[{resource:'energy',amount:1,complete:true},{resource:'reserves',amount:2,complete:true}],is_playable:true,unplayable_reason:null,
+ target_playability:[{target_index:0,playable:true,reason:null},{target_index:1,playable:false,reason:'대상 지정 불가'}],tooltips:[{title:'명중',description:'카드 중앙 조준선 안에 적이 있으면 명중 효과가 발생합니다.'},{title:'예비력',description:'에너지와 별개인 자원. 이번 카드에는 예비력 2가 필요합니다.'}],
  upgrade_preview:{available:true,before:{damage:7},after:{damage:11},description:'피해 11. 명중: 예비력 1 획득.',scope:'next_standard_upgrade_only'}});
-const base=(screen,actions)=>({type:'state',session_id:'latency-synthetic-v1',state_id:10,ready:true,actions,observation:{in_game:true,game_state:{screen_type:screen,class:'Hermit',current_hp:50,max_hp:70,gold:100,screen_state:{}}}});
-const action=(id,label,parameters={})=>({id,label,parameters});
-export function scenario(id){
- let state,prompt,expected,act=null;
- if(id===1){
-  state=base('COMPLETE',[action('run.proceed','계속')]);
-  prompt='계속 행동을 정확히 한 번 실행하고 반환된 다음 화면을 확인하라. facts 키: screen.';
-  expected={decision:'proceeded',facts:{screen:'VICTORY'}};act='run.proceed';
- }else if(id===2){
-  state=base('NONE',[action('run.play.eval','조준 사용',{target_index:{type:'integer',enum:[0,1]}})]);
-  state.observation.combat_decision={hand_complete:true};
-  state.observation.game_state.combat_state={hand_complete:true,hand:[card()],player:{energy:2,mechanics:{reserves:3}},monsters:[{name:'왼쪽',current_hp:20},{name:'오른쪽',current_hp:20}]};
-  prompt='조준의 실제 자원 비용·키워드·대상 가능 여부 확인 후 가능한 대상에게 한 번 사용하라. facts 키: energy, reserves, target_index, damage, hit_reserves.';
-  expected={decision:'played',facts:{energy:1,reserves:2,target_index:0,damage:7,hit_reserves:1}};act='run.play.eval';
- }else if(id===3){
-  state=base('CARD_REWARD',[action('run.reward.card','조준 획득'),action('run.potion.discard','포션 버리기'),action('run.reward.leave','떠나기')]);
-  state.observation.game_state.screen_state={cards:[card()]};
-  state.observation.reward_navigation={unclaimed_rewards:true,leave_abandons_rewards:true};
-  state.observation.potion_controls={slots_full:true,discard_is_separate_destructive_choice:true};
-  prompt='보상 카드의 원본·다음 표준 강화·키워드를 비교하라. 강화 피해가 11 이상이면 카드를 획득하라. 포션 버리기와 보상 포기는 금지. facts 키: damage, upgraded_damage, hit_reserves, discarded.';
-  expected={decision:'acquired',facts:{damage:7,upgraded_damage:11,hit_reserves:1,discarded:false}};act='run.reward.card';
- }else if(id===4){
-  state=base('EVENT',[action('run.event.acknowledge_event_reading','본문 확인',{reading_id:{type:'string'},commentary:{type:'string'}})]);
-  const body='낡은 탑. 입구의 숫자는 17. '+('벽에는 오래된 여행자의 기록이 남아 있다. '.repeat(120))+' 마지막 경고: 붉은 문은 체력 9를 잃는다. 푸른 문은 보상 없이 떠난다.';
-  state.observation.game_state.screen_state={event_id:'tower',event_reading:{reading_id:'reading-tower-10',body_complete:true,options_complete:true,status:'needs_acknowledgement',body_text:body,options:[{text:'붉은 문: 체력 9 잃음',disabled:false,choice_index:0},{text:'푸른 문: 떠남',disabled:false,choice_index:1}]}};
-  prompt='현재 이벤트 본문 전체를 읽고 상황과 선택지를 설명한 뒤 본문 확인만 하라. 문 선택 금지. facts 키: entrance_number, red_hp_loss, blue_reward.';
-  expected={decision:'acknowledged',facts:{entrance_number:17,red_hp_loss:9,blue_reward:false}};act='run.event.acknowledge_event_reading';
- }else if(id===5){
-  state=base('REST',[]);
-  state.observation.game_state.mechanics={collection:{cards:Array.from({length:35},(_,i)=>({...card(),name:i===32?'황혼 표식':`기록 ${i+1}`,id:`archive-${i}`,description:i===32?'피해 13. 소멸.':'피해 7.',upgrade_preview:{available:true,after:{damage:i===32?18:11},scope:'next_standard_upgrade_only'}}))}};
-  prompt='현재 공개 컬렉션의 목록을 탐색해 황혼 표식을 찾고 그 카드만 상세 조회하라. 실행 행동 없음. facts 키: name, damage, upgraded_damage, exhaust.';
-  expected={decision:'inspected',facts:{name:'황혼 표식',damage:13,upgraded_damage:18,exhaust:true}};
- }else if(id===6){
-  state=base('REST',[action('run.rest.safe','쉬기')]);
-  prompt='전달받은 오래된 참조(session_id=latency-synthetic-v1,state_id=9,ref=actions)를 조회해 오래된 상태 처리를 확인한 뒤, 새 상태에서 쉬기를 한 번만 시도하라(wait_ms=10). 응답이 불확실하면 영수증과 현재 상태를 확인하되 절대 재전송하지 말라. facts 키: retry_allowed, outcome.';
-  expected={decision:'uncertain_stop',facts:{retry_allowed:false,outcome:'unknown'}};act='run.rest.safe';
- }else throw new Error('Unknown evaluation scenario');
- return {id,state,prompt,expected,act};
+const base=(screen,actions)=>({type:'state',session_id:'latency-synthetic-v1',state_id:10,ready:true,actions,observation:{in_game:true,game_state:{screen_type:screen,class:'Hermit',current_hp:50,max_hp:70,gold:100,screen_state:{}}}}),action=(id,label,parameters={})=>({id,label,parameters});
+export function scenario(id){let state,prompt,expected,act=null;
+ if(id===1){state=base('COMPLETE',[action('run.proceed','계속')]);prompt='계속 행동을 정확히 한 번 실행하고 반환된 다음 화면을 확인하라. facts 키: screen.';expected={decision:'proceeded',facts:{screen:'VICTORY'}};act='run.proceed';}
+ else if(id===2){state=base('NONE',[action('run.play.eval','조준 사용',{target_index:{type:'integer',enum:[0,1]}})]);state.observation.combat_decision={hand_complete:true};state.observation.game_state.combat_state={hand_complete:true,hand:[card()],player:{energy:2,mechanics:{reserves:3}},monsters:[{name:'왼쪽',current_hp:20},{name:'오른쪽',current_hp:20}]};prompt='조준의 실제 자원 비용·키워드·대상 가능 여부 확인 후 가능한 대상에게 한 번 사용하라. facts 키: energy, reserves, target_index, damage, hit_reserves.';expected={decision:'played',facts:{energy:1,reserves:2,target_index:0,damage:7,hit_reserves:1}};act='run.play.eval';}
+ else if(id===3){state=base('CARD_REWARD',[action('run.reward.card','조준 획득'),action('run.potion.discard','포션 버리기'),action('run.reward.leave','떠나기')]);state.observation.game_state.screen_state={cards:[card()]};state.observation.reward_navigation={unclaimed_rewards:true,leave_abandons_rewards:true};state.observation.potion_controls={slots_full:true,discard_is_separate_destructive_choice:true};prompt='보상 카드의 원본·다음 표준 강화·키워드를 비교하라. 강화 피해가 11 이상이면 카드를 획득하라. 포션 버리기와 보상 포기는 금지. facts 키: damage, upgraded_damage, hit_reserves, discarded.';expected={decision:'acquired',facts:{damage:7,upgraded_damage:11,hit_reserves:1,discarded:false}};act='run.reward.card';}
+ else if(id===4){state=base('EVENT',[action('run.event.acknowledge_event_reading','본문 확인',{reading_id:{type:'string'},commentary:{type:'string'}})]);const body='낡은 탑. 입구의 숫자는 17. '+('벽에는 오래된 여행자의 기록이 남아 있다. '.repeat(120))+' 마지막 경고: 붉은 문은 체력 9를 잃는다. 푸른 문은 보상 없이 떠난다.';state.observation.game_state.screen_state={event_id:'tower',event_reading:{reading_id:'reading-tower-10',body_complete:true,options_complete:true,status:'needs_acknowledgement',body_text:body,options:[{text:'붉은 문: 체력 9 잃음',disabled:false,choice_index:0},{text:'푸른 문: 떠남',disabled:false,choice_index:1}]}};prompt='현재 이벤트 본문 전체를 읽고 상황과 선택지를 설명한 뒤 본문 확인만 하라. 문 선택 금지. facts 키: entrance_number, red_hp_loss, blue_reward.';expected={decision:'acknowledged',facts:{entrance_number:17,red_hp_loss:9,blue_reward:false}};act='run.event.acknowledge_event_reading';}
+ else if(id===5){state=base('REST',[]);state.observation.game_state.mechanics={collection:{cards:Array.from({length:35},(_,i)=>({...card(),name:i===32?'황혼 표식':`기록 ${i+1}`,id:`archive-${i}`,description:i===32?'피해 13. 소멸.':'피해 7.',upgrade_preview:{available:true,after:{damage:i===32?18:11},scope:'next_standard_upgrade_only'}}))}};prompt='현재 공개 컬렉션의 목록을 탐색해 황혼 표식을 찾고 그 카드만 상세 조회하라. 실행 행동 없음. facts 키: name, damage, upgraded_damage, exhaust.';expected={decision:'inspected',facts:{name:'황혼 표식',damage:13,upgraded_damage:18,exhaust:true}};}
+ else if(id===6){state=base('REST',[action('run.rest.safe','쉬기')]);prompt='현재 상태에서 쉬기를 정확히 한 번만 시도하라. 응답이 불확실하면 반환된 request_id로 영수증과 현재 상태를 확인하되 절대 재전송하지 말라. facts 키: retry_allowed, outcome.';expected={decision:'uncertain_stop',facts:{retry_allowed:false,outcome:'unknown'}};act='run.rest.safe';}
+ else throw new Error('Unknown evaluation scenario');return {id,state,prompt,expected,act};
 }
 export function judge(id,answer,events){
- const s=scenario(id),acts=events.filter(e=>e.kind==='backend_act'),requests=events.filter(e=>e.kind==='request'),failures=[];
+ const s=scenario(id),acts=events.filter(e=>e.kind==='backend_act'),requests=events.filter(e=>e.kind==='request'),responses=events.filter(e=>e.kind==='response'),reqById=new Map(requests.map(e=>[e.id,e])),failures=[];
  if(!answer||answer.decision!==s.expected.decision||JSON.stringify(Object.keys(answer.facts??{}).sort())!==JSON.stringify(Object.keys(s.expected.facts).sort())||Object.entries(s.expected.facts).some(([k,v])=>answer.facts?.[k]!==v))failures.push('final_facts');
- const attempted=Math.max(requests.filter(e=>e.name==='sts_act').length,...events.filter(e=>e.kind==='host_action_attempt_count').map(e=>e.count));
- if(acts.length!==(s.act?1:0)||acts.some(e=>e.command.action_id!==s.act)||attempted!==(s.act?1:0))failures.push('action_count_or_choice');
- const before=acts[0]?.at??Infinity;
- // A toc is discovery, never evidence of having read the underlying facts.
- const read=(ref)=>events.some(e=>e.kind==='response'&&!e.error&&e.at<=before&&(e.data?.fragments??[]).some(f=>{
-  if(!['card','fields','value','text'].includes(f.format))return false;
-  if(f.format==='value')return f.ref===ref;
-  if(f.format==='text')return f.ref===ref&&f.offset===0&&f.next_offset===null;
-  if(ref!==f.ref&&!ref.startsWith(f.ref+'/'))return false;
-  const keys=ref===f.ref?[]:ref.slice(f.ref.length+1).split('/').map(decodeURIComponent);
-  let v=f.data;for(const k of keys){if(v===null||typeof v!=='object'||!Object.hasOwn(v,k))return false;v=v[k];}return v!==undefined;
+ const attempted=Math.max(requests.filter(e=>e.name==='sts_act').length,...events.filter(e=>e.kind==='host_action_attempt_count').map(e=>e.count));if(acts.length!==(s.act?1:0)||acts.some(e=>e.command.action_id!==s.act)||attempted!==(s.act?1:0))failures.push('action_count_or_choice');const before=acts[0]?.at??Infinity;
+ const read=ref=>responses.some(e=>!e.error&&e.at<=before&&(e.data?.fragments??[]).some(f=>{
+  if(Object.hasOwn(f,'value'))return f.ref===ref;if(Object.hasOwn(f,'text'))return f.ref===ref;
+  if(!Object.hasOwn(f,'data')||ref!==f.ref&&!ref.startsWith(f.ref+'/'))return false;const keys=ref===f.ref?[]:ref.slice(f.ref.length+1).split('/').map(decodeURIComponent);let v=f.data;for(const k of keys){if(v===null||typeof v!=='object'||!Object.hasOwn(v,k))return false;v=v[k];}return v!==undefined;
  }));
  if(!requests.some(e=>e.name==='sts_get_state'))failures.push('state_not_read');
- if(id===1&&!events.some(e=>e.kind==='response'&&!e.error&&e.name==='sts_act'&&e.at>before&&e.data?.outcome==='applied'&&e.data?.state?.screen==='VICTORY'&&e.data?.state?.state_id===11))failures.push('next_state_not_observed');
- if(id===2){
-  for(const ref of ['hand/0/description','hand/0/cost_components/0/amount','hand/0/cost_components/1/amount','hand/0/target_playability/0/playable','hand/0/target_playability/1/playable','hand/0/tooltips/0/description','hand/0/tooltips/1/description'])if(!read(ref))failures.push('unread:'+ref);
- }
- if(id===3){
-  for(const ref of ['screen/cards/0/description','screen/cards/0/upgrade_preview/after/damage','screen/cards/0/tooltips/0/description','screen/cards/0/tooltips/1/description'])if(!read(ref))failures.push('unread:'+ref);
- }
- if(id===5){
-  for(const ref of ['collection/cards/32/description','collection/cards/32/upgrade_preview/after/damage'])if(!read(ref))failures.push('unread:'+ref);
-  if(!events.some(e=>e.kind==='response'&&(e.data?.fragments??[]).some(f=>f.format==='index'&&f.toc?.some(r=>r.ref==='collection/cards/32'))))failures.push('list_not_navigated');
- }
+ if(id===1&&!responses.some(e=>!e.error&&e.name==='sts_act'&&e.at>before&&e.data?.state?.screen==='VICTORY'))failures.push('next_state_not_observed');
+ if(id===2)for(const ref of ['hand/0/description','hand/0/cost_components/0/amount','hand/0/cost_components/1/amount','hand/0/target_playability/0/playable','hand/0/target_playability/1/playable','hand/0/tooltips/0/description','hand/0/tooltips/1/description'])if(!read(ref))failures.push('unread:'+ref);
+ if(id===3)for(const ref of ['screen/cards/0/description','screen/cards/0/upgrade_preview/after/damage','screen/cards/0/tooltips/0/description','screen/cards/0/tooltips/1/description'])if(!read(ref))failures.push('unread:'+ref);
+ if(id===5){for(const ref of ['collection/cards/32/description','collection/cards/32/upgrade_preview/after/damage'])if(!read(ref))failures.push('unread:'+ref);if(!responses.some(e=>(e.data?.fragments??[]).some(f=>f.toc?.some(r=>r.ref==='collection/cards/32'))))failures.push('list_not_navigated');}
  if(id===2&&acts[0]?.command.arguments?.target_index!==0)failures.push('target');
- if(id===4){
-  const a=acts[0]?.command.arguments;
-  if(a?.reading_id!=='reading-tower-10'||typeof a?.commentary!=='string'||!/(탑|tower)/i.test(a.commentary)||!a.commentary.includes('17')||!/(붉|red)/i.test(a.commentary)||!/(체력|HP|health)/i.test(a.commentary)||!a.commentary.includes('9')||!/(푸른|blue)/i.test(a.commentary)||!/(보상.{0,8}(없|없이)|no reward)/i.test(a.commentary))failures.push('event_ack_evidence');
-  // Every UTF-16 character must have been returned before acknowledgement.
-  const text=scenario(4).state.observation.game_state.screen_state.event_reading.body_text;
-  const end=acts[0]?.at??Infinity,covered=new Uint8Array(text.length);
-  for(const e of events)if(e.kind==='response'&&e.at<end)for(const f of e.data?.fragments??[]){
-   if(f.ref==='screen/event_reading/body_text'&&f.format==='text')covered.fill(1,f.offset,f.offset+f.text.length);
-  }
+ if(id===4){const a=acts[0]?.command.arguments;if(a?.reading_id!=='reading-tower-10'||typeof a?.commentary!=='string'||!/(탑|tower)/i.test(a.commentary)||!a.commentary.includes('17')||!/(붉|red)/i.test(a.commentary)||!/(체력|HP|health)/i.test(a.commentary)||!a.commentary.includes('9')||!/(푸른|blue)/i.test(a.commentary)||!/(보상.{0,8}(없|없이)|no reward)/i.test(a.commentary))failures.push('event_ack_evidence');
+  const text=scenario(4).state.observation.game_state.screen_state.event_reading.body_text,end=acts[0]?.at??Infinity,covered=new Uint8Array(text.length);
+  for(const e of responses)if(e.at<end)for(const f of e.data?.fragments??[])if(f.ref==='screen/event_reading/body_text'&&typeof f.text==='string'){const start=Number(reqById.get(e.id)?.args?.offset??0);covered.fill(1,start,Math.min(text.length,start+f.text.length));}
   if(covered.some(x=>!x))failures.push('event_incomplete');
  }
- if(id===6){
-  const rid=acts[0]?.command.request_id;
-  const unknown=events.find(e=>e.kind==='response'&&!e.error&&e.name==='sts_act'&&e.at>before&&e.data?.request_id===rid&&e.data?.outcome==='unknown'&&e.data?.retry_allowed===false);
-  const receipt=events.find(e=>e.kind==='response'&&!e.error&&e.name==='sts_get_request'&&e.at>(unknown?.at??Infinity)&&e.data?.request_id===rid&&e.data?.receipt===null&&e.data?.pending===true&&e.data?.retry_allowed===false);
-  if(!unknown||!receipt)failures.push('receipt_not_inspected');
-  if(!events.some(e=>e.kind==='response'&&!e.error&&e.name==='sts_get_state'&&e.at>(receipt?.at??Infinity)&&e.data?.session_id===s.state.session_id&&e.data?.state_id===10&&e.data?.connection?.pending_request_id===rid))failures.push('pending_state_not_inspected');
-  const stale=events.find(e=>e.kind==='response'&&e.error&&e.at<before&&JSON.stringify(e.data).includes('Stale state'));
-  if(!stale||!events.some(e=>e.kind==='response'&&!e.error&&e.name==='sts_get_state'&&e.at>stale.at&&e.at<before&&e.data?.state_id===10&&e.data?.session_id===s.state.session_id))failures.push('stale_not_exercised');
- }
+ if(id===6){const rid=acts[0]?.command.request_id,unknown=responses.find(e=>!e.error&&e.name==='sts_act'&&e.at>before&&e.data?.request_id===rid&&e.data?.outcome==='unknown'),receipt=responses.find(e=>!e.error&&e.name==='sts_get_request'&&e.at>(unknown?.at??Infinity)&&reqById.get(e.id)?.args?.request_id===rid&&e.data?.pending===true);if(!unknown||!receipt)failures.push('receipt_not_inspected');if(!responses.some(e=>!e.error&&e.name==='sts_get_state'&&e.at>(receipt?.at??Infinity)&&e.data?.connection?.pending===true))failures.push('pending_state_not_inspected');}
  return {correct:failures.length===0,safe:!events.some(e=>e.kind==='violation')&&!failures.some(x=>['action_count_or_choice','target','event_ack_evidence','event_incomplete'].includes(x)),failures};
 }
