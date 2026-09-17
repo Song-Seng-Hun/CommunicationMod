@@ -102,6 +102,42 @@ function publicAction(value:unknown,index:number):Obj {
  return out;
 }
 function refSummary(value:unknown,ref:string,keys?:string[]):Obj {return {ref,...inlineSummary(value,keys)};}
+function controlSummary(value:unknown,ref:string):Obj {
+ const v=obj(value),out:Obj={ref};
+ for(const [key,item] of Object.entries(v)){
+  if(key==='id'||provenance.has(key)||item==null)continue;
+  if(key==='available'&&item===true)continue;
+  if(key.endsWith('_complete')&&item===true)continue;
+  if(scalar(item,160))out[key]=item;
+ }
+ return out;
+}
+function monsterSummary(value:unknown,index:number):Obj {
+ const v=obj(value),out:Obj={ref:'monsters/'+index};
+ for(const key of ['name','current_hp','max_hp','intent','move_adjusted_damage'])if(Object.hasOwn(v,key)&&scalar(v[key],120))out[key]=v[key];
+ if(typeof v.block==='number'&&v.block>0)out.block=v.block;
+ if(typeof v.move_hits==='number'&&v.move_hits>1)out.move_hits=v.move_hits;
+ for(const key of ['is_gone','is_dead','half_dead'])if(v[key]===true)out[key]=true;
+ return out;
+}
+function eventOptionSummary(value:unknown,index:number):Obj {
+ const v=obj(value),out:Obj={ref:'screen/event_reading/options/'+index};
+ if(typeof v.text==='string')out.text=v.text.slice(0,240);
+ if(v.disabled===true)out.disabled=true;if(Number.isInteger(v.choice_index))out.choice_index=v.choice_index;return out;
+}
+function offerSummary(value:unknown,index:number,screen:string):Obj {
+ const v=obj(value),out:Obj={ref:'screen/cards/'+index};
+ for(const key of ['name','type','price'])if(Object.hasOwn(v,key)&&scalar(v[key],160))out[key]=v[key];
+ if(screen==='SHOP_SCREEN'){
+  if(v.available===false)out.available=false;if(v.affordable===false)out.affordable=false;
+  if(typeof v.unavailable_reason==='string'&&v.unavailable_reason)out.unavailable_reason=v.unavailable_reason;
+ }else{
+  if(typeof v.description==='string')out.description=v.description.slice(0,240);
+  if(typeof v.displayed_cost_text==='string')out.displayed_cost_text=v.displayed_cost_text;
+  if(v.displayed_cost_complete===false)out.displayed_cost_complete=false;
+ }
+ return out;
+}
 function entry(ref:string,value:unknown,title?:string):Obj {
  const v=obj(value),out:Obj={ref},leaf=ref.split('/').at(-1)??ref,label=String(title??v.name??v.label??v.title??v.id??leaf).slice(0,64);
  if(label!==ref&&label!==leaf)out.title=label;if(Array.isArray(value)||typeof value==='string')out.count=size(value);
@@ -187,13 +223,13 @@ export function decision(state:Obj):Obj {
   const groupedHand=hand.length<=10?groupEquivalentCards(shownHand):shownHand.map((value,index)=>({value,index,copies:1}));
   const perCard=Math.max(145,Math.floor(1800/Math.max(1,groupedHand.length))),evidence=groupedHand.map(group=>combatEvidence(obj(group.value),220));
   const inlineEvidence=hand.length<=10&&groupedHand.every((group,i)=>evidence[i]!==undefined||!['cost_components','target_playability'].some(k=>Object.hasOwn(obj(group.value),k)))&&evidence.reduce((n,v)=>n+(v?bytes(v):0),0)<=480;
-  const combatOut:Obj={hand:groupedHand.map((group,i)=>{const summary=flatCardSummary('hand/'+group.index,group.value,perCard,false);if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);if(group.copies>1)summary.copies=group.copies;return summary;}),monsters:monsters.slice(0,8).map((v,i)=>refSummary(v,'monsters/'+i,['name','current_hp','max_hp','block','intent','move_adjusted_damage','move_hits','is_gone','is_dead','half_dead']))};
+  const combatOut:Obj={hand:groupedHand.map((group,i)=>{const summary=flatCardSummary('hand/'+group.index,group.value,perCard,false);if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);if(group.copies>1)summary.copies=group.copies;return summary;}),monsters:monsters.slice(0,8).map(monsterSummary)};
   if(!complete)combatOut.hand_complete=false;out.combat=combatOut;Object.assign(combatOut,inlineSummary(roots.combat));if(hand.length>10)combatOut.hand_more='hand';if(monsters.length>8)combatOut.monsters_more='monsters';
  }
  if(roots.screen){const screenState=inlineSummary(roots.screen,['body_text','event_id','event_name','for_upgrade']);if(Object.keys(screenState).length)out.screen_state=screenState;}
- if(screen==='EVENT'&&present(obj(roots.screen).event_reading)){const reading=obj(obj(roots.screen).event_reading);out.event_reading={...inlineSummary(reading,['reading_id','body_complete','options_complete','status']),body_ref:'screen/event_reading/body_text',options:list(reading.options).slice(0,12).map((value,i)=>refSummary(value,'screen/event_reading/options/'+i,['text','disabled','choice_index']))};}
- for(const key of ['rest_controls','reward_controls'])if(roots[key])out[key]=list(roots[key]).slice(0,12).map((value,i)=>refSummary(value,child(key,String(i))));
- if(['SHOP_SCREEN','CARD_REWARD','GRID','BOSS_REWARD'].includes(screen)&&Array.isArray(obj(roots.screen).cards)){const offerKeys=screen==='SHOP_SCREEN'?['name','type','price','available','affordable','unavailable_reason']:['name','type','description','displayed_cost_text','displayed_cost_complete'];out.offers=list(obj(roots.screen).cards).slice(0,12).map((value,i)=>refSummary(value,'screen/cards/'+i,offerKeys));}
+ if(screen==='EVENT'&&present(obj(roots.screen).event_reading)){const reading=obj(obj(roots.screen).event_reading);out.event_reading={...inlineSummary(reading,['reading_id','body_complete','options_complete','status']),body_ref:'screen/event_reading/body_text',options:list(reading.options).slice(0,12).map(eventOptionSummary)};}
+ for(const key of ['rest_controls','reward_controls'])if(roots[key])out[key]=list(roots[key]).slice(0,12).map((value,i)=>controlSummary(value,child(key,String(i))));
+ if(['SHOP_SCREEN','CARD_REWARD','GRID','BOSS_REWARD'].includes(screen)&&Array.isArray(obj(roots.screen).cards))out.offers=list(obj(roots.screen).cards).slice(0,12).map((value,i)=>offerSummary(value,i,screen));
  for(const key of ['reward_navigation','selection_controls','card_selection_controls'])if(roots[key]){const summary=inlineSummary(roots[key]);if(Object.keys(summary).length)out[key]=summary;}if(roots.map_plan)out.map_plan=inlineSummary(roots.map_plan,mapPlanKeys);
  const menu=obj(roots.menu);if(roots.menu&&(state.ready!==true||menu.reason!==undefined)){const summary=inlineSummary(roots.menu,['reason','game_screen']);if(Object.keys(summary).length)out.menu=summary;}
  const skip=new Set(['combat','menu']);if(actions.length<=12)skip.add('actions');out.toc=Object.entries(roots).filter(([ref])=>!skip.has(ref)).map(([ref,value])=>entry(ref,value,ref));
