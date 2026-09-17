@@ -38,7 +38,10 @@ public final class RunUi {
             if(CardCrawlGame.isPopupOpen || AbstractDungeon.isFadingOut || AbstractDungeon.fadeColor.a>0.01f || AbstractDungeon.player.isDead) return view;
             if(!RoomUi.ready()){status.addProperty("reason","native_input_pending_or_transition");return view;}
             if(type.equals("MAP")&&communicationmod.map.MapDrawing.blocksNavigation()) {
-                status.addProperty("reason","human_editing_map");return view;
+                offerMapReturn();
+                status.addProperty("reason","human_editing_map");
+                status.addProperty("stable",!offered.isEmpty());
+                return view;
             }
             if(AbstractDungeon.screen==AbstractDungeon.CurrentScreen.FTUE) {
                 tutorial(view,status);
@@ -80,7 +83,9 @@ public final class RunUi {
                 }
                 if(offered.isEmpty())status.addProperty("reason","event_text_not_ready_or_unsupported_renderer");
             } else if(type.equals("MAP")) {
+                offerMapReturn();
                 offered.addAll(communicationmod.map.MapDrawing.actions());
+                final int safeMapActions=offered.size();
                 final MapRoomNode origin=AbstractDungeon.getCurrMapNode();
                 final Object map=AbstractDungeon.map;
                 if(!communicationmod.compat.DownfallMapCoordinates.isSupported()) {
@@ -105,7 +110,8 @@ public final class RunUi {
                         }
                     }
                     if(!communicationmod.compat.DownfallMapCoordinates.isSupported()) {
-                        offered.clear();status.addProperty("reason",communicationmod.compat.DownfallMapCoordinates.getUnsupportedReason());
+                        while(offered.size()>safeMapActions)offered.remove(offered.size()-1);
+                        status.addProperty("reason",communicationmod.compat.DownfallMapCoordinates.getUnsupportedReason());
                     }
                 } else status.addProperty("reason","map_input_pending_or_not_ready");
             } else if(Arrays.asList("REST","SHOP_ROOM","SHOP_SCREEN","BOSS_REWARD","CHEST","COMPLETE").contains(type)) {
@@ -124,6 +130,16 @@ public final class RunUi {
         }
     }
     public List<ProtocolSession.Action> actions(){return inMenu?menu.actions():new ArrayList<>(offered);}
+
+    private void offerMapReturn() {
+        if(AbstractDungeon.screen!=AbstractDungeon.CurrentScreen.MAP || !AbstractDungeon.dungeonMapScreen.dismissable)return;
+        offered.add(simple("run.map.return","return",()->{
+            if(AbstractDungeon.screen!=AbstractDungeon.CurrentScreen.MAP || !AbstractDungeon.dungeonMapScreen.dismissable)
+                throw new IllegalArgumentException("Map can no longer be closed");
+            communicationmod.map.MapDrawing.close();
+            ChoiceScreenUtils.pressCancelButton();
+        }));
+    }
 
     private static boolean mapInputPending() {
         return AbstractDungeon.screen!=AbstractDungeon.CurrentScreen.MAP
