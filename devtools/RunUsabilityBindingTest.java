@@ -21,12 +21,12 @@ public final class RunUsabilityBindingTest {
             check(calls(p,"communicationmod.observation.RunUi").contains("GridSelectionUi.capture"),"grid route");
         } else if(mode.equals("room")) {
             String calls=calls(p,"communicationmod.observation.RoomUi");
-            for(String expected:new String[]{"NativeUiInput.click","AbstractCampfireOption.update","AbstractChest.update","BossRelicSelectScreen.update"})check(calls.contains(expected),expected);
+            for(String expected:new String[]{"NativeUiInput.click","NativeUiInput.deferClick","AbstractCampfireOption.update","AbstractChest.update","BossRelicSelectScreen.update"})check(calls.contains(expected),expected);
             check(!calls.contains("Merchant.update"),"merchant entry must wait for the normal game update");
             check(fieldWrites(p,"communicationmod.observation.RoomUi").contains("communicationmod.patches.MerchantPatch.visitMerchant"),"merchant entry queues native merchant patch");
             check(!calls.contains("CommandExecutor.executeCommand")&&!calls.contains("loseGold")&&!calls.contains("gainGold"),"native UI only");
             check(calls(p,"communicationmod.observation.RunUi").contains("RoomUi.capture"),"room route");
-            check(calls.contains("PotionUi.idle"),"human potion UI blocks every room action");
+            check(calls.contains("PotionUi.idle") && calls.contains("NativeUiInput.pending"),"pending native input blocks every room action");
         } else if(mode.equals("potion")) {
             String calls=calls(p,"communicationmod.observation.PotionUi");
             for(String expected:new String[]{"PotionPopUp.open","NativeUiInput.click","NativeUiInput.press","RunUiPolicy.potionUse","RoomUi.action"})check(calls.contains(expected),expected);
