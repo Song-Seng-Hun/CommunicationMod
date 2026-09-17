@@ -50,6 +50,15 @@ test('Snecko/current turn cost changes invalidate known_view even when other car
  s.observation.game_state.combat_state.hand[0].cost=3;
  const changed=conditionalDecision(s,first.view_id);assert.equal(changed.unchanged,undefined);assert.equal(changed.combat.hand[0].cost,3);
 });
+test('hand TOC exposes current turn cost without opening each card',async()=>{
+ const {readContext}=await api(),s=state('NONE');
+ s.actions=[{id:'run.play.a.0',label:'타격',parameters:{}}];
+ s.observation.game_state.combat_state={hand_complete:true,hand:[{id:'a',name:'타격',cost:0},{id:'b',name:'수비',cost:3}],monsters:[],player:{energy:3},draw_pile:[]};
+ const page=readContext(s,['hand']).fragments[0];
+ assert.equal(page.toc[0].ref,'hand/0');assert.equal(page.toc[0].title,'타격');assert.equal(page.toc[0].cost,0);
+ assert.equal(page.toc[1].ref,'hand/1');assert.equal(page.toc[1].title,'수비');assert.equal(page.toc[1].cost,3);
+ assert.ok(JSON.stringify(page).length<2400);
+});
 test('native choice screen and in-combat selection retain current controls',async()=>{
  const {decision,readContext}=await api(),s=state('NONE');s.ready=false;s.observation.menu={screen:'REST',game_screen:'NONE'};
  s.observation.rest_controls=[{description:'회복',available:false}];
