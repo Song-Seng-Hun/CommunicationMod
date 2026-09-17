@@ -32,13 +32,21 @@ public final class McpBridge implements AutoCloseable {
         Thread accept=new Thread(this::accept,"comm-mcp-accept");accept.setDaemon(true);accept.start();
     }
     public synchronized void publish(JsonObject message) {
-        String type=string(message,"type");
+        String type=string(message,"type");JsonObject outbound=message;
         if(type.equals("state")){latest=message;latestAt=System.nanoTime();}
         if(type.equals("result") || type.equals("error")) {
             String id=string(message,"request_id");
-            if(!id.isEmpty()) {receipts.put(id,message);while(receipts.size()>128)receipts.remove(receipts.keySet().iterator().next());if(id.equals(pending))pending=null;}
+            // The bridge is strictly single-flight. If a terminal game reply omits
+            // request_id, it can only belong to the sole forwarded pending request.
+            // Correlate defensively so a malformed/rejected action cannot wedge the
+            // bridge forever. This never retries or invents a second gameplay action.
+            if(id.isEmpty() && pending!=null) {
+                outbound=new JsonParser().parse(message.toString()).getAsJsonObject();
+                outbound.addProperty("request_id",pending);id=pending;
+            }
+            if(!id.isEmpty()) {receipts.put(id,outbound);while(receipts.size()>128)receipts.remove(receipts.keySet().iterator().next());if(id.equals(pending))pending=null;}
         }
-        Peer current=peer;if(current!=null)current.offer(message.toString());
+        Peer current=peer;if(current!=null)current.offer(outbound.toString());
     }
     private void accept() {
         while(!closed) {
