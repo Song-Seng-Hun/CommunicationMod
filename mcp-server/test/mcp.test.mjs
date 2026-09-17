@@ -11,49 +11,27 @@ test('real MCP stdio uses pinned state, single-copy payloads and bounded context
  const publish=message=>{for(const p of peers)p.write(JSON.stringify(message)+'\n');};
  try{
   await client.connect(transport);const tools=(await client.listTools()).tools;assert.equal(tools.length,6);assert.ok(tools.some(t=>t.name==='sts_get_state'));
-  const actSchema=tools.find(t=>t.name==='sts_act').inputSchema,ctxSchema=tools.find(t=>t.name==='sts_get_context').inputSchema;
-  for(const schema of [actSchema,ctxSchema]){assert.equal(schema.properties.session_id,undefined);assert.equal(schema.properties.state_id,undefined);}
-  const getResult=await client.callTool({name:'sts_get_state',arguments:{wait_ms:1000}}),get=restore(getResult);
-  assert.equal(get.structuredContent,undefined);assert.equal(get.screen_state.body_text,'이벤트 본문 전체');assert.equal(get.session_id,undefined);assert.equal(get.state_id,undefined);assert.equal(get.connection,undefined);assert.equal(get.ready,undefined);
-  assert.ok(get.toc.some(x=>x.ref==='screen'));assert.ok(!get.toc.some(x=>x.ref==='map'));
-
+  const actSchema=tools.find(t=>t.name==='sts_act').inputSchema,ctxSchema=tools.find(t=>t.name==='sts_get_context').inputSchema;for(const schema of [actSchema,ctxSchema]){assert.equal(schema.properties.session_id,undefined);assert.equal(schema.properties.state_id,undefined);}
+  const get=restore(await client.callTool({name:'sts_get_state',arguments:{wait_ms:1000}}));assert.equal(get.screen_state.body_text,'이벤트 본문 전체');assert.equal(get.session_id,undefined);assert.equal(get.state_id,undefined);assert.equal(get.connection,undefined);assert.equal(get.ready,undefined);assert.ok(get.toc.some(x=>x.ref==='screen'));assert.ok(!get.toc.some(x=>x.ref==='map'));
   const same=restore(await client.callTool({name:'sts_get_state',arguments:{known_view:get.view_id}}));assert.deepEqual(same,{view_id:get.view_id,unchanged:true});
-  const waitStarted=performance.now();const waited=restore(await client.callTool({name:'sts_get_state',arguments:{known_view:get.view_id,wait_ms:80}}));
-  assert.ok(performance.now()-waitStarted>=65);assert.equal(waited.unchanged,true);
-
+  const waitStarted=performance.now(),waited=restore(await client.callTool({name:'sts_get_state',arguments:{known_view:get.view_id,wait_ms:80}}));assert.ok(performance.now()-waitStarted>=65);assert.equal(waited.unchanged,true);
   const change=setTimeout(()=>publish(state(1,64)),30);try{const next=restore(await client.callTool({name:'sts_get_state',arguments:{known_view:get.view_id,wait_ms:1000}}));assert.equal(next.player.current_hp,64);}finally{clearTimeout(change);}
   publish(state(1));const repinned=restore(await client.callTool({name:'sts_get_state',arguments:{wait_ms:0}}));
-
-  const controller=new AbortController();const cancelled=client.callTool({name:'sts_get_state',arguments:{known_view:repinned.view_id,wait_ms:15000}},undefined,{signal:controller.signal});
-  const rejected=assert.rejects(cancelled);const cancelTimer=setTimeout(()=>controller.abort('test cancellation'),80);try{await rejected;}finally{clearTimeout(cancelTimer);}
-
+  const controller=new AbortController(),cancelled=client.callTool({name:'sts_get_state',arguments:{known_view:repinned.view_id,wait_ms:15000}},undefined,{signal:controller.signal});const rejected=assert.rejects(cancelled),cancelTimer=setTimeout(()=>controller.abort('test cancellation'),80);try{await rejected;}finally{clearTimeout(cancelTimer);}
   const exampleRef=repinned.guidance?.ref;if(exampleRef){const example=restore(await client.callTool({name:'sts_get_context',arguments:{refs:[exampleRef]}}));assert.ok(example.fragments[0].data);}
   const mechanics=restore(await client.callTool({name:'sts_get_context',arguments:{refs:['mechanics']}}));assert.ok(mechanics.fragments[0].toc.some(x=>x.ref==='mechanics/collection'));
   const tail=restore(await client.callTool({name:'sts_get_context',arguments:{refs:['collection/cards'],offset:130,limit:30}}));assert.equal(tail.fragments[0].toc[4].title,'card-134');assert.equal(tail.fragments[0].next_offset,undefined);
-  const batch=restore(await client.callTool({name:'sts_get_context',arguments:{refs:['collection/cards/134','deck/0']}}));assert.equal(batch.fragments[0].data.id,'card-134');assert.equal(batch.fragments[1].data.name,'타격');
-  assert.ok(Buffer.byteLength(JSON.stringify(batch),'utf8')<5000);
-
-  const compactResult=await client.callTool({name:'sts_get_context',arguments:{refs:['collection/cards'],limit:20,response_format:'compact'}});assert.equal(compactResult.structuredContent,undefined);const compact=restore(compactResult);
-  const defaultPage=restore(await client.callTool({name:'sts_get_context',arguments:{refs:['collection/cards'],limit:20}}));assert.deepEqual(compact,defaultPage);
+  const batch=restore(await client.callTool({name:'sts_get_context',arguments:{refs:['collection/cards/134','deck/0']}}));assert.equal(batch.fragments[0].data.id,'card-134');assert.equal(batch.fragments[1].data.name,'타격');assert.ok(Buffer.byteLength(JSON.stringify(batch),'utf8')<5000);
+  const compactResult=await client.callTool({name:'sts_get_context',arguments:{refs:['collection/cards'],limit:20,response_format:'compact'}});assert.equal(compactResult.structuredContent,undefined);const compact=restore(compactResult),defaultPage=restore(await client.callTool({name:'sts_get_context',arguments:{refs:['collection/cards'],limit:20}}));assert.deepEqual(compact,defaultPage);
   const invalid=await client.callTool({name:'sts_get_context',arguments:{refs:['collection/cards'],response_format:'tsv'}});assert.equal(invalid.isError,true);
-
-  const result=restore(await client.callTool({name:'sts_act',arguments:{action_id:'run.event.0',request_id:'one'}}));assert.equal(result.outcome,'applied');assert.equal(result.request_id,undefined);assert.equal(result.receipt,undefined);assert.equal(result.retry_allowed,undefined);assert.equal(dispatches,1);
-  assert.equal(result.state.session_id,undefined);assert.equal(result.state.state_id,undefined);
-
-  // A backend state change that the model has not refreshed invalidates the server-side pin.
-  publish(state(4));await new Promise(r=>setTimeout(r,10));
-  const stale=await client.callTool({name:'sts_act',arguments:{action_id:'run.event.0'}});assert.equal(stale.isError,true);assert.equal(dispatches,1);
-  const staleContext=await client.callTool({name:'sts_get_context',arguments:{refs:['collection/cards']}});assert.equal(staleContext.isError,true);
-  const fresh=restore(await client.callTool({name:'sts_get_state',arguments:{wait_ms:0}}));assert.ok(fresh.view_id);
-  const deck=restore(await client.callTool({name:'sts_get_context',arguments:{refs:['deck'],limit:1}}));assert.equal(deck.fragments[0].total,2);assert.equal(deck.fragments[0].next_offset,1);
-
-  const request=restore(await client.callTool({name:'sts_get_request',arguments:{request_id:'one'}}));assert.equal(request.receipt.status,'applied');
-  const metricsDir=path.join(root,'target','agent-efficiency','metrics');let rows=[];
-  for(let i=0;i<40;i++){
+  const result=restore(await client.callTool({name:'sts_act',arguments:{action_id:'run.event.0',request_id:'one'}}));assert.equal(result.outcome,undefined);assert.equal(result.request_id,undefined);assert.equal(result.receipt,undefined);assert.deepEqual(Object.keys(result),['state']);assert.equal(dispatches,1);assert.equal(result.state.session_id,undefined);assert.equal(result.state.state_id,undefined);
+  publish(state(4));await new Promise(r=>setTimeout(r,10));const stale=await client.callTool({name:'sts_act',arguments:{action_id:'run.event.0'}});assert.equal(stale.isError,true);assert.equal(dispatches,1);const staleContext=await client.callTool({name:'sts_get_context',arguments:{refs:['collection/cards']}});assert.equal(staleContext.isError,true);
+  const fresh=restore(await client.callTool({name:'sts_get_state',arguments:{wait_ms:0}}));assert.ok(fresh.view_id);const deck=restore(await client.callTool({name:'sts_get_context',arguments:{refs:['deck'],limit:1}}));assert.equal(deck.fragments[0].total,2);assert.equal(deck.fragments[0].next_offset,1);
+  const request=restore(await client.callTool({name:'sts_get_request',arguments:{request_id:'one'}}));assert.deepEqual(request,{receipt:{status:'applied'}});
+  const metricsDir=path.join(root,'target','agent-efficiency','metrics');let rows=[];for(let i=0;i<40;i++){
    try{const files=(await readdir(metricsDir)).filter(x=>x.endsWith('.jsonl'));rows=(await Promise.all(files.map(f=>readFile(path.join(metricsDir,f),'utf8')))).flatMap(text=>text.trim().split('\n').filter(Boolean).map(JSON.parse));}catch{}
    if(rows.some(r=>r.error_class==='cancelled'))break;await new Promise(r=>setTimeout(r,10));
   }
-  assert.ok(rows.some(r=>r.tool==='sts_get_state'&&r.wait_ms>=65));assert.ok(rows.some(r=>r.tool==='sts_get_state'&&r.error_class==='cancelled'));
-  assert.ok(rows.every(r=>r.response_bytes>0));assert.ok(!JSON.stringify(rows).includes('이벤트 본문'));assert.ok(!JSON.stringify(rows).includes(token));
+  assert.ok(rows.some(r=>r.tool==='sts_get_state'&&r.wait_ms>=65));assert.ok(rows.some(r=>r.tool==='sts_get_state'&&r.error_class==='cancelled'));assert.ok(rows.every(r=>r.response_bytes>0));assert.ok(!JSON.stringify(rows).includes('이벤트 본문'));assert.ok(!JSON.stringify(rows).includes(token));
  }finally{await client.close();for(const socket of peers)socket.destroy();await new Promise(r=>backend.close(r));}
 });
