@@ -10,7 +10,7 @@ public final class MenuControlSession {
     private final Supplier<JsonObject> observe;
     private final Supplier<List<ProtocolSession.Action>> actions;
     private boolean connected;
-    private String lastView, published;
+    private String lastView, published, awaitingChangeFrom;
     private int stableFrames;
     private final boolean playControl;
 
@@ -25,7 +25,11 @@ public final class MenuControlSession {
 
     public String receive(String line) {
         // Manual UI changes must invalidate even between publication and dispatch.
-        if(connected && !decisionKey(observe.get()).equals(lastView))reset();
+        String before=null;
+        if(connected) {
+            before=decisionKey(observe.get());
+            if(!before.equals(lastView))reset();
+        }
         String response=protocol.receive(line);
         JsonObject reply=new JsonParser().parse(response).getAsJsonObject();
         String type=reply.get("type").getAsString();
@@ -35,7 +39,10 @@ public final class MenuControlSession {
             if(playControl)reply.getAsJsonArray("capabilities").add("partial_run_control");
             response=reply.toString();
         } else if(type.equals("result")) {
-            // An action result is not proof that the next screen has finished rendering.
+            // A successful dispatch is not proof that the next screen has finished rendering.
+            // Do not re-arm the exact same decision while its click/transition is still being
+            // consumed; wait until the observed decision key actually changes.
+            awaitingChangeFrom="applied".equals(reply.has("status")?reply.get("status").getAsString():"")?before:null;
             lastView=null;published=null;stableFrames=0;
         }
         return response;
@@ -44,8 +51,19 @@ public final class MenuControlSession {
     public String update(JsonObject runtime) {
         if(!connected)return null;
         JsonObject view=observe.get();String key=decisionKey(view);
-        boolean stable=view.getAsJsonObject("menu").get("stable").getAsBoolean();
+        if(awaitingChangeFrom!=null) {
+            if(key.equals(awaitingChangeFrom)) {
+                if(!key.equals(lastView)){protocol.invalidate();lastView=key;}
+                stableFrames=0;
+                String next=key+"/awaiting-change";
+                if(next.equals(published))return null;
+                published=next;
+                return protocol.publish(runtime,view,Collections.emptyList(),false,"unsupported_or_transition");
+            }
+            awaitingChangeFrom=null;lastView=null;published=null;stableFrames=0;
+        }
         if(!key.equals(lastView)){protocol.invalidate();stableFrames=0;lastView=key;}
+        boolean stable=view.getAsJsonObject("menu").get("stable").getAsBoolean();
         stableFrames=stable?Math.min(2,stableFrames+1):0;
         boolean ready=stableFrames>=2;
         String next=key+"/"+ready;
@@ -54,7 +72,7 @@ public final class MenuControlSession {
         return protocol.publish(runtime,view,ready?actions.get():Collections.emptyList(),ready,
             stable?"supported":"unsupported_or_transition");
     }
-    private void reset(){protocol.invalidate();lastView=null;published=null;stableFrames=0;}
+    private void reset(){protocol.invalidate();lastView=null;published=null;stableFrames=0;awaitingChangeFrom=null;}
     private String decisionKey(JsonObject view) {
         if(!playControl)return view.toString();
         JsonObject key=new JsonParser().parse(view.toString()).getAsJsonObject();
