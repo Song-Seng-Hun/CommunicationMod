@@ -5,75 +5,21 @@ import path from 'node:path';import os from 'node:os';import {randomBytes} from 
 import {decode} from '@toon-format/toon';import {scenario} from './scenarios.mjs';
 const [id,dist,log,absoluteDeadline]=process.argv.slice(2),s=scenario(Number(id));
 if(!path.isAbsolute(dist)||!path.isAbsolute(log))throw new Error('Absolute evaluation paths required');
-const now=()=>Number(process.hrtime.bigint())/1e6;
-const record=e=>appendFileSync(log,JSON.stringify({at:now(),...e})+'\n');
-const root=await mkdtemp(path.join(os.tmpdir(),'downfall-latency-synthetic-'));
-const runtime=path.join(root,'target','fixture'),records=path.join(runtime,'recordings','synthetic');await mkdir(records,{recursive:true});
-const token=randomBytes(32).toString('base64url'),peers=new Set();let current=s.state,acted=false,child,stopping=false;
-const allowed=new Set(['sts_get_state','sts_get_context','sts_act','sts_get_request']);
-function stop(code=0){
- if(stopping)return;stopping=true;
- for(const p of peers)p.destroy();backend.close();child?.kill();
- setTimeout(()=>process.exit(code),30);
-}
+const now=()=>Number(process.hrtime.bigint())/1e6,record=e=>appendFileSync(log,JSON.stringify({at:now(),...e})+'\n');
+const root=await mkdtemp(path.join(os.tmpdir(),'downfall-latency-synthetic-')),runtime=path.join(root,'target','fixture'),records=path.join(runtime,'recordings','synthetic');await mkdir(records,{recursive:true});
+const token=randomBytes(32).toString('base64url'),peers=new Set();let current=s.state,acted=false,child,stopping=false;const allowed=new Set(['sts_get_state','sts_get_context','sts_act','sts_get_request']);
+function stop(code=0){if(stopping)return;stopping=true;for(const p of peers)p.destroy();backend.close();child?.kill();setTimeout(()=>process.exit(code),30);}
 function violation(reason){record({kind:'violation',reason});stop(3);}
-const backend=net.createServer(socket=>{
- peers.add(socket);socket.setEncoding('utf8');let buffer='',auth=false;
- const send=o=>socket.write(JSON.stringify(o)+'\n');
- const heartbeat=setInterval(()=>{if(auth)send(current);},500);
- socket.on('close',()=>{clearInterval(heartbeat);peers.delete(socket);});socket.on('error',()=>socket.destroy());
- socket.on('data',chunk=>{
-  buffer+=chunk;if(buffer.length>16384)return violation('backend_message_budget');
-  for(let i;(i=buffer.indexOf('\n'))>=0;){
-   let command;try{command=JSON.parse(buffer.slice(0,i));}catch{return violation('backend_invalid_json');}buffer=buffer.slice(i+1);
-   if(!auth){if(command.token!==token)return violation('backend_auth');auth=true;send({type:'bridge_ready'});send(current);continue;}
-   record({kind:'backend_act',command});
-   if(command.type!=='act'||acted||command.action_id!==s.act)return violation('unexpected_action');
-   if(Number(id)===2&&command.arguments?.target_index!==0)return violation('wrong_target');
-   if(Number(id)===4&&(command.arguments?.reading_id!=='reading-tower-10'||typeof command.arguments?.commentary!=='string'||!command.arguments.commentary.trim()))return violation('invalid_event_ack');
-   acted=true;
-   if(Number(id)===6)continue; // Deliberately missing outcome: real GameSession locks replay.
-   send({type:'result',request_id:command.request_id,status:'applied'});
-   current={...current,state_id:11,actions:[],observation:{...current.observation,game_state:{...current.observation.game_state,screen_type:Number(id)===1?'VICTORY':current.observation.game_state.screen_type}}};
-   send(current);
-  }
- });
-});
-await new Promise(resolve=>backend.listen(0,'127.0.0.1',resolve));
-await writeFile(path.join(root,'target','local-test-ready.json'),JSON.stringify({runtime}));
-await writeFile(path.join(records,'mcp-bridge.json'),JSON.stringify({protocol:1,port:backend.address().port,token}));
-child=spawn(process.execPath,[path.join(dist,'index.js')],{stdio:['pipe','pipe','pipe'],windowsHide:true,env:{...process.env,COMMUNICATIONMOD_WORKSPACE:root}});
-child.stderr.pipe(process.stderr);child.on('error',()=>violation('mcp_spawn_failed'));child.on('exit',code=>stop(code??1));
+const backend=net.createServer(socket=>{peers.add(socket);socket.setEncoding('utf8');let buffer='',auth=false;const send=o=>socket.write(JSON.stringify(o)+'\n');const heartbeat=setInterval(()=>{if(auth)send(current);},500);
+ socket.on('close',()=>{clearInterval(heartbeat);peers.delete(socket);});socket.on('error',()=>socket.destroy());socket.on('data',chunk=>{buffer+=chunk;if(buffer.length>16384)return violation('backend_message_budget');for(let i;(i=buffer.indexOf('\n'))>=0;){let command;try{command=JSON.parse(buffer.slice(0,i));}catch{return violation('backend_invalid_json');}buffer=buffer.slice(i+1);
+  if(!auth){if(command.token!==token)return violation('backend_auth');auth=true;send({type:'bridge_ready'});send(current);continue;}record({kind:'backend_act',command});if(command.type!=='act'||acted||command.action_id!==s.act)return violation('unexpected_action');
+  if(Number(id)===2&&command.arguments?.target_index!==0)return violation('wrong_target');if(Number(id)===4&&(command.arguments?.reading_id!=='reading-tower-10'||typeof command.arguments?.commentary!=='string'||!command.arguments.commentary.trim()))return violation('invalid_event_ack');acted=true;
+  if(Number(id)===6)continue;send({type:'result',request_id:command.request_id,status:'applied'});current={...current,state_id:11,actions:[],observation:{...current.observation,game_state:{...current.observation.game_state,screen_type:Number(id)===1?'VICTORY':current.observation.game_state.screen_type}}};send(current);
+ }});});
+await new Promise(resolve=>backend.listen(0,'127.0.0.1',resolve));await writeFile(path.join(root,'target','local-test-ready.json'),JSON.stringify({runtime}));await writeFile(path.join(records,'mcp-bridge.json'),JSON.stringify({protocol:1,port:backend.address().port,token}));
+child=spawn(process.execPath,[path.join(dist,'index.js')],{stdio:['pipe','pipe','pipe'],windowsHide:true,env:{...process.env,COMMUNICATIONMOD_WORKSPACE:root,COMMUNICATIONMOD_ACTION_WAIT_MS:'20'}});child.stderr.pipe(process.stderr);child.on('error',()=>violation('mcp_spawn_failed'));child.on('exit',code=>stop(code??1));
 const requests=new Map();let initializeId;
-function lines(stream,handle){let buf='';stream.setEncoding('utf8');stream.on('data',chunk=>{
- buf+=chunk;if(buf.length>2097152)return violation('mcp_message_budget');
- for(let i;(i=buf.indexOf('\n'))>=0;){const line=buf.slice(0,i);buf=buf.slice(i+1);if(!line.trim())continue;
-  let msg;try{msg=JSON.parse(line);}catch{return violation('mcp_invalid_json');}handle(msg,line);
- }
-});}
-lines(process.stdin,(msg,line)=>{
- if(stopping)return;
- if(msg.method==='initialize'){initializeId=msg.id;record({kind:'initialize_request'});}
- if(msg.method==='tools/call'){
-  const name=msg.params?.name;if(!allowed.has(name))return violation('forbidden_tool:'+name);
-  const e={kind:'request',id:msg.id,name,args:msg.params.arguments??{}};requests.set(msg.id,e);record(e);
- }else if(msg.method&&!['initialize','notifications/initialized','tools/list','ping','notifications/cancelled'].includes(msg.method))return violation('unexpected_mcp_method:'+msg.method);
- child.stdin.write(line+'\n');
-});
-lines(child.stdout,(msg,line)=>{
- if(msg.id===initializeId&&msg.result){process.stdout.write(line+'\n',()=>record({kind:'initialize_response'}));initializeId=undefined;return;}
- const req=requests.get(msg.id);
- if(req){
-  let data=msg.result?.structuredContent?.data;
-  if(data===undefined){const text=msg.result?.content?.find(x=>x.type==='text')?.text;
-   try{data=JSON.parse(text);}catch{try{data=decode(text.replace(/^TOON:.*\n/,''));}catch{data=text??msg.error;}}
-  }
-  requests.delete(msg.id);
-  process.stdout.write(line+'\n',()=>record({kind:'response',id:msg.id,name:req.name,error:!!(msg.error||msg.result?.isError),data}));return;
- }
- process.stdout.write(line+'\n');
-});
-record({kind:'ready',synthetic:true});
-process.stdin.on('end',()=>stop());process.on('SIGTERM',()=>stop());process.on('SIGINT',()=>stop());
-// Watchdog also bounds orphan lifetime after host termination.
-setTimeout(()=>stop(4),Number(absoluteDeadline)>0?Math.max(1,Math.min(90000,Number(absoluteDeadline)-now())):90000).unref();
+function lines(stream,handle){let buf='';stream.setEncoding('utf8');stream.on('data',chunk=>{buf+=chunk;if(buf.length>2097152)return violation('mcp_message_budget');for(let i;(i=buf.indexOf('\n'))>=0;){const line=buf.slice(0,i);buf=buf.slice(i+1);if(!line.trim())continue;let msg;try{msg=JSON.parse(line);}catch{return violation('mcp_invalid_json');}handle(msg,line);}});}
+lines(process.stdin,(msg,line)=>{if(stopping)return;if(msg.method==='initialize'){initializeId=msg.id;record({kind:'initialize_request'});}if(msg.method==='tools/call'){const name=msg.params?.name;if(!allowed.has(name))return violation('forbidden_tool:'+name);const e={kind:'request',id:msg.id,name,args:msg.params.arguments??{}};requests.set(msg.id,e);record(e);}else if(msg.method&&!['initialize','notifications/initialized','tools/list','ping','notifications/cancelled'].includes(msg.method))return violation('unexpected_mcp_method:'+msg.method);child.stdin.write(line+'\n');});
+lines(child.stdout,(msg,line)=>{if(msg.id===initializeId&&msg.result){process.stdout.write(line+'\n',()=>record({kind:'initialize_response'}));initializeId=undefined;return;}const req=requests.get(msg.id);if(req){let data=msg.result?.structuredContent?.data;if(data===undefined){const text=msg.result?.content?.find(x=>x.type==='text')?.text;try{data=JSON.parse(text);}catch{try{data=decode(text.replace(/^TOON:.*\n/,''));}catch{data=text??msg.error;}}}requests.delete(msg.id);process.stdout.write(line+'\n',()=>record({kind:'response',id:msg.id,name:req.name,error:!!(msg.error||msg.result?.isError),data}));return;}process.stdout.write(line+'\n');});
+record({kind:'ready',synthetic:true});process.stdin.on('end',()=>stop());process.on('SIGTERM',()=>stop());process.on('SIGINT',()=>stop());setTimeout(()=>stop(4),Number(absoluteDeadline)>0?Math.max(1,Math.min(90000,Number(absoluteDeadline)-now())):90000).unref();
