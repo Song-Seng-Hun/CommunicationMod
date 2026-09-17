@@ -15,7 +15,7 @@ const mapPlanKeys=['map_id','revision','route_author','current_node','next_plann
 const mapViewKeys=['session_id','state_id','ready','screen','connection'];
 const rules:Record<string,string>={
  act:'Use only offered actions from ready state. Read needed referenced details. One action per call; never replay unknown/applied_waiting. Refresh state after stale rejection.',
- cost:'Use native displayed_cost_text and cost_components (energy/reserves/X/Pyre). Incomplete or unrendered costs unknown. Read target_playability and unplayable_reason before playing.',
+ cost:'The scalar cost is the current card.costForTurn energy cost and must be considered for ordinary cards, including Snecko-randomized costs. Use displayed_cost_text and cost_components to qualify X/alternate-resource/special costs. Read target_playability and unplayable_reason before playing.',
  upgrade:'Before acquisition or upgrade, read offered card upgrade_preview and relevant keyword details. Only next standard upgrade, not random/event/relic outcomes. Read selected_after before separate branch/tree confirmation.',
  event:'Read and present current event body, situation and choices before acknowledgement. Supply observed reading_id and meaningful commentary; discuss result pages. Do not silently acknowledge incomplete text.',
  map:'Map planning draws route, never moves character. Use offered map_id/revision and node IDs; stale revisions rejected. Native edges only, not predicted travel powers.',
@@ -235,7 +235,7 @@ export function decision(state:Obj):Obj {
    && evidence.reduce((n,v)=>n+(v?JSON.stringify(v).length:0),0)<=768;
   out.combat={hand_complete:c.hand_complete ?? obj(o.combat_decision).hand_complete ?? false,
    hand:shownHand.map((v,i)=>{
-    const summary=brief(v,'hand/'+i,['id','uuid','name','type','upgrades','description','is_playable','displayed_cost_text','displayed_cost_complete','cost_components_complete','unplayable_reason','description_complete']);
+    const summary=brief(v,'hand/'+i,['id','uuid','name','type','upgrades','description','cost','is_playable','displayed_cost_text','displayed_cost_complete','cost_components_complete','unplayable_reason','description_complete']);
     if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);
     return summary;
    }),
