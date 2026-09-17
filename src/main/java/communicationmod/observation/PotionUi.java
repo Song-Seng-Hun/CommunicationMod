@@ -25,17 +25,17 @@ public final class PotionUi {
             JsonObject row=new JsonObject();row.addProperty("slot",slot);row.addProperty("id",potion.ID);
             row.addProperty("requires_target",potion.targetRequired);row.addProperty("can_use",potion.canUse());row.addProperty("can_discard",potion.canDiscard());controls.add(row);
             if(potion.canDiscard())actions.add(RoomUi.action("run.potion.discard."+slot,potion.name+" — "+PotionPopUp.TEXT[1],decision,"play",
-                ()->same(slot,potion) && potion.canDiscard(),()->apply(slot,potion,null,true)));
+                ()->same(slot,potion) && potion.canDiscard(),()->applyAndRearm(slot,potion,null,true,decision)));
             if(potion.targetRequired && combat && !AbstractDungeon.isScreenUp) {
                 List<AbstractMonster> monsters=AbstractDungeon.getMonsters().monsters;
                 for(int j=0;j<monsters.size();j++) {
                     final int targetIndex=j;AbstractMonster target=monsters.get(j);
                     if(usable(potion,target))actions.add(RoomUi.action("run.potion.use."+slot+"."+j,potion.name+" → "+target.name,decision,"play",
                         ()->same(slot,potion) && usable(potion,target) && targetIndex<AbstractDungeon.getMonsters().monsters.size() && AbstractDungeon.getMonsters().monsters.get(targetIndex)==target,
-                        ()->apply(slot,potion,target,false)));
+                        ()->applyAndRearm(slot,potion,target,false,decision)));
                 }
             } else if(!potion.targetRequired && usable(potion,null))actions.add(RoomUi.action("run.potion.use."+slot,potion.name+" — "+PotionPopUp.TEXT[0],decision,"play",
-                ()->same(slot,potion) && usable(potion,null),()->apply(slot,potion,null,false)));
+                ()->same(slot,potion) && usable(potion,null),()->applyAndRearm(slot,potion,null,false,decision)));
         }
         return actions;
     }
@@ -47,6 +47,15 @@ public final class PotionUi {
         && !AbstractDungeon.topPanel.selectPotionMode && !AbstractDungeon.topPanel.potionCombine;}
     private static boolean same(int slot,AbstractPotion potion){return availablePopup() && slot<AbstractDungeon.player.potions.size() && AbstractDungeon.player.potions.get(slot)==potion;}
     private static boolean usable(AbstractPotion potion,AbstractMonster target){return RunUiPolicy.potionUse(!(potion instanceof PotionSlot),potion.canUse(),potion.targetRequired,CombatObservation.inCombat(),target!=null && !target.isDeadOrEscaped() && !target.isDying) && (!potion.targetRequired || !AbstractDungeon.isScreenUp);}
+    private static void applyAndRearm(int slot,AbstractPotion potion,AbstractMonster target,boolean discard,String decision) {
+        apply(slot,potion,target,discard);
+        // claim() intentionally consumes the old combat decision before native input.
+        // Potion inventory is not part of CombatDecision's key, so a successful
+        // potion/discard whose eventual visible combat facts equal the old facts can
+        // otherwise remain awaiting_resolution forever. Only rearm after the native
+        // handler returned successfully; failures keep the consumed observation blocked.
+        if(decision!=null)CombatObservation.invalidate();
+    }
     private static void apply(int slot,AbstractPotion potion,AbstractMonster target,boolean discard) {
         PotionPopUp popup=AbstractDungeon.topPanel.potionUi;
         // Opening the popup is part of the single requested use/discard gesture, never a second gameplay choice.
