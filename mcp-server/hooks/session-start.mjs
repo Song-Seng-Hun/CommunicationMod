@@ -24,7 +24,7 @@ export async function loadContext(input,env=process.env){
   return contextFor(input,env,revision);
  }catch{return '';}
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(new URL(process.argv[1],`file://${process.cwd()}/`).href).href){
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  let input='',oversize=false;
  for await(const chunk of process.stdin){if(!oversize){input+=chunk;if(Buffer.byteLength(input)>8192){oversize=true;input='';}}}
  try{if(!oversize){const text=await loadContext(JSON.parse(input));if(text)process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'SessionStart',additionalContext:text}}));}}catch{ /* Missing/invalid input is silent. */ }
