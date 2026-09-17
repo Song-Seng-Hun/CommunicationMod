@@ -31,7 +31,7 @@ public final class HandSelectionUi {
         info.addProperty("cancel_available",false);
         if(HandSelectionPolicy.canSelect(owner.numCardsToSelect,owner.selectedCards.size())) {
             for(AbstractCard card:AbstractDungeon.player.hand.group) {
-                result.add(action("run.hand.select."+card.uuid,card.name,owner,decision,()->{
+                result.add(action("run.hand.select."+card.uuid,selectionLabel(card),owner,decision,()->{
                     int index=AbstractDungeon.player.hand.group.indexOf(card);
                     if(index<0 || !HandSelectionPolicy.canSelect(owner.numCardsToSelect,owner.selectedCards.size()))throw new IllegalArgumentException("Hand selection changed");
                     claim(decision);boolean click=InputHelper.justClickedLeft;
@@ -40,7 +40,7 @@ public final class HandSelectionUi {
             }
         }
         for(AbstractCard card:owner.selectedCards.group) {
-            result.add(action("run.hand.deselect."+card.uuid,card.name,owner,decision,()->{
+            result.add(action("run.hand.deselect."+card.uuid,selectionLabel(card),owner,decision,()->{
                 if(!owner.selectedCards.group.contains(card) || deselecting!=null)throw new IllegalArgumentException("Selected card changed");
                 claim(decision);
                 Map<Hitbox,Boolean> hovered=new IdentityHashMap<>();
@@ -56,6 +56,10 @@ public final class HandSelectionUi {
             // The normal next frame consumes the click and preserves all installed update patches.
         }));
         return result;
+    }
+    private static String selectionLabel(AbstractCard card) {
+        String cost=card.freeToPlayOnce?"0":card.costForTurn==-1?"X":card.costForTurn>=0?Integer.toString(card.costForTurn):"?";
+        return card.name+" [cost "+cost+"]";
     }
     private static ProtocolSession.Action action(String id,String label,HandCardSelectScreen owner,String decision,Runnable effect) {
         return new ProtocolSession.Action(id,label,new JsonObject(),args->{if(!args.entrySet().isEmpty())throw new IllegalArgumentException("No arguments expected");},args->{
