@@ -6,19 +6,13 @@ import {obj,list,type Obj} from './view.js';
 
 const hash=(v:string)=>createHash('sha256').update(v).digest('hex');
 const unavailable=()=>{throw new Error('Reference not available in current state.');};
-const cleanProse=(text:string)=>text
- .replace(/same current session\/state;?\s*/gi,'')
- .replace(/current session\/state and\s*/gi,'')
- .replace(/Stale required IDs\/refs/gi,'Stale refs')
- .replace(/No current IDs\/refs for context/gi,'No current refs for context')
- .replace(/current IDs\/refs/gi,'current refs');
+const cleanProse=(text:string)=>text.replace(/same current session\/state;?\s*/gi,'').replace(/current session\/state and\s*/gi,'').replace(/Stale required IDs\/refs/gi,'Stale refs').replace(/No current IDs\/refs for context/gi,'No current refs for context').replace(/current IDs\/refs/gi,'current refs');
+const bindNames=(value:unknown,out=new Set<string>()):Set<string>=>{if(value&&typeof value==='object'&&!Array.isArray(value)&&Object.hasOwn(value,'$bind')){const key=(value as Obj).$bind;if(typeof key==='string')out.add(key);return out;}if(Array.isArray(value))for(const child of value)bindNames(child,out);else if(value&&typeof value==='object')for(const child of Object.values(value as Obj))bindNames(child,out);return out;};
 function publicCapsule(source:Capsule):Capsule {
  const capsule:any=structuredClone(source);delete capsule.revision;
- for(const [key,binding] of Object.entries(capsule.bindings as Record<string,{source:string}>))if(['current.session_id','current.state_id'].includes(binding.source))delete capsule.bindings[key];
- for(const call of capsule.calls as Array<{tool:string;arguments:Record<string,unknown>}>){
-  delete call.arguments.session_id;delete call.arguments.state_id;
-  if(call.tool==='sts_act'){delete call.arguments.request_id;delete call.arguments.wait_ms;}
- }
+ for(const call of capsule.calls as Array<{tool:string;arguments:Record<string,unknown>}>){delete call.arguments.session_id;delete call.arguments.state_id;if(call.tool==='sts_act'){delete call.arguments.request_id;delete call.arguments.wait_ms;}}
+ const used=new Set<string>();for(const call of capsule.calls)bindNames(call.arguments,used);
+ for(const key of Object.keys(capsule.bindings))if(!used.has(key))delete capsule.bindings[key];
  for(const key of ['when','not_when','requires','expect','stop'])capsule[key]=cleanProse(capsule[key]);return capsule as Capsule;
 }
 export function exampleFragment(capsule:Capsule):Obj {return {ref:'guidance/'+capsule.id,data:publicCapsule(capsule)};}
@@ -27,7 +21,7 @@ try {
  const bundle=JSON.parse(readFileSync(new URL('./guidance-bundle.json',import.meta.url),'utf8'));
  const required=['context.js','view.js','session.js','guidance.js','guidance-catalog.js','tool-schemas.js'];
  if(required.some(name=>bundle.modules?.[name]!==hash(readFileSync(new URL(name,import.meta.url),'utf8'))))throw new Error('Guidance contract mismatch');
- for(const capability of capabilities){const stamp=bundle.capabilities?.[capability.id];if(!stamp || stamp.digest!==hash(JSON.stringify(capability)))continue;active.set(capability.id,{capability,revision:stamp.digest.slice(0,16)});}
+ for(const capability of capabilities){const stamp=bundle.capabilities?.[capability.id];if(!stamp||stamp.digest!==hash(JSON.stringify(capability)))continue;active.set(capability.id,{capability,revision:stamp.digest.slice(0,16)});}
 }catch{ /* Existing state/rules remain available even without example artifacts. */ }
 
 const screens=new Map<string,Set<string>>(),rootsIndex=new Map<string,Set<string>>(),actionsIndex=new Map<string,Set<string>>(),specials=new Map<string,Set<string>>();
@@ -54,6 +48,5 @@ export function selectGuidance(state:Obj,scope:{screen:string;roots:Obj;unsuppor
  return {summary:{ref:'guidance/'+selected[0].capability.id+'/normal'},directory,capsules};
 }
 export function guidanceFragment(selection:GuidanceSelection|undefined,ref:string,offset:number):Obj|undefined {
- if(!selection)unavailable();if(ref==='guidance')return;if(!/^guidance\/[a-z][a-z0-9.-]*(?:\/(?:normal|incomplete|exception))?$/.test(ref))return unavailable();
- const parts=ref.split('/');if(!Object.hasOwn(selection!.directory,parts[1]))return unavailable();if(parts.length===2)return;const capsule=selection!.capsules.get(ref);if(!capsule)return unavailable();if(offset!==0)throw new Error('Example offset must be 0; capsule is atomic.');return exampleFragment(capsule);
+ if(!selection)unavailable();if(ref==='guidance')return;if(!/^guidance\/[a-z][a-z0-9.-]*(?:\/(?:normal|incomplete|exception))?$/.test(ref))return unavailable();const parts=ref.split('/');if(!Object.hasOwn(selection!.directory,parts[1]))return unavailable();if(parts.length===2)return;const capsule=selection!.capsules.get(ref);if(!capsule)return unavailable();if(offset!==0)throw new Error('Example offset must be 0; capsule is atomic.');return exampleFragment(capsule);
 }
