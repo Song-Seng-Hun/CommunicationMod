@@ -9,7 +9,7 @@ test('only current roots are discoverable or readable, no full/extension escape'
   assert.ok(!refs.includes(r),r);assert.throws(()=>readContext(s,[r]),/not available/);
  }
  assert.ok(!JSON.stringify(v).includes('must-not-dump'));assert.equal(v.unsupported_information,true);
- assert.equal(v.player.current_hp,20);assert.equal(v.actions[0].id,'run.event.0');
+ assert.equal(v.player.current_hp,20);assert.equal(v.actions[0].id,'a0');assert.ok(!JSON.stringify(v).includes('run.event.0'));
  assert.equal(v.session_id,undefined);assert.equal(v.state_id,undefined);assert.equal(v.connection,undefined);
 });
 test('fragments are shallow, batchable, bounded and exact long-text pages are recoverable',async()=>{
@@ -37,6 +37,7 @@ test('combat facts remain accessible while upgrade detail stays off default view
  s.observation.game_state.combat_state={hand_complete:true,hand:[{id:'a',name:'타격',description:'피해 6.',cost:0,displayed_cost_complete:false,upgrade_preview:{after:{description:'피해 9.'}}}],monsters:[{name:'적',current_hp:12,intent:'ATTACK',move_adjusted_damage:5}],player:{energy:3,mechanics:{information_complete:false,collection:{count:1,cards_complete:true,order_visible:false,cards:[{id:'col'}]}}},draw_pile:[],draw_pile_order_visible:false};
  const v=decision(s);assert.equal(v.combat.hand[0].displayed_cost_complete,false);assert.equal(v.combat.hand[0].cost,0);assert.equal(v.combat.monsters[0].move_adjusted_damage,5);
  assert.equal(v.combat.hand_complete,undefined);assert.ok(!JSON.stringify(v).includes('피해 9.'));assert.ok(v.toc.some(x=>x.ref==='collection'));
+ assert.equal(v.player.mechanics_incomplete,true);assert.ok(v.toc.some(x=>x.ref==='mechanics'));
  assert.equal(readContext(s,['hand/0/upgrade_preview/after']).fragments[0].data.description,'피해 9.');
  assert.equal(readContext(s,['collection/cards/0']).fragments[0].data.id,'col');
  assert.equal(readContext(s,['mechanics']).fragments[0].data.information_complete,false);
