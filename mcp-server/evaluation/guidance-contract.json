@@ -1,5 +1,5 @@
 {
-  "fingerprint": "95551d30dfbfb852903f20cd25546edcc0a9bea467a6af1e25ce6dcc3935e7ef",
+  "revision": "2026-09-17-lean-pinned-v1",
   "files": 101,
-  "basis": "2026-09-13 feedback review: whole-hand admission for small native payment/target bundles preserves omission/completeness and prevents early-card token bias. Encode/Ghostflame public panel observers extracted with unchanged visibility and error semantics. Five summary regressions and thirteen catalog checks passed before explicit repin; fresh Java fixture/binding regressions verify native panels and failure isolation. Final integrated evidence recorded separately. No live-game or real-agent acceptance."
+  "basis": "2026-09-17 reviewed MCP economy refactor: public tools pin state server-side instead of exposing session/state IDs; JSON payloads are single-copy; normal transport/success metadata is omitted; hand TOC carries current cost; multi-card reads share an inline budget; guidance transport bindings are stripped before public validation/output. Stale-action, uncertain-receipt, native-fact, hidden-order, event-reading, map, and destructive-action safety semantics remain covered by dedicated tests. No live-game acceptance claim."
 }
