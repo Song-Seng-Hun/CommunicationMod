@@ -21,9 +21,12 @@ public final class GridSelectionUi {
         controls.addProperty("any_number",owner.anyNumber);controls.addProperty("confirm_up",owner.confirmScreenUp || owner.isJustForConfirming);
         final String key=key(owner);
         if(!owner.confirmScreenUp && !owner.isJustForConfirming)for(AbstractCard card:owner.targetGroup.group) {
-            if(!RoomUi.settled(card))continue;
+            // Grid cards may remain fractionally in motion for a long time even though their native
+            // selection hitboxes are already valid. Do not hide the whole action set behind a
+            // pixel-perfect current_x/current_y convergence check.
+            if(card.hb.clicked || card.hb.clickStarted)continue;
             String op=owner.selectedCards.contains(card)?"deselect":"select";
-            actions.add(RoomUi.action("run.grid."+op+"."+card.uuid,card.name,decision,"selection",()->valid(owner) && key(owner).equals(key) && owner.targetGroup.group.contains(card) && RoomUi.settled(card),()->{
+            actions.add(RoomUi.action("run.grid."+op+"."+card.uuid,card.name,decision,"selection",()->valid(owner) && key(owner).equals(key) && owner.targetGroup.group.contains(card) && !card.hb.clicked && !card.hb.clickStarted,()->{
                 if(selecting!=null)throw new IllegalStateException("Grid input already pending");
                 selecting=card;try{NativeUiInput.click(card.hb,()->owner.update());}finally{selecting=null;}
             }));
