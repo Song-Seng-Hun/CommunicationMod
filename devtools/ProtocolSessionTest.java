@@ -8,7 +8,11 @@ import communicationmod.protocol.ProtocolSession;
 public final class ProtocolSessionTest {
     private static JsonObject parse(String line) { return new JsonParser().parse(line).getAsJsonObject(); }
     private static void check(boolean ok, String message) { if (!ok) throw new AssertionError(message); }
-    private static void error(String response, String code) { JsonObject parsed = parse(response); check(parsed.has("code") && parsed.get("code").getAsString().equals(code), response); }
+    private static JsonObject error(String response, String code) { JsonObject parsed = parse(response); check(parsed.has("code") && parsed.get("code").getAsString().equals(code), response); return parsed; }
+    private static void correlated(String response, String code, String request) {
+        JsonObject parsed=error(response,code);
+        check(parsed.has("request_id") && request.equals(parsed.get("request_id").getAsString()),"uncorrelated action error: "+response);
+    }
 
     public static void main(String[] args) {
         AtomicInteger calls = new AtomicInteger();
@@ -45,15 +49,15 @@ public final class ProtocolSessionTest {
             .get("visible").getAsString().equals("original"), "snapshot alias leaked");
         long rev = state.get("state_id").getAsLong();
         String command = command(sid, rev, "r1", "pick", "{}");
-        error(session.receive(command("wrong", rev, "foreign", "pick", "{}")), "SESSION_MISMATCH");
-        error(session.receive(command(sid, rev - 1, "old", "pick", "{}")), "STALE_STATE");
-        error(session.receive(command(sid, rev, "bad", "pick", "{\"extra\":1}")), "INVALID_ARGUMENTS");
+        correlated(session.receive(command("wrong", rev, "foreign", "pick", "{}")), "SESSION_MISMATCH", "foreign");
+        correlated(session.receive(command(sid, rev - 1, "old", "pick", "{}")), "STALE_STATE", "old");
+        correlated(session.receive(command(sid, rev, "bad", "pick", "{\"extra\":1}")), "INVALID_ARGUMENTS", "bad");
         check(parse(session.receive(command)).get("status").getAsString().equals("applied"), "action not applied");
-        error(session.receive(command), "DUPLICATE_REQUEST");
+        correlated(session.receive(command), "DUPLICATE_REQUEST", "r1");
         long invalidatedRev = parse(session.receive("{\"type\":\"get_state\"}")).get("state_id").getAsLong();
         check(invalidatedRev > rev, "invalidation changed snapshot content without a new state ID");
-        error(session.receive(command(sid, rev, "r2", "pick", "{}")), "STALE_STATE");
-        error(session.receive(command(sid, invalidatedRev, "r2", "pick", "{}")), "NOT_READY");
+        correlated(session.receive(command(sid, rev, "r2", "pick", "{}")), "STALE_STATE", "r2");
+        correlated(session.receive(command(sid, invalidatedRev, "r2", "pick", "{}")), "NOT_READY", "r2");
         check(calls.get() == 1, "action applied more than once");
         check(!parse(session.receive("{\"type\":\"get_state\"}")).get("ready").getAsBoolean(), "stale ready flag");
         JsonObject unsupported = parse(session.publish(new JsonObject(), observation, Arrays.asList(action), true, "unsupported"));
@@ -62,8 +66,9 @@ public final class ProtocolSessionTest {
         state = parse(session.publish(new JsonObject(), observation, Arrays.asList(broken), true, "supported"));
         String failed = session.receive(command(sid, state.get("state_id").getAsLong(), "failure", "broken", "{}"));
         error(failed, "ACTION_FAILED");
+        check(parse(failed).has("request_id") && "failure".equals(parse(failed).get("request_id").getAsString()),"failed result lost request correlation");
         check(!failed.contains("private-details") && failures.get() == 1, "diagnostic leaked or missing");
-        error(session.receive(command(sid, state.get("state_id").getAsLong(), "failure", "broken", "{}")), "DUPLICATE_REQUEST");
+        correlated(session.receive(command(sid, state.get("state_id").getAsLong(), "failure", "broken", "{}")), "DUPLICATE_REQUEST", "failure");
         session.invalidate();
         check(!parse(session.receive("{\"type\":\"get_state\"}")).get("ready").getAsBoolean(), "invalidate failed");
         error(session.receive("{\"type\":\"hello\",\"protocol_version\":2}"), "ALREADY_CONNECTED");
@@ -78,10 +83,11 @@ public final class ProtocolSessionTest {
             throw new IllegalStateException("Failure after publish");
         });
         state = parse(session.publish(new JsonObject(), observation, Arrays.asList(reentrant), true, "supported"));
-        error(session.receive(command(sid, state.get("state_id").getAsLong(), "reentrant", "reentrant", "{}")), "ACTION_FAILED");
+        String reentrantFailed=session.receive(command(sid, state.get("state_id").getAsLong(), "reentrant", "reentrant", "{}"));
+        error(reentrantFailed, "ACTION_FAILED");check("reentrant".equals(parse(reentrantFailed).get("request_id").getAsString()),"reentrant failure lost request correlation");
         JsonObject afterFailure = parse(session.receive("{\"type\":\"get_state\"}"));
         check(!afterFailure.get("ready").getAsBoolean() && afterFailure.getAsJsonArray("actions").size() == 0, "reentrant failing callback left actions enabled");
-        System.out.println("PASS: handshake, immutable snapshots, stale/duplicate/session checks, unsupported states, failure consumption, local diagnostics");
+        System.out.println("PASS: handshake, immutable snapshots, correlated action errors, stale/duplicate/session checks, unsupported states, failure consumption, local diagnostics");
     }
 
     private static String command(String session, long state, String request, String action, String arguments) {
