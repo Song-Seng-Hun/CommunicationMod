@@ -73,7 +73,7 @@ public final class RoomUi {
             boolean available=price>=0 && AbstractDungeon.player.gold>=price && settled(card);
             row(controls,id,card.name,price,available,available?null:"insufficient_gold_or_card_moving");
             if(available)actions.add(action(id,card.name,null,"play",()->shopSame(owner) && ChoiceScreenUtils.getShopScreenCards().contains(card) && card.price==price && AbstractDungeon.player.gold>=price && settled(card),
-                ()->NativeUiInput.click(card.hb,()->NativeUiInput.invoke(owner,"updateCards"))));
+                ()->NativeUiInput.deferClick(card.hb)));
         }
         List<StoreRelic> relics=ChoiceScreenUtils.getShopScreenRelics();
         for(int i=0;i<relics.size();i++) {
@@ -111,7 +111,7 @@ public final class RoomUi {
         }
         final com.megacrit.cardcrawl.screens.mainMenu.MenuCancelButton cancel=(com.megacrit.cardcrawl.screens.mainMenu.MenuCancelButton)NativeUiInput.field(owner,"cancelButton");
         if(NativeUiInput.visible(cancel))actions.add(action("run.boss_relic.skip",(String)NativeUiInput.field(cancel,"buttonText"),null,"play",()->AbstractDungeon.bossRelicScreen==owner && NativeUiInput.visible(cancel) && !(Boolean)NativeUiInput.field(owner,"isDone"),
-            ()->NativeUiInput.click(cancel.hb,()->NativeUiInput.invoke(owner,"updateCancelButton"))));
+                ()->NativeUiInput.click(cancel.hb,()->NativeUiInput.invoke(owner,"updateCancelButton"))));
     }
     private static AbstractChest chest(){AbstractRoom room=AbstractDungeon.getCurrRoom();return room instanceof TreasureRoomBoss?((TreasureRoomBoss)room).chest:room instanceof TreasureRoom?((TreasureRoom)room).chest:null;}
     static void proceed(List<ProtocolSession.Action> actions,String id) {
@@ -122,11 +122,11 @@ public final class RoomUi {
     static void cancel(List<ProtocolSession.Action> actions,String id,String decision,String mode,BooleanSupplier valid) {
         CancelButton button=AbstractDungeon.overlayMenu.cancelButton;
         if(NativeUiInput.visible(button))actions.add(action(id,button.buttonText,decision,mode,()->valid.getAsBoolean() && AbstractDungeon.overlayMenu.cancelButton==button && NativeUiInput.visible(button),
-            ()->NativeUiInput.click(button.hb,()->button.update())));
+            ()->NativeUiInput.click(button.hb,()->NativeUiInput.invoke(button,"update"))));
     }
     static boolean settled(AbstractCard card){return Math.abs(card.current_x-card.target_x)<0.5f && Math.abs(card.current_y-card.target_y)<0.5f && card.isSeen && !card.isLocked && !card.isFlipped;}
     static boolean ready(){return Boolean.getBoolean("communicationmod.play_control") && !Settings.isTouchScreen && !Settings.isControllerMode
-        && !CardCrawlGame.isPopupOpen && PotionUi.idle() && !AbstractDungeon.isFadingIn && !AbstractDungeon.isFadingOut && AbstractDungeon.fadeColor.a<=0.01f
+        && !CardCrawlGame.isPopupOpen && PotionUi.idle() && !NativeUiInput.pending() && !AbstractDungeon.isFadingIn && !AbstractDungeon.isFadingOut && AbstractDungeon.fadeColor.a<=0.01f
         && AbstractDungeon.player!=null && !AbstractDungeon.player.isDead && !AbstractDungeon.player.isDraggingCard && !AbstractDungeon.player.viewingRelics
         && !InputHelper.justClickedLeft && !InputHelper.justClickedRight && !InputHelper.justReleasedClickLeft;}
     static ProtocolSession.Action action(String id,String label,String decision,String mode,BooleanSupplier valid,Runnable effect) {
