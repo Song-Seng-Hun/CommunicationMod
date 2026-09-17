@@ -8,7 +8,7 @@ const guide='TOON: 2-space indent; [N]{fields}: rows.\n';
 const textResult=(text:string):CallToolResult=>({content:[{type:'text',text}]});
 let tokenizer:Promise<Tiktoken>|undefined;
 
-// No tokenizer initialization on legacy, small or non-tabular reads.
+// No tokenizer initialization on small or non-tabular reads.
 function getTokenizer(){
  return tokenizer??=Promise.all([import('js-tiktoken/lite'),import('js-tiktoken/ranks/o200k_base')])
   .then(([{Tiktoken},ranks])=>new Tiktoken(ranks.default));
@@ -16,7 +16,8 @@ function getTokenizer(){
 function record(value:unknown):value is Record<string,unknown>{return value!==null&&typeof value==='object'&&!Array.isArray(value);}
 function hasTable(value:unknown,depth=0):boolean{
  if(depth>32||value===null||typeof value!=='object')return false;
- if(Array.isArray(value)&&value.length>=3&&record(value[0])){
+ // Two rows are enough to try: the later roundtrip/token checks reject cases where TOON is not actually worthwhile.
+ if(Array.isArray(value)&&value.length>=2&&record(value[0])){
   const keys=Object.keys(value[0]);
   if(keys.length>0&&value.every(row=>{
    if(!record(row))return false;
