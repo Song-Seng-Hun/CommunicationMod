@@ -66,11 +66,28 @@ public final class MenuControlSessionTest {
         tick();narrative.addProperty("render_frame",2);
         check(tick().get("ready").getAsBoolean(),"diagnostic render counters must not prevent a stable decision");
         narrative.addProperty("render_frame",3);check(tick()==null,"render counter alone retains decision state ID");
-        System.out.println("PASS: menu v2 mode, two-frame stability, post-action transition hold, localization, stale/manual/overlay/duplicate/argument guards");
+
+        // Regression: the visible screen can stay byte-identical while legal actions change.
+        // Such a change must advance state identity rather than leaving a stale reward/potion action armed.
+        view=menu("SAME_VIEW",true);String[] dynamicId={"menu.old"};
+        Supplier<List<ProtocolSession.Action>> changing=()->Collections.singletonList(new ProtocolSession.Action(
+            dynamicId[0],dynamicId[0],new JsonObject(),a->{},a->{}));
+        session=type.getConstructor(Supplier.class,Supplier.class,boolean.class).newInstance(observe,changing,true);
+        reply("{\"type\":\"hello\",\"protocol_version\":2}");tick();state=tick();
+        JsonObject staleAction=request(state,"stale-action-set","menu.old");
+        dynamicId[0]="menu.new";
+        JsonObject actionChanged=tick();
+        check(actionChanged!=null && !actionChanged.get("ready").getAsBoolean() && actionChanged.getAsJsonArray("actions").size()==0,
+            "action-only change did not invalidate the published state");
+        check(reply(staleAction.toString()).get("code").getAsString().equals("STALE_STATE"),"old action survived an action-only change");
+        state=tick();check(state.get("ready").getAsBoolean(),"new action set did not stabilize");
+        check(state.getAsJsonArray("actions").get(0).getAsJsonObject().get("id").getAsString().equals("menu.new"),"new action set not published");
+        System.out.println("PASS: menu v2 mode, two-frame stability, post-action transition hold, action-set identity, localization, stale/manual/overlay/duplicate/argument guards");
     }
     private static JsonObject menu(String screen,boolean stable){JsonObject root=new JsonObject(),menu=new JsonObject();menu.addProperty("screen",screen);menu.addProperty("stable",stable);root.add("menu",menu);return root;}
     private static JsonObject tick()throws Exception{String value=(String)update.invoke(session,new JsonObject());return value==null?null:new JsonParser().parse(value).getAsJsonObject();}
     private static JsonObject reply(String line)throws Exception{return new JsonParser().parse((String)receive.invoke(session,line)).getAsJsonObject();}
-    private static JsonObject request(JsonObject state,String id){JsonObject r=new JsonObject();r.addProperty("type","act");r.add("session_id",state.get("session_id"));r.add("state_id",state.get("state_id"));r.addProperty("request_id",id);r.addProperty("action_id","menu.play");r.add("arguments",new JsonObject());return r;}
+    private static JsonObject request(JsonObject state,String id){return request(state,id,"menu.play");}
+    private static JsonObject request(JsonObject state,String id,String action){JsonObject r=new JsonObject();r.addProperty("type","act");r.add("session_id",state.get("session_id"));r.add("state_id",state.get("state_id"));r.addProperty("request_id",id);r.addProperty("action_id",action);r.add("arguments",new JsonObject());return r;}
     private static void check(boolean yes,String message){if(!yes)throw new AssertionError(message);}
 }
