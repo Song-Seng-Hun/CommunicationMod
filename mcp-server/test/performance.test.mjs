@@ -30,13 +30,14 @@ test('map-only polling does not inspect unrelated narrative, combat or controls'
 });
 
 test('fragment traversal is bounded, paged and rejects unsafe paths without mutation',()=>{
- const s=performanceState(135,'EVENT'),before=JSON.stringify(s),g=s.observation.game_state;
+ const s=performanceState(135,'EVENT'),g=s.observation.game_state;
  g.screen_state={body_text:'\u0000한글🔥'.repeat(1000),normal:7,nested:{'a/b%':{message:'그대로'}}};
+ const before=JSON.stringify(s);
  const page=current.readContext(s,['collection/cards'],130,30).fragments[0];assert.equal(page.toc.length,5);assert.equal(page.next_offset,undefined);
  let recovered='',offset=0;do{const p=current.readContext(s,['screen/body_text'],offset).fragments[0];recovered+=p.text;offset=p.next_offset??null;assert.ok(bytes(p)<=2400);}while(offset!==null);
  assert.equal(recovered,g.screen_state.body_text);
  for(const ref of ['full','screen/__proto__','screen/constructor','screen/%ZZ','screen/body_text/length','collection/cards/00','collection/cards/-1','collection/cards/99999'])assert.throws(()=>current.readContext(s,[ref]),/Reference not available/);
- assert.equal(JSON.stringify(s),before.replace(/"screen_state":\{"body_text":"현재 본문"\}/,JSON.stringify(g.screen_state).slice(1,-1))===JSON.stringify(s)?JSON.stringify(s):JSON.stringify(s));
+ assert.equal(JSON.stringify(s),before,'Projection must not mutate input state');
 });
 
 test('large default decisions remain comfortably below Antigravity inline limit',()=>{
