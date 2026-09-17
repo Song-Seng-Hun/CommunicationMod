@@ -4,14 +4,14 @@ import {readFile,writeFile,readdir} from 'node:fs/promises';import {createHash} 
 import {Tiktoken} from 'js-tiktoken/lite';import ranks from 'js-tiktoken/ranks/o200k_base';
 import {toolSchemas} from '../dist/tool-schemas.js';import {contextText} from '../hooks/session-start.mjs';
 
-const REVIEWED_CONTRACT='2026-09-17-lean-pinned-v1',digest=v=>createHash('sha256').update(v).digest('hex'),object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const REVIEWED_CONTRACT='2026-09-17-lean-pinned-v2',digest=v=>createHash('sha256').update(v).digest('hex'),object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const sources=new Map(Object.entries({
  'current.observed_refs':'array','last.fragment.next_offset':'number','current.offered_action.id':'string','last.request_id':'string',
  'agent.arguments_validated_against_current.offered_action.parameters_and_complete_relevant_evidence':'object','current.event_reading.reading_id':'string','agent.commentary_already_presented_to_user_for_current.event_reading.reading_id':'string',
  'current.offered_action.parameters.properties.map_id.const':'string','current.offered_action.parameters.properties.revision.const':'number','agent.selected_node_ids_from_current.observed_map_validated_against_drawn_edges_and_offered_route_schema':'array'
 }));
 export async function sourceContract(){
- const root=new URL('../../',import.meta.url),files=['mcp-server/src/tool-schemas.ts','mcp-server/src/context.ts','mcp-server/src/view.ts','mcp-server/src/session.ts'];
+ const root=new URL('../../',import.meta.url),files=['mcp-server/src/tool-schemas.ts','mcp-server/src/context.ts','mcp-server/src/hand-dedupe.ts','mcp-server/src/view.ts','mcp-server/src/session.ts'];
  const walk=async relative=>{for(const entry of await readdir(new URL(relative+'/',root),{withFileTypes:true})){const name=relative+'/'+entry.name;if(entry.isDirectory())await walk(name);else if(name.endsWith('.java'))files.push(name);}};
  await walk('src/main/java/communicationmod');files.sort();const parts=[];for(const file of files)parts.push([file,digest((await readFile(new URL(file,root),'utf8')).replace(/\r\n/g,'\n'))]);
  return {revision:REVIEWED_CONTRACT,fingerprint:digest(JSON.stringify(parts)),files:files.length};
@@ -34,7 +34,7 @@ export function validateCatalog(capabilities){
 }
 export async function buildGuidance(){
  const contract=await sourceContract();validateSourceContract(JSON.parse(await readFile(new URL('../evaluation/guidance-contract.json',import.meta.url),'utf8')),contract);
- const {capabilities}=await import('../dist/guidance-catalog.js'),report=validateCatalog(capabilities),encoder=new Tiktoken(ranks),modules={};for(const name of ['context.js','view.js','session.js','guidance.js','guidance-catalog.js','tool-schemas.js'])modules[name]=digest(await readFile(new URL('../dist/'+name,import.meta.url),'utf8'));
+ const {capabilities}=await import('../dist/guidance-catalog.js'),report=validateCatalog(capabilities),encoder=new Tiktoken(ranks),modules={};for(const name of ['context.js','hand-dedupe.js','view.js','session.js','guidance.js','guidance-catalog.js','tool-schemas.js'])modules[name]=digest(await readFile(new URL('../dist/'+name,import.meta.url),'utf8'));
  const stamps={};for(const c of capabilities){const normal=publicCapsule(c.cases.find(x=>x.case==='normal')),tokens=encoder.encode(JSON.stringify(normal),[],[]).length;stamps[c.id]={digest:digest(JSON.stringify(c)),public_tokens:tokens};}
  const revision=digest(JSON.stringify(stamps)).slice(0,16),hookTokens=encoder.encode(contextText(revision),[],[]).length;assert.ok(hookTokens<=128,'SessionStart context exceeds 128 token budget');const hook={revision,tokens:hookTokens,digest:digest(await readFile(new URL('../hooks/session-start.mjs',import.meta.url)))},bundle={version:2,contract,modules,capabilities:stamps,hook};await writeFile(new URL('../dist/guidance-bundle.json',import.meta.url),JSON.stringify(bundle)+'\n');console.log(JSON.stringify({guidance:report.examples,capabilities:report.capabilities.length}));return bundle;
 }
