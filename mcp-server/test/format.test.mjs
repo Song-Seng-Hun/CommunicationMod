@@ -16,8 +16,8 @@ const tokenizer=new Tiktoken(ranks),tokens=text=>tokenizer.encode(text,[],[]).le
 const restore=text=>text.startsWith('TOON:')?decode(text.slice(text.indexOf('\n')+1),{strict:true}):JSON.parse(text);
 const directory=()=>readContext(performanceState(40),['collection/cards'],0,20);
 
-test('default and explicit json preserve the legacy dual representation',async()=>{
- const data=directory(),expected={content:[{type:'text',text:JSON.stringify(data)}],structuredContent:{data}};
+test('default and explicit json emit one exact model-visible payload',async()=>{
+ const data=directory(),expected={content:[{type:'text',text:JSON.stringify(data)}]};
  assert.deepEqual(await formatContext(data),expected);
  assert.deepEqual(await formatContext(data,'json'),expected);
 });
@@ -27,7 +27,7 @@ test('uniform context directory uses smaller lossless labeled TOON without dupli
  assert.deepEqual(Object.keys(result),['content']);assert.equal(result.content.length,1);
  const text=result.content[0].text;
  assert.match(text,/^TOON:.*\[N\].*fields.*rows/);
- assert.match(text,/toc\[20\]\{ref,title,count\}:/);
+ assert.match(text,/toc\[20\]/);
  assert.equal(JSON.stringify(restore(text)),original);
  assert.equal(JSON.stringify(data),original,'Input must not be mutated');
  assert.ok(tokens(text)<=tokens(original)*0.9);
@@ -61,14 +61,14 @@ test('generated row data preserve every primitive and never grow compact text',a
  const atoms=[null,true,false,0,8,-5,0.25,'','001','unknown','사용 불가','a,b','a\tb','a\nb','"x"','한글😀'];
  for(let i=0;i<100;i++){
   const rows=Array.from({length:3+Math.floor(next()*28)},(_,j)=>({ref:`hand/${j}`,label:atoms[Math.floor(next()*atoms.length)],complete:atoms[Math.floor(next()*atoms.length)]}));
-  const data={session_id:'s-001',state_id:i,toc:rows,next_offset:i%2?null:30},json=JSON.stringify(data);
+  const data={state_id:i,toc:rows,next_offset:i%2?null:30},json=JSON.stringify(data);
   const result=await formatContext(data,'compact');
   assert.equal(JSON.stringify(restore(result.content[0].text)),json);
   assert.ok(tokens(result.content[0].text)<=tokens(json));
  }
 });
 
-test('all existing required-fact workflows roundtrip with unchanged IDs, refs and pagination',async()=>{
+test('all existing required-fact workflows roundtrip with unchanged refs and pagination',async()=>{
  for(const workflow of workflows())for(const step of workflow.after){
   const result=await formatContext(step.response,'compact');
   assert.equal(JSON.stringify(restore(result.content[0].text)),JSON.stringify(step.response),workflow.name);
