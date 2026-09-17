@@ -27,10 +27,10 @@ function hasTable(value:unknown,depth=0):boolean{
  return Object.values(value).some(child=>hasTable(child,depth+1));
 }
 
-/** Optional presentation only. The canonical JSON payload remains the authority. */
+/** Presentation only. Emit one model-visible payload; never duplicate JSON in structuredContent. */
 export async function formatContext(data:Obj,format:ContextFormat='json'):Promise<CallToolResult>{
  const json=JSON.stringify(data);
- if(format==='json')return {...textResult(json),structuredContent:{data}};
+ if(format==='json')return textResult(json);
  const fallback=textResult(json);
  // Conversion is bounded; nothing is truncated when the bound is exceeded.
  if(json.length<512||json.length>32768)return fallback;
@@ -44,7 +44,7 @@ export async function formatContext(data:Obj,format:ContextFormat='json'):Promis
   const count=(text:string)=>encoder.encode(text,[],[]).length;
   const before=count(json),after=count(guide+toon);
   if(before-after<16||after>before*0.9)return fallback;
-  // Protect both raw model text and hosts that serialize the entire text block.
+  // Protect hosts that serialize the entire text block.
   if(count(JSON.stringify(candidate))>=count(JSON.stringify(fallback)))return fallback;
   return candidate;
  }catch{
