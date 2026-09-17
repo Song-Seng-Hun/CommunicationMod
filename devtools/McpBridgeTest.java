@@ -18,9 +18,16 @@ public final class McpBridgeTest {
     if(sent.size()!=1)throw new AssertionError("No forwarded action");
     out.println("{\"type\":\"act\",\"request_id\":\"other\",\"action_id\":\"run.x\"}");
     if(!in.readLine().contains("bridge_error"))throw new AssertionError("Concurrent mutation accepted");
-    JsonObject result=new JsonParser().parse("{\"type\":\"result\",\"request_id\":\"r\",\"status\":\"applied\"}").getAsJsonObject();c.getMethod("publish",JsonObject.class).invoke(bridge,result);
+
+    // A game-side validation error is terminal for this request and must release the bridge lock.
+    JsonObject rejected=new JsonParser().parse("{\"type\":\"error\",\"request_id\":\"r\",\"code\":\"INVALID_ARGUMENTS\"}").getAsJsonObject();c.getMethod("publish",JsonObject.class).invoke(bridge,rejected);
+    String rejectedLine=in.readLine();if(!rejectedLine.contains("INVALID_ARGUMENTS")||!rejectedLine.contains("\"request_id\":\"r\""))throw new AssertionError("Correlated error lost");
+
+    out.println("{\"type\":\"act\",\"session_id\":\"s\",\"state_id\":1,\"request_id\":\"r2\",\"action_id\":\"run.x\",\"arguments\":{}}");
+    until=System.currentTimeMillis()+2000;while(sent.size()<2&&System.currentTimeMillis()<until)Thread.sleep(5);
+    if(sent.size()!=2||!sent.get(1).contains("\"request_id\":\"r2\""))throw new AssertionError("Bridge stayed locked after correlated error");
+    JsonObject result=new JsonParser().parse("{\"type\":\"result\",\"request_id\":\"r2\",\"status\":\"applied\"}").getAsJsonObject();c.getMethod("publish",JsonObject.class).invoke(bridge,result);
     if(!in.readLine().contains("applied"))throw new AssertionError("Receipt lost");
-    if(sent.size()!=1)throw new AssertionError("Unexpected dispatch");
    }
   }finally{bridge.close();}
   Class<?> peerClass=Class.forName("communicationmod.devclient.McpBridge$Peer");
@@ -30,6 +37,6 @@ public final class McpBridgeTest {
    char[] huge=new char[2*1024*1024+1];Arrays.fill(huge,'x');offer.invoke(peer,new String(huge));
    if(!server.isClosed())throw new AssertionError("Slow-peer queue has no memory budget");
   }
-  System.out.println("PASS: loopback authentication, live state, single-flight action and receipt");
+  System.out.println("PASS: loopback authentication, live state, single-flight action, correlated-error unlock and receipt");
  }
 }
