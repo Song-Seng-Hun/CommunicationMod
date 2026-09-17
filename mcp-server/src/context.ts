@@ -6,6 +6,7 @@ const pick=(o:Obj,keys:string[]):Obj=>Object.fromEntries(keys.filter(k=>k in o).
 const present=(v:unknown)=>v!=null && (Array.isArray(v)?v.length>0:typeof v==='object'?Object.keys(obj(v)).length>0:true);
 const child=(ref:string,key:string)=>ref+'/'+encodeURIComponent(key);
 const size=(v:unknown)=>Array.isArray(v)||typeof v==='string'?v.length:Object.keys(obj(v)).length;
+const bytes=(v:unknown)=>Buffer.byteLength(JSON.stringify(v),'utf8');
 const provenance=new Set(['description_source','description_rendering','tooltips_source','tooltips_rendering','render_frame']);
 const nativeKeys=new Set(['class','act','floor','ascension_level','current_hp','max_hp','gold','keys','relics','potions','screen_type','screen_state','deck','map','map_plan','combat_state','mechanics','narrative','seed','choice_list']);
 const controlKeys=['tutorial','selection_controls','reward_controls','card_reward_header','potion_controls','rest_controls','shop_controls','reward_navigation','card_selection_controls'];
@@ -89,19 +90,38 @@ function resolve(roots:Obj,ref:string):unknown {
  }
  return value;
 }
+const cardRef=(ref:string)=>/^(?:(?:hand|deck|screen\/cards|collection\/cards|combat_collection\/cards)\/\d+|card_in_play)$/.test(ref);
+function cardSummary(ref:string,value:unknown,budget:number):Obj {
+ const source=obj(value),data:Obj={};
+ const out:Obj={ref,format:'card_summary',data,page_complete:true,next_offset:null,details_required:true};
+ const scalar=(v:unknown)=>v===null || typeof v==='boolean' || typeof v==='number' || typeof v==='string'&&v.length<=160;
+ // Decision-critical scalars first. In particular, cost must survive even under the
+ // smallest shared budget so Snecko/randomized hands remain comparable at a glance.
+ for(const key of ['name','cost','id','uuid','type','upgrades','is_playable','unplayable_reason','displayed_cost_text','displayed_cost_complete','cost_components_complete','has_target','exhausts','ethereal']){
+  if(!Object.hasOwn(source,key) || !scalar(source[key]))continue;
+  data[key]=source[key];if(bytes(out)>budget)delete data[key];
+ }
+ if(typeof source.description==='string' && bytes(out)<budget-80){
+  let text=source.description.slice(0,240);data.description=text;
+  if(text.length<source.description.length)data.description_truncated=true;
+  while(bytes(out)>budget && text.length>24){text=text.slice(0,Math.floor(text.length*.7));data.description=text;data.description_truncated=true;}
+  if(bytes(out)>budget){delete data.description;delete data.description_truncated;}
+ }
+ return out;
+}
 /** One shallow fragment; offset is a field/row index, or a UTF-16 text offset. */
-function fragment(ref:string,value:unknown,offset:number,limit:number):Obj {
- if(offset===0 && /^(?:(?:hand|deck|screen\/cards|collection\/cards|combat_collection\/cards)\/\d+|card_in_play)$/.test(ref)
-  && value!==null && typeof value==='object'){
+function fragment(ref:string,value:unknown,offset:number,limit:number,budget=2400):Obj {
+ const pageBudget=Math.max(360,Math.min(2400,budget));
+ if(offset===0 && cardRef(ref) && value!==null && typeof value==='object'){
   const card:Obj={ref,format:'card',data:null,page_complete:true,next_offset:null};
-  let remaining=2400-JSON.stringify(card).length+4;
+  let remaining=pageBudget-bytes(card)+4;
   const exceeded=Symbol('card budget exceeded');
   const spend=(chars:number)=>(remaining-=chars)>=0;
-  const stringFits=(text:string)=>text.length+2<=remaining && spend(JSON.stringify(text).length);
+  const stringFits=(text:string)=>{const encoded=Buffer.byteLength(JSON.stringify(text),'utf8');return encoded<=remaining&&spend(encoded);};
   const omitted=(v:unknown)=>v===undefined || typeof v==='function' || typeof v==='symbol';
   const clean=(v:unknown,arrayItem=false):unknown=>{
    if(typeof v==='string')return stringFits(v)?v:exceeded;
-   if(v===null || typeof v!=='object')return spend(omitted(v)?(arrayItem?4:0):JSON.stringify(v).length)?v:exceeded;
+   if(v===null || typeof v!=='object')return spend(omitted(v)?(arrayItem?4:0):Buffer.byteLength(JSON.stringify(v),'utf8'))?v:exceeded;
    if(!spend(2))return exceeded;
    if(Array.isArray(v)){
     if(Math.max(0,2*v.length-1)>remaining)return exceeded;
@@ -124,11 +144,14 @@ function fragment(ref:string,value:unknown,offset:number,limit:number):Obj {
    return out;
   };
   const data=clean(value);
-  if(data!==exceeded){card.data=data;return card;}
+  if(data!==exceeded){card.data=data;if(bytes(card)<=pageBudget)return card;}
+  // Multiple card refs share the request budget. If a whole card no longer fits,
+  // return the comparison fields instead of spilling the tool result to output.txt.
+  return cardSummary(ref,value,pageBudget);
  }
  if(typeof value==='string'){
   let end=Math.min(value.length,offset+1600);
-  while(JSON.stringify({ref,text:value.slice(offset,end)}).length>2200 && end>offset+1)end=offset+Math.floor((end-offset)*0.8);
+  while(bytes({ref,text:value.slice(offset,end)})>pageBudget && end>offset+1)end=offset+Math.floor((end-offset)*0.8);
   if(end<value.length && /[\uD800-\uDBFF]/.test(value[end-1]))end--;
   return {ref,format:'text',text:value.slice(offset,end),total:value.length,offset,next_offset:end<value.length?end:null};
  }
@@ -144,7 +167,7 @@ function fragment(ref:string,value:unknown,offset:number,limit:number):Obj {
   }
   if(!array && (item===null || ['number','boolean'].includes(typeof item) || typeof item==='string' && item.length<=240))data[key]=item;
   else toc.push(entry(path,item,array?undefined:key));
-  if(JSON.stringify({...out,data,toc}).length>2400){
+  if(bytes({...out,data,toc})>pageBudget){
    delete data[key];if(toc.at(-1)?.ref===path)toc.pop();
    if(i===offset){out.information_complete=false;out.unavailable_reason='field_budget_exceeded';i++;}
    break;
@@ -158,14 +181,18 @@ export function readContext(state:Obj,refs:string[],offset=0,limit=20):Obj {
  if(!Array.isArray(refs)||refs.length<1||refs.length>8||refs.some(r=>typeof r!=='string'||r.length<1||r.length>512)
   ||!Number.isSafeInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>30)throw new Error('Invalid fragment request.');
  const current=scope(state),{roots}=current;
- const needed=refs.some(ref=>ref==='guidance'||ref.startsWith('guidance/'));
+ const unique=[...new Set(refs)];
+ // Antigravity moves tool results above 5KB into output.txt. Share a conservative
+ // UTF-8 budget across refs so multi-card comparisons stay inline.
+ const perFragment=Math.max(360,Math.floor(3600/unique.length));
+ const needed=unique.some(ref=>ref==='guidance'||ref.startsWith('guidance/'));
  const guidance=needed?selectGuidance(state,current):undefined;
  if(guidance)roots.guidance=guidance.directory;
- return {session_id:state.session_id,state_id:state.state_id,fragments:[...new Set(refs)].map(ref=>{
+ return {session_id:state.session_id,state_id:state.state_id,fragments:unique.map(ref=>{
   if(ref==='guidance'||ref.startsWith('guidance/')){
    const capsule=guidanceFragment(guidance,ref,offset);if(capsule)return capsule;
   }
-  return fragment(ref,resolve(roots,ref),offset,limit);
+  return fragment(ref,resolve(roots,ref),offset,limit,perFragment);
  })};
 }
 function brief(value:unknown,ref:string,keys?:string[]):Obj {
