@@ -24,6 +24,9 @@ public final class LocalObserverBuildTest {
         expect(observer>=0,"live observer tick installed");
         expect(find(calls,"CardCostObservation.completeFrame")>=0 && find(calls,"CardCostObservation.completeFrame")<observer,"cost frame completes before observations");
         expect(count(calls(pool.get("com.megacrit.cardcrawl.helpers.Hitbox").getDeclaredMethod("update",new CtClass[0])),"afterHitbox")==1,"native input hook installed once");
+        calls=calls(pool.get("com.megacrit.cardcrawl.shop.Merchant").getDeclaredMethod("update"));
+        expect(count(calls,"consume")==1 && find(calls,"MerchantPatch.consume")>find(calls,"Hitbox.update"),"merchant entry hook installed after hitbox refresh");
+        expect(find(calls,"java.lang.Boolean.getBoolean")>=0,"merchant entry hook explicitly gated to local play control");
         expect(find(calls(pool.get("com.megacrit.cardcrawl.screens.select.GridCardSelectScreen").getDeclaredMethod("updateCardPositionsAndHoverLogic")),"GridSelectionUi.hover")>=0,"scoped grid selection hook installed");
         List<String> energyCalls=calls(pool.get("com.megacrit.cardcrawl.cards.AbstractCard").getDeclaredMethod("renderEnergy"));
         expect(find(energyCalls,"CardCostObservation.rendered")>find(energyCalls,"RenderEnergySwitch.Insert"),"final post-modifier rendered cost observed");
@@ -65,7 +68,7 @@ public final class LocalObserverBuildTest {
         expect(Files.exists(out.resolve("runtime.properties")),"hash manifest written");
         try {builder.getMethod("main",String[].class).invoke(null,(Object)args);throw new AssertionError("Overwrote existing prepared runtime");}
         catch(java.lang.reflect.InvocationTargetException e){if(!(e.getCause() instanceof java.io.IOException))throw e;}
-        System.out.println("PASS: fresh copied runtime, original bootstrap, frame order, turn hook, no submissions, no overwrite");
+        System.out.println("PASS: fresh copied runtime, original bootstrap, merchant/frame/map hooks, turn hook, no submissions, no overwrite");
     }
     private static List<String> calls(CtBehavior method)throws Exception{
         List<String> calls=new ArrayList<>();
