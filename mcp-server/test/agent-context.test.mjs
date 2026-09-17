@@ -7,16 +7,18 @@ const state=()=>({session_id:'agent-summary',state_id:42,ready:true,connection:{
  observation:{game_state:{screen_type:'NONE',current_hp:20,max_hp:30,gold:75,deck:[],combat_state:{hand_complete:true,hand:[],monsters:[],player:{energy:3}}}}});
 const withCard=card=>{const s=state();s.observation.game_state.deck=[card];s.observation.game_state.combat_state.hand=[card];return s;};
 
-test('no-argument actions expose only executable identity and label',()=>{
- const s=state(),a=decision(s).actions[0];assert.deepEqual(a,{id:'run.play.0',label:'카드 사용'});
- assert.equal(JSON.stringify(a).includes('actions/0'),false);assert.equal(a.parameters,undefined);assert.equal(a.ref,undefined);
+test('no-argument actions expose only short executable alias and label',()=>{
+ const s=state(),a=decision(s).actions[0];assert.deepEqual(a,{id:'a0',label:'카드 사용'});
+ assert.equal(JSON.stringify(a).includes('run.play.0'),false);assert.equal(a.parameters,undefined);assert.equal(a.ref,undefined);
+ const detail=readContext(s,['actions/0']).fragments[0];assert.equal(detail.data.id,'a0');assert.equal(JSON.stringify(detail).includes('run.play.0'),false);
 });
 
 test('nonempty parameters retain one exact reachable reference',()=>{
  const s=state();s.actions=[{id:'run.play.target',label:'사용',parameters:{target_index:2,confirmation:{required:true}}}];
- const a=decision(s).actions[0];assert.equal(a.parameters_ref,'actions/0/parameters');assert.equal(a.parameters,undefined);
+ const a=decision(s).actions[0];assert.equal(a.id,'a0');assert.equal(a.parameters_ref,'actions/0/parameters');assert.equal(a.parameters,undefined);
  assert.equal(readContext(s,[a.parameters_ref]).fragments[0].data.target_index,2);
  assert.equal(readContext(s,[a.parameters_ref+'/confirmation']).fragments[0].data.required,true);
+ assert.throws(()=>readContext(s,['actions/0/id']),/not available/i);
 });
 
 test('single selected card keeps full facts without success boilerplate',()=>{
@@ -39,6 +41,14 @@ test('default combat summary is flat and decision-critical',()=>{
  const s=withCard({id:'a',uuid:'u',name:'스네코 카드',cost:0,type:'ATTACK',is_playable:true,description:'피해를 줍니다.',upgrades:3});
  const c=decision(s).combat.hand[0];assert.equal(c.ref,'hand/0');assert.equal(c.name,'스네코 카드');assert.equal(c.cost,0);assert.equal(c.type,'ATTACK');
  assert.equal(c.data,undefined);assert.equal(c.id,undefined);assert.equal(c.uuid,undefined);assert.equal(c.upgrades,undefined);
+});
+
+test('mechanics audit boilerplate stays out of default view while gameplay resources remain',()=>{
+ const s=state();s.observation.game_state.combat_state.player.mechanics={scope:'pinned_native_public_character_panels',character_supported:true,panel_bindings_complete:true,information_complete:true,information_issues:[],information_issue_count:0,audited_panels_complete:true,character_specific_complete:true,temporary_hp:0,max_orb_slots:0,reserves:2,essence:0};
+ const v=decision(s);assert.equal(v.mechanics,undefined);assert.equal(v.player.reserves,2);assert.equal(v.player.essence,0);assert.equal(v.player.scope,undefined);assert.equal(v.player.character_supported,undefined);assert.ok(v.toc.some(x=>x.ref==='mechanics'));
+ s.observation.game_state.combat_state.player.mechanics={scope:'pinned_native_public_character_panels',character_supported:true,panel_bindings_complete:true,information_complete:true,information_issues:[],information_issue_count:0,audited_panels_complete:true,character_specific_complete:true,temporary_hp:0,max_orb_slots:0};
+ const clean=decision(s);assert.equal(clean.mechanics,undefined);assert.ok(!clean.toc.some(x=>x.ref==='mechanics'));
+ s.observation.game_state.combat_state.player.mechanics.information_complete=false;const bad=decision(s);assert.equal(bad.player.mechanics_incomplete,true);assert.ok(bad.toc.some(x=>x.ref==='mechanics'));
 });
 
 test('healthy transport metadata stays internal while hidden identity still invalidates view hash',()=>{
