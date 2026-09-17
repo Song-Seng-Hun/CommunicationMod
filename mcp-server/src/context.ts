@@ -11,11 +11,10 @@ const provenance=new Set(['description_source','description_rendering','tooltips
 const nativeKeys=new Set(['class','act','floor','ascension_level','current_hp','max_hp','gold','keys','relics','potions','screen_type','screen_state','deck','map','map_plan','combat_state','mechanics','narrative','seed','choice_list']);
 const controlKeys=['tutorial','selection_controls','reward_controls','card_reward_header','potion_controls','rest_controls','shop_controls','reward_navigation','card_selection_controls'];
 const knownObservationKeys=new Set(['in_game','game_state','combat_decision','menu',...controlKeys]);
-const connectionKeys=['status','pending_request_id'];
 const mapPlanKeys=['map_id','revision','route_author','current_node','next_planned_node','status','editing'];
-const mapViewKeys=['session_id','state_id','ready','screen','connection'];
+const mapViewKeys=['ready','screen','connection'];
 const rules:Record<string,string>={
- act:'Use only offered actions from ready state. Read needed referenced details. One action per call; never replay unknown/applied_waiting. Refresh state after stale rejection.',
+ act:'Use only offered actions from the current state. Read needed referenced details. One action per call; never replay unknown/applied_waiting. Refresh state after stale rejection.',
  cost:'The scalar cost is the current card.costForTurn energy cost and must be considered for ordinary cards, including Snecko-randomized costs. Use displayed_cost_text and cost_components to qualify X/alternate-resource/special costs. Read target_playability and unplayable_reason before playing.',
  upgrade:'Before acquisition or upgrade, read offered card upgrade_preview and relevant keyword details. Only next standard upgrade, not random/event/relic outcomes. Read selected_after before separate branch/tree confirmation.',
  event:'Read and present current event body, situation and choices before acknowledgement. Supply observed reading_id and meaningful commentary; discuss result pages. Do not silently acknowledge incomplete text.',
@@ -73,11 +72,21 @@ function scope(state:Obj):Scope {
  if(Object.keys(roots).length)add('rules',relevantRules);
  return {screen,combat,roots,unsupported:Object.keys(g).some(k=>!nativeKeys.has(k)) || Object.keys(o).some(k=>!knownObservationKeys.has(k))};
 }
+function connectionSummary(state:Obj):Obj|undefined {
+ const c=obj(state.connection),status=typeof c.status==='string'?c.status:undefined,pending=!!c.pending_request_id;
+ if((status===undefined||status==='connected')&&!pending)return;
+ const out:Obj={};if(status&&status!=='connected')out.status=status;if(pending)out.pending=true;return out;
+}
 function entry(ref:string,value:unknown,title?:string):Obj {
- const v=obj(value),out:Obj={ref,title:String(title ?? v.name ?? v.label ?? v.title ?? v.id ?? ref.split('/').at(-1)).slice(0,64),count:size(value)};
- // Hand TOC is a decision surface, not just navigation. Keep the current turn cost
- // visible so Snecko/random cost changes do not require one detail read per card.
- if(ref.startsWith('hand/') && (typeof v.cost==='number' || typeof v.cost==='string'))out.cost=v.cost;
+ const v=obj(value),out:Obj={ref},leaf=ref.split('/').at(-1) ?? ref;
+ const label=String(title ?? v.name ?? v.label ?? v.title ?? v.id ?? leaf).slice(0,64);
+ if(label!==ref&&label!==leaf)out.title=label;
+ if(Array.isArray(value)||typeof value==='string')out.count=size(value);
+ // Hand TOC is itself a decision surface: name + current turn cost are enough to compare cards.
+ if(ref.startsWith('hand/')){
+  if(typeof v.name==='string')out.title=v.name.slice(0,64);
+  if(typeof v.cost==='number'||typeof v.cost==='string')out.cost=v.cost;
+ }
  return out;
 }
 function resolve(roots:Obj,ref:string):unknown {
@@ -93,14 +102,17 @@ function resolve(roots:Obj,ref:string):unknown {
 const cardRef=(ref:string)=>/^(?:(?:hand|deck|screen\/cards|collection\/cards|combat_collection\/cards)\/\d+|card_in_play)$/.test(ref);
 function cardSummary(ref:string,value:unknown,budget:number):Obj {
  const source=obj(value),data:Obj={};
- const out:Obj={ref,format:'card_summary',data,page_complete:true,next_offset:null,details_required:true};
+ const out:Obj={ref,data,details_required:true};
  const scalar=(v:unknown)=>v===null || typeof v==='boolean' || typeof v==='number' || typeof v==='string'&&v.length<=160;
- // Decision-critical scalars first. In particular, cost must survive even under the
- // smallest shared budget so Snecko/randomized hands remain comparable at a glance.
- for(const key of ['name','cost','id','uuid','type','upgrades','is_playable','unplayable_reason','displayed_cost_text','displayed_cost_complete','cost_components_complete','has_target','exhausts','ethereal']){
-  if(!Object.hasOwn(source,key) || !scalar(source[key]))continue;
-  data[key]=source[key];if(bytes(out)>budget)delete data[key];
+ for(const key of ['name','cost','type','is_playable']){
+  if(!Object.hasOwn(source,key)||!scalar(source[key]))continue;data[key]=source[key];if(bytes(out)>budget)delete data[key];
  }
+ if(source.is_playable===false&&scalar(source.unplayable_reason)){data.unplayable_reason=source.unplayable_reason;if(bytes(out)>budget)delete data.unplayable_reason;}
+ const rendered=source.displayed_cost_text;
+ if(typeof rendered==='string'&&rendered.length<=32&&(typeof source.cost!=='number'||rendered!==String(source.cost))){data.displayed_cost_text=rendered;if(bytes(out)>budget)delete data.displayed_cost_text;}
+ if(source.displayed_cost_complete===false)data.displayed_cost_complete=false;
+ if(source.cost_components_complete===false)data.cost_components_complete=false;
+ for(const key of ['has_target','exhausts','ethereal'])if(source[key]===true)data[key]=true;
  if(typeof source.description==='string' && bytes(out)<budget-80){
   let text=source.description.slice(0,240);data.description=text;
   if(text.length<source.description.length)data.description_truncated=true;
@@ -113,7 +125,7 @@ function cardSummary(ref:string,value:unknown,budget:number):Obj {
 function fragment(ref:string,value:unknown,offset:number,limit:number,budget=2400):Obj {
  const pageBudget=Math.max(360,Math.min(2400,budget));
  if(offset===0 && cardRef(ref) && value!==null && typeof value==='object'){
-  const card:Obj={ref,format:'card',data:null,page_complete:true,next_offset:null};
+  const card:Obj={ref,data:null};
   let remaining=pageBudget-bytes(card)+4;
   const exceeded=Symbol('card budget exceeded');
   const spend=(chars:number)=>(remaining-=chars)>=0;
@@ -145,20 +157,18 @@ function fragment(ref:string,value:unknown,offset:number,limit:number,budget=240
   };
   const data=clean(value);
   if(data!==exceeded){card.data=data;if(bytes(card)<=pageBudget)return card;}
-  // Multiple card refs share the request budget. If a whole card no longer fits,
-  // return the comparison fields instead of spilling the tool result to output.txt.
   return cardSummary(ref,value,pageBudget);
  }
  if(typeof value==='string'){
   let end=Math.min(value.length,offset+1600);
   while(bytes({ref,text:value.slice(offset,end)})>pageBudget && end>offset+1)end=offset+Math.floor((end-offset)*0.8);
   if(end<value.length && /[\uD800-\uDBFF]/.test(value[end-1]))end--;
-  return {ref,format:'text',text:value.slice(offset,end),total:value.length,offset,next_offset:end<value.length?end:null};
+  const out:Obj={ref,text:value.slice(offset,end)};if(end<value.length)out.next_offset=end;return out;
  }
- if(value===null || typeof value!=='object')return {ref,format:'value',value};
+ if(value===null || typeof value!=='object')return {ref,value};
  const array=Array.isArray(value),fields=array?value.slice(offset,offset+limit).map((v,i)=>[String(offset+i),v] as const):Object.entries(obj(value)).filter(([key])=>!provenance.has(key));
  const total=array?value.length:fields.length;
- const out:Obj={ref,format:array?'index':'fields',total,offset,next_offset:null};
+ const out:Obj={ref};if(array)out.total=total;
  const data:Obj=Object.create(null),toc:Obj[]=[];let i=offset;
  for(;i<Math.min(total,offset+limit);i++){
   const [key,item]=fields[array?i-offset:i],path=child(ref,key);
@@ -173,8 +183,7 @@ function fragment(ref:string,value:unknown,offset:number,limit:number,budget=240
    break;
   }
  }
- out.next_offset=i<total?i:null;out.page_complete=offset===0 && i===total;
- if(!array)out.data=data;if(toc.length || array)out.toc=toc;
+ if(i<total)out.next_offset=i;if(!array&&Object.keys(data).length)out.data=data;if(toc.length)out.toc=toc;
  return out;
 }
 export function readContext(state:Obj,refs:string[],offset=0,limit=20):Obj {
@@ -182,13 +191,11 @@ export function readContext(state:Obj,refs:string[],offset=0,limit=20):Obj {
   ||!Number.isSafeInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>30)throw new Error('Invalid fragment request.');
  const current=scope(state),{roots}=current;
  const unique=[...new Set(refs)];
- // Antigravity moves tool results above 5KB into output.txt. Share a conservative
- // UTF-8 budget across refs so multi-card comparisons stay inline.
  const perFragment=Math.max(360,Math.floor(3600/unique.length));
  const needed=unique.some(ref=>ref==='guidance'||ref.startsWith('guidance/'));
  const guidance=needed?selectGuidance(state,current):undefined;
  if(guidance)roots.guidance=guidance.directory;
- return {session_id:state.session_id,state_id:state.state_id,fragments:unique.map(ref=>{
+ return {fragments:unique.map(ref=>{
   if(ref==='guidance'||ref.startsWith('guidance/')){
    const capsule=guidanceFragment(guidance,ref,offset);if(capsule)return capsule;
   }
@@ -207,9 +214,7 @@ function brief(value:unknown,ref:string,keys?:string[]):Obj {
  return out;
 }
 function decisionHeader(state:Obj,screen:string):Obj {
- const out:Obj={session_id:state.session_id,state_id:state.state_id,ready:state.ready===true,screen};
- if(state.connection)out.connection=pick(obj(state.connection),connectionKeys);
- return out;
+ const out:Obj={screen};if(state.ready!==true)out.ready=false;const connection=connectionSummary(state);if(connection)out.connection=connection;return out;
 }
 function combatEvidence(card:Obj,budget:number):Obj|undefined {
  if(budget<=2)return;
@@ -244,17 +249,15 @@ function combatEvidence(card:Obj,budget:number):Obj|undefined {
 /** Compact default decision; the catalog, not an arbitrary native-field dump, owns discovery. */
 export function decision(state:Obj):Obj {
  const {screen,combat,roots,unsupported}=scope(state),o=obj(state.observation),g=obj(o.game_state),c=obj(g.combat_state);
- const out:Obj={session_id:state.session_id,state_id:state.state_id,ready:state.ready===true,screen};
- if(state.connection)out.connection=pick(obj(state.connection),connectionKeys);
+ const out:Obj=decisionHeader(state,screen);
  if(unsupported)out.unsupported_information=true;
  if(roots.player)out.player=brief(roots.player,'player',['class','act','floor','current_hp','max_hp','gold','energy','block']);
  const actions=list(roots.actions);
  out.actions=actions.slice(0,12).map((a,i)=>{
-  const action=obj(a),{parameters,...rest}=action,ref='actions/'+i;
+  const action=obj(a),parameters=action.parameters,ref='actions/'+i,summary:Obj=pick(action,['id','label']);
   const objectParameters=parameters!==null && typeof parameters==='object' && !Array.isArray(parameters);
-  if(objectParameters && Object.keys(parameters).length===0)return brief(rest,ref,['id','label']);
-  const summary=brief(action,ref,['id','label']);
-  if(objectParameters)summary.parameters_ref=child(ref,'parameters');
+  if(objectParameters&&Object.keys(parameters).length)summary.parameters_ref=child(ref,'parameters');
+  const omitted=Object.keys(action).some(k=>!['id','label','parameters',...provenance].includes(k));if(omitted)summary.details_required=true;
   return summary;
  });
  if(actions.length>12)out.actions_more='actions';
@@ -266,13 +269,11 @@ export function decision(state:Obj):Obj {
    && evidence.reduce((n,v)=>n+(v?JSON.stringify(v).length:0),0)<=768;
   out.combat={hand_complete:c.hand_complete ?? obj(o.combat_decision).hand_complete ?? false,
    hand:shownHand.map((v,i)=>{
-    const summary=brief(v,'hand/'+i,['id','uuid','name','type','upgrades','description','cost','is_playable','displayed_cost_text','displayed_cost_complete','cost_components_complete','unplayable_reason','description_complete']);
-    if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);
-    return summary;
+    const summary=cardSummary('hand/'+i,v,620);if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);return summary;
    }),
    monsters:monsters.slice(0,8).map((v,i)=>brief(v,'monsters/'+i))};
-   if(roots.combat)Object.assign(obj(out.combat),roots.combat);
-   if(hand.length>10)obj(out.combat).hand_more='hand';if(monsters.length>8)obj(out.combat).monsters_more='monsters';
+  if(roots.combat)Object.assign(obj(out.combat),roots.combat);
+  if(hand.length>10)obj(out.combat).hand_more='hand';if(monsters.length>8)obj(out.combat).monsters_more='monsters';
  }
  if(roots.mechanics)out.mechanics=brief(roots.mechanics,'mechanics');
  if(roots.screen)out.screen_state=brief(roots.screen,'screen',['body_text','event_id','event_name','for_upgrade']);
@@ -281,13 +282,11 @@ export function decision(state:Obj):Obj {
   out.event_reading={...brief(reading,'screen/event_reading',['reading_id','body_complete','options_complete','status']),body_ref:'screen/event_reading/body_text',
    options:list(reading.options).slice(0,12).map((value,i)=>brief(value,'screen/event_reading/options/'+i,['text','disabled','choice_index']))};
  }
- // Actions are the authoritative default control surface. Keep shop_controls available through the TOC,
- // but do not inline the same shop actions a second time.
  for(const key of ['rest_controls','reward_controls'])if(roots[key])out[key]=list(roots[key]).slice(0,12).map((value,i)=>brief(value,child(key,String(i))));
  if(['SHOP_SCREEN','CARD_REWARD','GRID','BOSS_REWARD'].includes(screen) && Array.isArray(obj(roots.screen).cards)){
   const offerKeys=screen==='SHOP_SCREEN'
-   ? ['id','uuid','name','type','upgrades','price','available','affordable','unavailable_reason']
-   : ['id','uuid','name','type','description','description_complete','displayed_cost_text','displayed_cost_complete'];
+   ? ['name','type','price','available','affordable','unavailable_reason']
+   : ['name','type','description','displayed_cost_text','displayed_cost_complete'];
   out.offers=list(obj(roots.screen).cards).slice(0,12).map((value,i)=>brief(value,'screen/cards/'+i,offerKeys));
  }
  for(const key of ['reward_navigation','selection_controls','card_selection_controls'])if(roots[key])out[key]=brief(roots[key],key);
@@ -295,21 +294,21 @@ export function decision(state:Obj):Obj {
  if(roots.menu)out.menu=brief(roots.menu,'menu');
  out.toc=Object.entries(roots).map(([ref,value])=>entry(ref,value,ref));
  const guidance=selectGuidance(state,{screen,roots,unsupported});
- if(guidance){out.guidance=guidance.summary;list(out.toc).push({ref:'guidance',title:'Examples'});}
+ if(guidance){out.guidance=guidance.summary;list(out.toc).push({ref:'guidance'});}
  return out;
 }
 function mapDecision(state:Obj):Obj {
  const o=obj(state.observation),g=obj(o.game_state),screen=String(obj(o.menu).screen ?? g.screen_type ?? 'unavailable');
  if(state.ready===true && list(state.actions).some(a=>typeof obj(a).id!=='string')){
-  const full=decision(state);
-  return {...pick(full,mapViewKeys),map_plan:full.map_plan ?? {status:'unavailable'}};
+  const full=decision(state);return {...pick(full,mapViewKeys),map_plan:full.map_plan ?? {status:'unavailable'}};
  }
  const plan=screen==='MAP' && Object.keys(g).length && present(g.map_plan) && g.map_plan;
  return {...decisionHeader(state,screen),map_plan:plan?brief(plan,'map_plan',mapPlanKeys):{status:'unavailable'}};
 }
 export function conditionalDecision(state:Obj,knownView?:string,mode:'decision'|'map_plan'='decision'):Obj {
  const view=mode==='map_plan'?mapDecision(state):decision(state);
- const viewId=createHash('sha256').update(mode+JSON.stringify(view)).digest('hex').slice(0,24);
- if(knownView===viewId)return {...pick(view,['session_id','state_id','ready','connection']),view_id:viewId,unchanged:true};
+ // Session/state identity remains part of the hash for stale/restart invalidation, but is not model-visible.
+ const viewId=createHash('sha256').update(mode+'|'+String(state.session_id)+'|'+String(state.state_id)+'|'+JSON.stringify(view)).digest('hex').slice(0,24);
+ if(knownView===viewId)return {view_id:viewId,unchanged:true};
  return {...view,view_id:viewId};
 }
