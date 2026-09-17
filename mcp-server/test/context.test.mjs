@@ -35,12 +35,20 @@ test('conditional reads require explicit known_view and invalidate on safety cha
 test('combat facts remain accessible while inactive UI and upgrade detail stay off default view',async()=>{
  const {decision,readContext}=await api(),s=state('NONE');
  s.actions=[{id:'run.play.a.0',label:'타격',parameters:{}}];
- s.observation.game_state.combat_state={hand_complete:true,hand:[{id:'a',name:'타격',description:'피해 6.',displayed_cost_complete:false,upgrade_preview:{after:{description:'피해 9.'}}}],monsters:[{name:'적',current_hp:12,intent:'ATTACK',move_adjusted_damage:5}],player:{energy:3,mechanics:{information_complete:false,collection:{count:1,cards_complete:true,order_visible:false,cards:[{id:'col'}]}}},draw_pile:[],draw_pile_order_visible:false};
- const v=decision(s);assert.equal(v.combat.hand[0].displayed_cost_complete,false);assert.equal(v.combat.monsters[0].move_adjusted_damage,5);
+ s.observation.game_state.combat_state={hand_complete:true,hand:[{id:'a',name:'타격',description:'피해 6.',cost:0,displayed_cost_complete:false,upgrade_preview:{after:{description:'피해 9.'}}}],monsters:[{name:'적',current_hp:12,intent:'ATTACK',move_adjusted_damage:5}],player:{energy:3,mechanics:{information_complete:false,collection:{count:1,cards_complete:true,order_visible:false,cards:[{id:'col'}]}}},draw_pile:[],draw_pile_order_visible:false};
+ const v=decision(s);assert.equal(v.combat.hand[0].displayed_cost_complete,false);assert.equal(v.combat.hand[0].cost,0);assert.equal(v.combat.monsters[0].move_adjusted_damage,5);
  assert.ok(!JSON.stringify(v).includes('피해 9.'));assert.ok(v.toc.some(x=>x.ref==='collection'));
  assert.equal(readContext(s,['hand/0/upgrade_preview/after']).fragments[0].data.description,'피해 9.');
  assert.equal(readContext(s,['collection/cards/0']).fragments[0].data.id,'col');
  assert.equal(readContext(s,['mechanics']).fragments[0].data.information_complete,false);
+});
+test('Snecko/current turn cost changes invalidate known_view even when other card text is unchanged',async()=>{
+ const {conditionalDecision}=await api(),s=state('NONE');
+ s.actions=[{id:'run.play.a.0',label:'타격',parameters:{}}];
+ s.observation.game_state.combat_state={hand_complete:true,hand:[{id:'a',uuid:'u',name:'타격',cost:0,displayed_cost_complete:false}],monsters:[],player:{energy:3},draw_pile:[]};
+ const first=conditionalDecision(s);assert.equal(first.combat.hand[0].cost,0);
+ s.observation.game_state.combat_state.hand[0].cost=3;
+ const changed=conditionalDecision(s,first.view_id);assert.equal(changed.unchanged,undefined);assert.equal(changed.combat.hand[0].cost,3);
 });
 test('native choice screen and in-combat selection retain current controls',async()=>{
  const {decision,readContext}=await api(),s=state('NONE');s.ready=false;s.observation.menu={screen:'REST',game_screen:'NONE'};
