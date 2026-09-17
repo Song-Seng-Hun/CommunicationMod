@@ -4,7 +4,7 @@ import {readFile,writeFile,readdir} from 'node:fs/promises';import {createHash} 
 import {Tiktoken} from 'js-tiktoken/lite';import ranks from 'js-tiktoken/ranks/o200k_base';
 import {toolSchemas} from '../dist/tool-schemas.js';import {contextText} from '../hooks/session-start.mjs';
 
-const REVIEWED_CONTRACT='2026-09-17-lean-pinned-v3',digest=v=>createHash('sha256').update(v).digest('hex'),object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const REVIEWED_CONTRACT='2026-09-17-lean-pinned-v4',digest=v=>createHash('sha256').update(v).digest('hex'),object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const sources=new Map(Object.entries({
  'current.observed_refs':'array','last.fragment.next_offset':'number','current.offered_action.id':'string','last.request_id':'string',
  'agent.arguments_validated_against_current.offered_action.parameters_and_complete_relevant_evidence':'object','current.event_reading.reading_id':'string','agent.commentary_already_presented_to_user_for_current.event_reading.reading_id':'string',
@@ -17,12 +17,12 @@ export async function sourceContract(){
  return {revision:REVIEWED_CONTRACT,fingerprint:digest(JSON.stringify(parts)),files:files.length};
 }
 export function validateSourceContract(expected,actual){assert.equal(actual.revision,expected.revision,'Guidance reviewed contract revision changed: revalidate examples/tests and bump the explicit reviewed revision.');assert.equal(actual.files,expected.files,'Guidance source file set changed: revalidate examples/tests and update the reviewed contract.');}
-const cleanProse=text=>text.replace(/same current session\/state;?\s*/gi,'').replace(/current session\/state and\s*/gi,'').replace(/Stale required IDs\/refs/gi,'Stale refs').replace(/No current IDs\/refs for context/gi,'No current refs for context').replace(/current IDs\/refs/gi,'current refs').replace(/whether its view_id changed/gi,'whether the visible decision changed').replace(/omit known_view and recover it/gi,'request a full refresh').replace(/\bview_id\b/gi,'visible decision').replace(/\bknown_view\b/gi,'delta baseline').replace(/current map_id\/revision/gi,'pinned current map state').replace(/map_id\/revision/gi,'map state').replace(/observed reading_id/gi,'pinned current event page').replace(/current event_reading\.reading_id/gi,'pinned current event page');
+const cleanProse=text=>text.replace(/same current session\/state;?\s*/gi,'').replace(/current session\/state and\s*/gi,'').replace(/Stale required IDs\/refs/gi,'Stale refs').replace(/No current IDs\/refs for context/gi,'No current refs for context').replace(/current IDs\/refs/gi,'current refs').replace(/whether its view_id changed/gi,'whether the visible decision changed').replace(/omit known_view and recover it/gi,'request a full refresh').replace(/\bview_id\b/gi,'visible decision').replace(/\bknown_view\b/gi,'delta baseline').replace(/current map_id\/revision/gi,'pinned current map state').replace(/map_id\/revision/gi,'map state').replace(/observed reading_id/gi,'pinned current event page').replace(/current event_reading\.reading_id/gi,'pinned current event page').replace(/current decision_id/gi,'pinned current combat decision').replace(/\bdecision_id\b/gi,'pinned combat decision');
 const publicArguments=(tool,args)=>{
  const out=Object.fromEntries(Object.entries(args??{}).filter(([key])=>key!=='session_id'&&key!=='state_id'));
  if(tool==='sts_act'){
   delete out.request_id;delete out.wait_ms;
-  if(object(out.arguments)){const payload={...out.arguments};for(const key of ['reading_id','map_id','revision'])delete payload[key];out.arguments=payload;}
+  if(object(out.arguments)){const payload={...out.arguments};for(const key of ['reading_id','map_id','revision','decision_id'])delete payload[key];out.arguments=payload;}
  }
  if(tool==='sts_get_state')delete out.known_view;return out;
 };
