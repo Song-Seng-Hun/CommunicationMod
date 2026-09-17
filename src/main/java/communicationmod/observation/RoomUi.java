@@ -122,7 +122,7 @@ public final class RoomUi {
     static void cancel(List<ProtocolSession.Action> actions,String id,String decision,String mode,BooleanSupplier valid) {
         CancelButton button=AbstractDungeon.overlayMenu.cancelButton;
         if(NativeUiInput.visible(button))actions.add(action(id,button.buttonText,decision,mode,()->valid.getAsBoolean() && AbstractDungeon.overlayMenu.cancelButton==button && NativeUiInput.visible(button),
-            ()->NativeUiInput.click(button.hb,()->NativeUiInput.invoke(button,"update"))));
+            ()->NativeUiInput.click(button.hb,()->button.update())));
     }
     static boolean settled(AbstractCard card){return Math.abs(card.current_x-card.target_x)<0.5f && Math.abs(card.current_y-card.target_y)<0.5f && card.isSeen && !card.isLocked && !card.isFlipped;}
     static boolean ready(){return Boolean.getBoolean("communicationmod.play_control") && !Settings.isTouchScreen && !Settings.isControllerMode
