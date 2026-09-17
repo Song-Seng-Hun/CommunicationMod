@@ -25,7 +25,10 @@ public final class RunUsabilityBindingTest {
             for(String expected:new String[]{"NativeUiInput.click","NativeUiInput.invoke","AbstractCampfireOption.update","AbstractChest.update","BossRelicSelectScreen.update"})check(calls.contains(expected),expected);
             check(!calls.contains("NativeUiInput.deferClick"),"shop card purchase must use native purchase routine, not deferred hitbox state");
             check(!calls.contains("Merchant.update"),"merchant entry must wait for the normal game update");
-            check(fieldWrites(p,"communicationmod.observation.RoomUi").contains("communicationmod.patches.MerchantPatch.visitMerchant"),"merchant entry queues native merchant patch");
+            String writes=fieldWrites(p,"communicationmod.observation.RoomUi");
+            check(writes.contains("communicationmod.patches.MerchantPatch.visitMerchant"),"merchant entry queues native merchant patch");
+            check(calls.contains("ProceedButton.show"),"shop-room proceed must be revealed explicitly instead of waiting for animation convergence");
+            check(writes.contains("com.megacrit.cardcrawl.helpers.Hitbox.clicked"),"shop-room proceed queues native proceed click for the next game update");
             CtClass shop=p.get("com.megacrit.cardcrawl.shop.ShopScreen");
             shop.getDeclaredMethod("purchaseCard",new CtClass[]{p.get("com.megacrit.cardcrawl.cards.AbstractCard")});
             check(!calls.contains("CommandExecutor.executeCommand")&&!calls.contains("loseGold")&&!calls.contains("gainGold"),"native UI only");
