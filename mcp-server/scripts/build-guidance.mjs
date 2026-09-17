@@ -4,7 +4,7 @@ import {readFile,writeFile,readdir} from 'node:fs/promises';import {createHash} 
 import {Tiktoken} from 'js-tiktoken/lite';import ranks from 'js-tiktoken/ranks/o200k_base';
 import {toolSchemas} from '../dist/tool-schemas.js';import {contextText} from '../hooks/session-start.mjs';
 
-const REVIEWED_CONTRACT='2026-09-17-lean-pinned-v4',digest=v=>createHash('sha256').update(v).digest('hex'),object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const REVIEWED_CONTRACT='2026-09-17-lean-pinned-v5',digest=v=>createHash('sha256').update(v).digest('hex'),object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const sources=new Map(Object.entries({
  'current.observed_refs':'array','last.fragment.next_offset':'number','current.offered_action.id':'string','last.request_id':'string',
  'agent.arguments_validated_against_current.offered_action.parameters_and_complete_relevant_evidence':'object','current.event_reading.reading_id':'string','agent.commentary_already_presented_to_user_for_current.event_reading.reading_id':'string',
