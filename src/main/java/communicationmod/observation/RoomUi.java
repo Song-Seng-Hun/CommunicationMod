@@ -16,6 +16,7 @@ import com.megacrit.cardcrawl.ui.buttons.*;
 import com.megacrit.cardcrawl.ui.campfire.AbstractCampfireOption;
 import communicationmod.ChoiceScreenUtils;
 import communicationmod.GameStateConverter;
+import communicationmod.patches.MerchantPatch;
 import communicationmod.protocol.ProtocolSession;
 import java.util.*;
 import java.util.function.BooleanSupplier;
@@ -28,8 +29,11 @@ public final class RoomUi {
         if(type.equals("REST"))rest(view,actions);
         else if(type.equals("SHOP_ROOM")) {
             final ShopRoom room=(ShopRoom)AbstractDungeon.getCurrRoom();final Merchant merchant=room.merchant;
-            if(merchant!=null)actions.add(action("run.shop.enter",Merchant.NAMES[0],null,"play",()->room.merchant==merchant && !AbstractDungeon.isScreenUp,
-                ()->NativeUiInput.press(merchant.hb,()->merchant.update())));
+            // Do not call merchant.update() from the observer/render tail. The merchant's native click
+            // path is frame-sensitive; queue the existing MerchantPatch injection and let the next
+            // normal game update open SHOP_SCREEN. This is also the proven legacy `choose shop` path.
+            if(merchant!=null && !MerchantPatch.visitMerchant)actions.add(action("run.shop.enter",Merchant.NAMES[0],null,"play",()->room.merchant==merchant && !AbstractDungeon.isScreenUp && !MerchantPatch.visitMerchant,
+                ()->MerchantPatch.visitMerchant=true));
             proceed(actions,"run.room.proceed");
         } else if(type.equals("SHOP_SCREEN"))shop(view,actions);
         else if(type.equals("BOSS_REWARD"))boss(view,actions);
