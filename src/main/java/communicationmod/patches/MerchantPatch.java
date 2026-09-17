@@ -14,6 +14,19 @@ public class MerchantPatch {
 
     public static boolean visitMerchant = false;
 
+    /**
+     * Shared merchant-entry injection used by both the normal ModTheSpire patch and the
+     * copied local runtime. The local runtime does not automatically apply every
+     * @SpirePatch, so BuildLocalObserver wires this method into Merchant.update directly.
+     */
+    public static void consume(Merchant merchant) {
+        if (visitMerchant) {
+            merchant.hb.hovered = true;
+            InputHelper.justClickedLeft = true;
+            visitMerchant = false;
+        }
+    }
+
     @SpirePatch(
             clz=Merchant.class,
             method="update"
@@ -24,12 +37,7 @@ public class MerchantPatch {
                 locator=Locator.class
         )
         public static void Insert(Merchant _instance) {
-            if(visitMerchant) {
-                _instance.hb.hovered = true;
-                InputHelper.justClickedLeft = true;
-                visitMerchant = false;
-            }
-
+            consume(_instance);
         }
 
         private static class Locator extends SpireInsertLocator {
