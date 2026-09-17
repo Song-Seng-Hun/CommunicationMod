@@ -96,9 +96,10 @@ test('a selected small card is atomic without success boilerplate',async()=>{
  const {readContext}=await api(),s=state();s.observation.game_state.deck[0].tooltips=[{title:'취약',description:'추가 피해'}];
  const card=readContext(s,['deck/0']).fragments[0];assert.equal(card.data.tooltips[0].description,'추가 피해');assert.equal(card.page_complete,undefined);assert.equal(card.next_offset,undefined);assert.equal(card.format,undefined);
 });
-test('current event body has a direct fragment reference and short choices',async()=>{
- const {decision}=await api(),s=state();s.observation.game_state.screen_state={event_reading:{body_text:'이야기'.repeat(1000),reading_id:'r',options:[{text:'떠난다',disabled:false}]}};
- const v=decision(s);assert.equal(v.event_reading.body_ref,'screen/event_reading/body_text');assert.equal(v.event_reading.options[0].text,'떠난다');assert.equal(v.event_reading.reading_id,'r');
+test('current event body has a direct fragment reference while reading identity stays hidden',async()=>{
+ const {decision,readContext}=await api(),s=state();s.observation.game_state.screen_state={event_name:'탑',body_text:'중복 본문',event_reading:{body_text:'이야기'.repeat(1000),reading_id:'opaque',phase:'discussion_required',page_role:'before_choice',text_complete:true,options:[{text:'떠난다',disabled:false}]}};
+ const v=decision(s);assert.equal(v.event_reading.body_ref,'screen/event_reading/body_text');assert.equal(v.event_reading.options[0].text,'떠난다');assert.equal(v.event_reading.reading_id,undefined);assert.equal(v.event_reading.phase,'discussion_required');assert.equal(v.screen_state.body_text,undefined);
+ assert.throws(()=>readContext(s,['screen/event_reading/reading_id']),/not available/);
 });
 test('missing or conflicting completeness never exposes an ordinary hand',async()=>{
  const {decision,readContext}=await api(),s=state('NONE');
