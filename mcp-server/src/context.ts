@@ -79,10 +79,15 @@ const scalar=(v:unknown,max=160)=>v===null||typeof v==='boolean'||typeof v==='nu
 function inlineSummary(value:unknown,keys?:string[]):Obj {
  const v=obj(value),source=keys?pick(v,keys):v,out:Obj={};for(const [key,item] of Object.entries(source))if(!provenance.has(key)&&scalar(item,200))out[key]=item;return out;
 }
+function miniCard(value:unknown):Obj {
+ const v=obj(value),out:Obj={};
+ for(const key of ['name','cost','type'])if(Object.hasOwn(v,key)&&scalar(v[key],80))out[key]=v[key];
+ return out;
+}
 function mechanicsDecisionSummary(value:unknown):Obj {
  const v=obj(value),out:Obj={};let incomplete=false;
  for(const [key,item] of Object.entries(v)){
-  if(['scope','collection','combat_collection'].includes(key))continue;
+  if(['scope','collection','combat_collection','encode_sequence','function_preview','compile_panel','gremlins','spells','champ_stance','ghostflames'].includes(key))continue;
   if(key==='character_supported'){if(item===false)incomplete=true;continue;}
   if(key==='information_issues'){if(Array.isArray(item)&&item.length)incomplete=true;continue;}
   if(key==='information_issue_count'){if(typeof item==='number'&&item>0)incomplete=true;continue;}
@@ -91,6 +96,17 @@ function mechanicsDecisionSummary(value:unknown):Obj {
   if(mechanicsZeroNoise.has(key)&&item===0)continue;
   if(scalar(item,120))out[key]=item;
  }
+ const collection=obj(v.collection),combatCollection=obj(v.combat_collection);
+ if(typeof collection.count==='number')out.collection_count=collection.count;
+ if(typeof combatCollection.count==='number')out.combat_collection_count=combatCollection.count;
+ const encode=list(v.encode_sequence);
+ if(encode.length)out.encode_sequence=encode.slice(0,8).map(value=>{const row={...miniCard(value)};const source=obj(value);if(typeof source.encode_slot==='number')row.slot=source.encode_slot;return row;});
+ if(present(v.function_preview))out.function_preview=miniCard(v.function_preview);
+ const compile=obj(v.compile_panel);if(Object.keys(compile).length){const row:Obj={};if(typeof compile.title==='string')row.title=compile.title.slice(0,80);if(typeof compile.description==='string')row.description=compile.description.slice(0,160);if(Object.keys(row).length)out.compile_panel=row;}
+ const gremlins=list(v.gremlins);if(gremlins.length)out.gremlins=gremlins.slice(0,5).map(value=>{const g=obj(value),row:Obj={};const name=typeof g.name==='string'&&g.name?g.name:g.id;if(typeof name==='string')row.name=name.slice(0,80);for(const key of ['hp','active','enslaved'])if(Object.hasOwn(g,key)&&scalar(g[key],80))row[key]=g[key];return row;});
+ const spells=list(v.spells);if(spells.length)out.spells=spells.slice(0,8).map(value=>{const x=obj(value),row:Obj={...miniCard(x.card)};if(typeof x.count==='number')row.count=x.count;if(x.up_next===true)row.up_next=true;return row;});
+ const champ=obj(v.champ_stance);if(Object.keys(champ).length){const row:Obj={};for(const key of ['charged','technique_charges'])if(Object.hasOwn(champ,key)&&scalar(champ[key],80))row[key]=champ[key];if(typeof champ.description==='string')row.description=champ.description.slice(0,140);const abilities=obj(champ.abilities);for(const key of ['technique','finisher']){const ability=obj(abilities[key]);if(typeof ability.description==='string')row[key]=ability.description.slice(0,140);}if(Object.keys(row).length)out.champ_stance=row;}
+ const flames=list(v.ghostflames);if(flames.length)out.ghostflames=flames.slice(0,6).map(value=>{const f=obj(value),row:Obj={};for(const key of ['name','active','charged','triggers_required','trigger_count'])if(Object.hasOwn(f,key)&&scalar(f[key],90))row[key]=f[key];if(typeof f.description==='string')row.description=f.description.slice(0,120);return row;});
  if(incomplete)out.mechanics_incomplete=true;
  return out;
 }
@@ -110,6 +126,16 @@ function powerSummary(value:unknown):Obj {
 }
 function powersSummary(value:unknown,limit:number):Obj[] {
  return list(value).slice(0,limit).map(powerSummary).filter(power=>Object.keys(power).length>0);
+}
+function orbSummary(value:unknown,index:number):Obj {
+ const v=obj(value),out:Obj={slot:index};
+ for(const key of ['name','passive_amount','evoke_amount','hp','displayed_debuff'])if(Object.hasOwn(v,key)&&scalar(v[key],100))out[key]=v[key];
+ if(v.upgraded===true)out.upgraded=true;
+ if(typeof v.description==='string'&&v.description){const text=v.description.slice(0,140);out.description=text;if(text.length<v.description.length)out.description_truncated=true;}
+ const card=obj(v.stasis_card);if(Object.keys(card).length)out.stasis_card=miniCard(card);
+ if(v.details_complete===false)out.details_complete=false;
+ if(typeof v.unavailable_reason==='string'&&v.unavailable_reason)out.unavailable_reason=v.unavailable_reason;
+ return out;
 }
 function publicAction(value:unknown,index:number):Obj {
  const action=obj(value),out:Obj={id:actionAlias(index)};
@@ -289,8 +315,10 @@ function trimDecision(out:Obj,roots:Obj,actions:unknown[]):Obj {
  const combat=obj(out.combat),hand=list(combat.hand) as Obj[];
  if(bytes(out)>4400)for(const card of hand)if(card.description!==undefined){delete card.description;delete card.description_truncated;card.details_required=true;}
  if(bytes(out)>4400){
-  const strip=(powers:unknown)=>{for(const value of list(powers)){const power=obj(value);delete power.description;delete power.description_truncated;}};
-  strip(obj(out.player).powers);for(const monster of list(combat.monsters))strip(obj(monster).powers);
+  const strip=(rows:unknown)=>{for(const value of list(rows)){const row=obj(value);delete row.description;delete row.description_truncated;}};
+  strip(obj(out.player).powers);strip(obj(out.player).orbs);strip(obj(out.player).ghostflames);for(const monster of list(combat.monsters))strip(obj(monster).powers);
+  const compile=obj(obj(out.player).compile_panel);delete compile.description;
+  const champ=obj(obj(out.player).champ_stance);for(const key of ['description','technique','finisher'])delete champ[key];
  }
  if(bytes(out)>4400&&list(combat.monsters).length>4){combat.monsters=list(combat.monsters).slice(0,4);combat.monsters_more='monsters';}
  if(bytes(out)>4400&&Array.isArray(out.offers)&&out.offers.length>6){out.offers=out.offers.slice(0,6);out.offers_more='screen/cards';}
@@ -303,9 +331,12 @@ function trimDecision(out:Obj,roots:Obj,actions:unknown[]):Obj {
 export function decision(state:Obj):Obj {
  const current=scope(state),{screen,combat,roots,unsupported}=current,o=obj(state.observation),c=obj(obj(o.game_state).combat_state),out:Obj=decisionHeader(state,screen);if(unsupported)out.unsupported_information=true;
  if(roots.player){
-  const playerSource=obj(roots.player),keys=combat?['current_hp','max_hp','gold','energy','block']:['class','act','floor','current_hp','max_hp','gold'],player=inlineSummary(playerSource,keys),stance=obj(playerSource.stance),stanceName=stance.name??stance.id;
+  const playerSource=obj(roots.player),keys=combat?['class','current_hp','max_hp','gold','energy','block']:['class','act','floor','current_hp','max_hp','gold'],player=inlineSummary(playerSource,keys),stance=obj(playerSource.stance),stanceName=stance.name??stance.id;
   if(typeof stanceName==='string'&&stanceName)player.stance=stanceName;
-  if(combat){const powers=list(playerSource.powers);if(powers.length){player.powers=powersSummary(powers,6);if(powers.length>6)player.powers_more='player/powers';}}
+  if(combat){
+   const powers=list(playerSource.powers);if(powers.length){player.powers=powersSummary(powers,6);if(powers.length>6)player.powers_more='player/powers';}
+   const orbs=list(playerSource.orbs);if(orbs.length){player.orbs=orbs.slice(0,10).map(orbSummary);if(orbs.length>10)player.orbs_more='player/orbs';}
+  }
   Object.assign(player,mechanicsDecisionSummary(combat?obj(c.player).mechanics??obj(obj(o.game_state).mechanics):obj(obj(o.game_state).mechanics)));if(Object.keys(player).length)out.player=player;
  }
  const actions=list(roots.actions),actionMap=aliases(actions);out.actions=actions.slice(0,12).map(publicAction);if(actions.length>12)out.actions_more='actions';
