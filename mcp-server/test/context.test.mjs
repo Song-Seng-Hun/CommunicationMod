@@ -69,13 +69,13 @@ test('multi-card detail reads share one inline budget and omit routine card meta
   for(const key of ['id','uuid','upgrades','displayed_cost_complete','cost_components_complete','exhausts','ethereal','page_complete','format'])assert.equal(f[key]??f.data[key],undefined,key);
  }
 });
-test('native choice screen and in-combat selection retain current controls',async()=>{
+test('fully inlined controls skip redundant TOC while nested controls keep one detail ref',async()=>{
  const {decision,readContext}=await api(),s=state('NONE');s.ready=false;s.observation.menu={screen:'REST',game_screen:'NONE'};s.observation.rest_controls=[{description:'회복',available:false}];
- assert.equal(decision(s).screen,'REST');assert.ok(decision(s).toc.some(x=>x.ref==='rest_controls'));
+ const rest=decision(s);assert.equal(rest.screen,'REST');assert.deepEqual(rest.rest_controls,[{description:'회복',available:false}]);assert.ok(!rest.toc.some(x=>x.ref==='rest_controls'));
  s.observation.menu={screen:'CARD_REWARD'};s.observation.combat_decision={mode:'selection',hand_complete:false};
  s.observation.game_state.combat_state={hand_complete:false,hand:[{id:'stale-card'}],monsters:[{name:'enemy'}],draw_pile:[]};s.observation.selection_controls={kind:'discovery'};
- assert.ok(decision(s).toc.some(x=>x.ref==='monsters'));assert.ok(decision(s).toc.some(x=>x.ref==='selection_controls'));
- assert.ok(!decision(s).toc.some(x=>x.ref==='hand'));assert.throws(()=>readContext(s,['hand']),/not available/);
+ const simple=decision(s);assert.ok(simple.toc.some(x=>x.ref==='monsters'));assert.equal(simple.selection_controls.kind,'discovery');assert.ok(!simple.toc.some(x=>x.ref==='selection_controls'));assert.ok(!simple.toc.some(x=>x.ref==='hand'));assert.throws(()=>readContext(s,['hand']),/not available/);
+ s.observation.selection_controls={kind:'grid',upgrade_choice:{choice_required:true,options:[{index:0,label:'A'}]}};const nested=decision(s);assert.ok(nested.toc.some(x=>x.ref==='selection_controls'));assert.equal(nested.selection_controls.kind,'grid');
 });
 test('escaped text and huge fields cannot exceed budgets or stall continuations',async()=>{
  const {readContext}=await api(),s=state();s.observation.game_state.screen_state.body_text='\u0000'.repeat(3000);
