@@ -34,6 +34,11 @@ public final class RunUsabilityBindingTest {
             check(!calls.contains("CommandExecutor.executeCommand")&&!calls.contains("loseGold")&&!calls.contains("gainGold"),"native UI only");
             check(calls(p,"communicationmod.observation.RunUi").contains("RoomUi.capture"),"room route");
             check(calls.contains("PotionUi.idle") && calls.contains("NativeUiInput.pending"),"pending native input blocks every room action");
+        } else if(mode.equals("map")) {
+            String calls=calls(p,"communicationmod.observation.RunUi");
+            check(calls.contains("MapDrawing.close"),"map return closes annotation/edit mode before leaving");
+            check(calls.contains("ChoiceScreenUtils.pressCancelButton"),"map return uses the native dismiss/cancel path");
+            p.get("com.megacrit.cardcrawl.screens.DungeonMapScreen").getDeclaredField("dismissable");
         } else if(mode.equals("potion")) {
             String calls=calls(p,"communicationmod.observation.PotionUi");
             for(String expected:new String[]{"PotionPopUp.open","NativeUiInput.click","NativeUiInput.press","RunUiPolicy.potionUse","RoomUi.action"})check(calls.contains(expected),expected);
