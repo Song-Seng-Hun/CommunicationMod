@@ -15,7 +15,7 @@ export async function loadContext(input,env=process.env){
  try{
   if(typeof input.cwd!=='string'||path.relative(await realpath(repo),await realpath(input.cwd))!=='')return '';
   const bundle=JSON.parse(await readFile(new URL('../dist/guidance-bundle.json',import.meta.url),'utf8'));
-  for(const name of ['context.js','hand-dedupe.js','view.js','session.js','guidance.js','guidance-catalog.js','tool-schemas.js']){
+  for(const name of ['context.js','action-projection.js','hand-dedupe.js','view.js','session.js','guidance.js','guidance-catalog.js','tool-schemas.js']){
    if(bundle.modules?.[name]!==hash(await readFile(new URL('../dist/'+name,import.meta.url))))return '';
   }
   if(bundle.hook?.digest!==hash(await readFile(fileURLToPath(import.meta.url))))return '';
