@@ -9,19 +9,27 @@ const lifecycle=new Lifecycle(root,link);
 const read={readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false};
 const ids={session_id:z.string().min(1).max(128),state_id:z.number().int().nonnegative()};
 const outputSchema=z.object({data:z.record(z.string(),z.unknown())});
-function response(data:Obj){return {content:[{type:'text' as const,text:JSON.stringify(data)}],structuredContent:{data}};}
+function textPreview(data:Obj):string {
+ const raw=JSON.stringify(data);if(raw.length<=1800)return raw;
+ const keys=['session_id','state_id','ready','screen','phase','status','outcome','request_id','section','total','offset','next_offset'];
+ const preview:Obj=Object.fromEntries(keys.filter(k=>k in data).map(k=>[k,data[k]]));
+ if(Array.isArray(data.actions))preview.action_count=data.actions.length;
+ preview.structured_result=true;preview.note='Full result is in structuredContent.data.';
+ return JSON.stringify(preview);
+}
+function response(data:Obj){return {content:[{type:'text' as const,text:textPreview(data)}],structuredContent:{data}};}
 async function guard(run:()=>Promise<Obj>){try{await link.ensure();return response(await run());}catch(e){return {isError:true,content:[{type:'text' as const,text:e instanceof Error?e.message:'MCP operation failed; inspect current state before acting.'}]};}}
 async function lifecycleGuard(run:()=>Promise<Obj>){try{return response(await run());}catch(e){return {isError:true,content:[{type:'text' as const,text:e instanceof Error?e.message:'Game startup failed; inspect sts_game_status before retrying.'}]};}}
 server.registerTool('sts_game_status',{title:'Downfall process and connection status',description:'Inspect the configured test game process without launching, closing, or playing it. Works before a game connection exists. Reports stopped/running, scoped PID, runtime and next step.',inputSchema:z.object({}).strict(),outputSchema,annotations:read},
  ()=>lifecycleGuard(()=>lifecycle.status()));
 server.registerTool('sts_start_game',{title:'Start Downfall and connect',description:'Start the verified copied Downfall game with bundled Java 8 and test online submission blocks, or reuse the same running test game. Only when the user requests game launch/play. Never rebuilds, edits saves, resumes a run, or makes choices. Waits briefly for MCP; starting means inspect state/status, not spawn again. Game stays open when MCP closes.',inputSchema:z.object({wait_ms:z.number().int().min(0).max(15000).default(15000)}).strict(),outputSchema,annotations:{...read,readOnlyHint:false}},
  ({wait_ms})=>lifecycleGuard(()=>lifecycle.start(wait_ms)));
-server.registerTool('sts_get_state',{title:'Current game decision',description:'Get only current-screen decision information, full localized card/event text and offered actions. Deck/map/history are on-demand via sts_get_context. Never infer actions from an unready state.',inputSchema:z.object({wait_ms:z.number().int().min(0).max(15000).default(0)}).strict(),outputSchema,annotations:read},
+server.registerTool('sts_get_state',{title:'Current game decision',description:'Get a compact current-screen decision view and offered actions. Large card/shop/grid collections are returned as a TOC so the result stays inline; use sts_get_context section=screen for paginated full localized details. Deck/map/history remain on-demand. Never infer actions from an unready state.',inputSchema:z.object({wait_ms:z.number().int().min(0).max(15000).default(0)}).strict(),outputSchema,annotations:read},
  ({wait_ms})=>guard(async()=>focus(await link.game.wait(wait_ms))));
 server.registerTool('sts_act',{title:'Act and await next game decision',description:'Apply ONE offered action using the observed session/state IDs, then return its receipt and next stable decision. No automatic retries or multi-action planning. For event acknowledgement provide the reading_id and meaningful commentary in arguments. Unknown/applied_waiting means inspect state and request; do not resend.',
  inputSchema:z.object({...ids,action_id:z.string().min(1).max(512),request_id:z.string().min(1).max(128).optional(),arguments:z.record(z.string(),z.unknown()).default({}),wait_ms:z.number().int().min(10).max(15000).default(8000)}).strict(),outputSchema,annotations:{...read,readOnlyHint:false,destructiveHint:true,idempotentHint:false}},
  args=>guard(async()=>{if(JSON.stringify(args.arguments).length>8000)throw new Error('Arguments too large.');const result=await link.game.act({...args,request_id:args.request_id ?? randomUUID()},args.wait_ms);return {...result,state:focus(obj(result.state))};}));
-server.registerTool('sts_get_context',{title:'Additional public game context',description:'Read an on-demand public section for the same session/state: deck, full map, piles, history, screen, or full observation. Never accesses internal game objects or save files. Lists are paginated; contents retain upstream visibility rules.',
+server.registerTool('sts_get_context',{title:'Additional public game context',description:'Read an on-demand public section for the same session/state: deck, full map, piles, history, screen, or full observation. Screen details and deck cards are page-limited to keep ordinary tool results inline; follow next_offset when present. Never accesses internal game objects or save files.',
  inputSchema:z.object({...ids,section:z.enum(['deck','map','piles','history','screen','full']),offset:z.number().int().min(0).default(0),limit:z.number().int().min(1).max(100).default(30)}).strict(),outputSchema,annotations:read},
  args=>guard(async()=>section(link.game.assertState(args.session_id,args.state_id),args.section,args.offset,args.limit)));
 server.registerTool('sts_get_request',{title:'Inspect action outcome without replay',description:'Read a recent action receipt by request_id after timeout or disconnect. Missing receipt is unknown, not evidence of failure. Keeps the last 128 bridge receipts; never resends an action.',inputSchema:z.object({request_id:z.string().min(1).max(128)}).strict(),outputSchema,annotations:read},
