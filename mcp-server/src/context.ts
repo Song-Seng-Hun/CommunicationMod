@@ -106,8 +106,8 @@ function controlSummary(value:unknown,actionAliases:Map<string,string>):Obj {
  const v=obj(value),out:Obj={};
  for(const [key,item] of Object.entries(v)){
   if(provenance.has(key)||item==null)continue;
-  if((key==='id'||key==='action_id')&&typeof item==='string'&&actionAliases.has(item)){out.action=actionAliases.get(item);continue;}
-  if(key==='mutually_exclusive_with'&&typeof item==='string'&&actionAliases.has(item)){out[key]=actionAliases.get(item);continue;}
+  if((key==='id'||key==='action_id')&&typeof item==='string'){const alias=actionAliases.get(item);if(alias)out.action=alias;continue;}
+  if(key==='mutually_exclusive_with'&&typeof item==='string'){const alias=actionAliases.get(item);if(alias)out[key]=alias;continue;}
   if(['available','supported','claimable','can_use','can_discard'].includes(key)&&item===true)continue;
   if(['pending','ignored','disabled','requires_target'].includes(key)&&item===false)continue;
   if(key.endsWith('_complete')&&item===true)continue;
@@ -161,8 +161,8 @@ function sanitizeControlTree(value:unknown,actionAliases:Map<string,string>,dept
  if(depth>24)return value;if(Array.isArray(value))return value.map(item=>sanitizeControlTree(item,actionAliases,depth+1));
  if(value&&typeof value==='object'){
   const out:Obj={};for(const [key,item] of Object.entries(obj(value))){
-   if((key==='id'||key==='action_id')&&typeof item==='string'&&actionAliases.has(item)){out.action=actionAliases.get(item);continue;}
-   if(key==='mutually_exclusive_with'&&typeof item==='string'&&actionAliases.has(item)){out[key]=actionAliases.get(item);continue;}
+   if((key==='id'||key==='action_id')&&typeof item==='string'){const alias=actionAliases.get(item);if(alias)out.action=alias;continue;}
+   if(key==='mutually_exclusive_with'&&typeof item==='string'){const alias=actionAliases.get(item);if(alias)out[key]=alias;continue;}
    out[key]=sanitizeControlTree(item,actionAliases,depth+1);
   }return out;
  }
