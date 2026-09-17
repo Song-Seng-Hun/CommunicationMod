@@ -49,7 +49,6 @@ function scope(state:Obj):Scope {
   if(screen==='MAP'){add('map',g.map);add('map_plan',g.map_plan);}
   const narrative=obj(g.narrative),current=list(narrative.entries).filter(e=>obj(e).currently_displayed!==false);
   add('dialogue',current);
-  // Off-screen history is relevant only while interpreting current dialogue/event text.
   if(current.length || screen==='EVENT')add('history',narrative);
  }
  add('menu',o.menu);
@@ -88,15 +87,10 @@ function resolve(roots:Obj,ref:string):unknown {
 }
 /** One shallow fragment; offset is a field/row index, or a UTF-16 text offset. */
 function fragment(ref:string,value:unknown,offset:number,limit:number):Obj {
- // An explicitly selected small card is a useful semantic unit. Do not force a
- // second call for every short keyword or upgrade field already inside its budget.
  if(offset===0 && /^(?:(?:hand|deck|screen\/cards|collection\/cards|combat_collection\/cards)\/\d+|card_in_play)$/.test(ref)
   && value!==null && typeof value==='object'){
   const card:Obj={ref,format:'card',data:null,page_complete:true,next_offset:null};
-  // Reserve the complete wrapper, then charge exact JSON characters while copying.
-  // An oversized subtree abandons this candidate immediately; pagination below
-  // still reads the original value. Never map/copy an entire large nested array.
-  let remaining=2400-JSON.stringify(card).length+4; // Replace the `null` data slot.
+  let remaining=2400-JSON.stringify(card).length+4;
   const exceeded=Symbol('card budget exceeded');
   const spend=(chars:number)=>(remaining-=chars)>=0;
   const stringFits=(text:string)=>text.length+2<=remaining && spend(JSON.stringify(text).length);
@@ -104,9 +98,8 @@ function fragment(ref:string,value:unknown,offset:number,limit:number):Obj {
   const clean=(v:unknown,arrayItem=false):unknown=>{
    if(typeof v==='string')return stringFits(v)?v:exceeded;
    if(v===null || typeof v!=='object')return spend(omitted(v)?(arrayItem?4:0):JSON.stringify(v).length)?v:exceeded;
-   if(!spend(2))return exceeded; // Both container delimiters.
+   if(!spend(2))return exceeded;
    if(Array.isArray(v)){
-    // Each JSON array slot needs at least one character, plus separating commas.
     if(Math.max(0,2*v.length-1)>remaining)return exceeded;
     const out:unknown[]=[];out.length=v.length;
     for(let i=0;i<v.length;i++){
@@ -117,13 +110,11 @@ function fragment(ref:string,value:unknown,offset:number,limit:number):Obj {
     return out;
    }
    const source=obj(v),out:Obj={};let fields=0;
-   // Enumerate keys without eagerly reading/allocating all entry values.
    for(const key in source){
     if(!Object.hasOwn(source,key) || provenance.has(key))continue;
     const value=source[key];
     if(!omitted(value) && ((fields++>0 && !spend(1)) || !stringFits(key) || !spend(1)))return exceeded;
     const item=clean(value);if(item===exceeded)return exceeded;
-    // Preserve own native keys such as __proto__ without invoking a setter.
     Object.defineProperty(out,key,{value:item,enumerable:true,writable:true,configurable:true});
    }
    return out;
@@ -138,7 +129,6 @@ function fragment(ref:string,value:unknown,offset:number,limit:number):Obj {
   return {ref,format:'text',text:value.slice(offset,end),total:value.length,offset,next_offset:end<value.length?end:null};
  }
  if(value===null || typeof value!=='object')return {ref,format:'value',value};
- // Keep absolute refs/cursors, but allocate array pairs only for this page.
  const array=Array.isArray(value),fields=array?value.slice(offset,offset+limit).map((v,i)=>[String(offset+i),v] as const):Object.entries(obj(value)).filter(([key])=>!provenance.has(key));
  const total=array?value.length:fields.length;
  const out:Obj={ref,format:array?'index':'fields',total,offset,next_offset:null};
@@ -164,7 +154,6 @@ export function readContext(state:Obj,refs:string[],offset=0,limit=20):Obj {
  if(!Array.isArray(refs)||refs.length<1||refs.length>8||refs.some(r=>typeof r!=='string'||r.length<1||r.length>512)
   ||!Number.isSafeInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>30)throw new Error('Invalid fragment request.');
  const current=scope(state),{roots}=current;
- // Ordinary data reads retain their exact old path and allocation behavior.
  const needed=refs.some(ref=>ref==='guidance'||ref.startsWith('guidance/'));
  const guidance=needed?selectGuidance(state,current):undefined;
  if(guidance)roots.guidance=guidance.directory;
@@ -191,7 +180,6 @@ function decisionHeader(state:Obj,screen:string):Obj {
  if(state.connection)out.connection=pick(obj(state.connection),connectionKeys);
  return out;
 }
-/** Small native payment/target bundle, all-or-nothing. Never infer completeness. */
 function combatEvidence(card:Obj,budget:number):Obj|undefined {
  if(budget<=2)return;
  const fields=['cost_components','cost_components_scope','cost_components_unavailable_reason',
@@ -233,8 +221,7 @@ export function decision(state:Obj):Obj {
  out.actions=actions.slice(0,12).map((a,i)=>{
   const action=obj(a),{parameters,...rest}=action,ref='actions/'+i;
   const objectParameters=parameters!==null && typeof parameters==='object' && !Array.isArray(parameters);
-  // Empty arguments are complete, but other omitted action facts still need reads.
-  if(objectParameters && Object.keys(parameters).length===0)return {...brief(rest,ref,['id','label']),parameters:{}};
+  if(objectParameters && Object.keys(parameters).length===0)return brief(rest,ref,['id','label']);
   const summary=brief(action,ref,['id','label']);
   if(objectParameters)summary.parameters_ref=child(ref,'parameters');
   return summary;
@@ -243,7 +230,6 @@ export function decision(state:Obj):Obj {
  if(combat){
   const hand=c.hand_complete===false?[]:list(roots.hand),monsters=list(roots.monsters);
   const shownHand=hand.slice(0,10),evidence=shownHand.map(v=>combatEvidence(obj(v),384));
-  // Whole-hand admission prevents paying for early cards while a later chosen card still needs a read.
   const inlineEvidence=hand.length<=10
    && shownHand.every((v,i)=>evidence[i]!==undefined || !['cost_components','target_playability'].some(k=>Object.hasOwn(obj(v),k)))
    && evidence.reduce((n,v)=>n+(v?JSON.stringify(v).length:0),0)<=768;
@@ -264,9 +250,15 @@ export function decision(state:Obj):Obj {
   out.event_reading={...brief(reading,'screen/event_reading',['reading_id','body_complete','options_complete','status']),body_ref:'screen/event_reading/body_text',
    options:list(reading.options).slice(0,12).map((value,i)=>brief(value,'screen/event_reading/options/'+i,['text','disabled','choice_index']))};
  }
- for(const key of ['shop_controls','rest_controls','reward_controls'])if(roots[key])out[key]=list(roots[key]).slice(0,12).map((value,i)=>brief(value,child(key,String(i))));
- if(['SHOP_SCREEN','CARD_REWARD','GRID','BOSS_REWARD'].includes(screen) && Array.isArray(obj(roots.screen).cards))
-  out.offers=list(obj(roots.screen).cards).slice(0,12).map((value,i)=>brief(value,'screen/cards/'+i,['id','uuid','name','type','description','description_complete','displayed_cost_text','displayed_cost_complete']));
+ // Actions are the authoritative default control surface. Keep shop_controls available through the TOC,
+ // but do not inline the same shop actions a second time.
+ for(const key of ['rest_controls','reward_controls'])if(roots[key])out[key]=list(roots[key]).slice(0,12).map((value,i)=>brief(value,child(key,String(i))));
+ if(['SHOP_SCREEN','CARD_REWARD','GRID','BOSS_REWARD'].includes(screen) && Array.isArray(obj(roots.screen).cards)){
+  const offerKeys=screen==='SHOP_SCREEN'
+   ? ['id','uuid','name','type','upgrades','price','available','affordable','unavailable_reason']
+   : ['id','uuid','name','type','description','description_complete','displayed_cost_text','displayed_cost_complete'];
+  out.offers=list(obj(roots.screen).cards).slice(0,12).map((value,i)=>brief(value,'screen/cards/'+i,offerKeys));
+ }
  for(const key of ['reward_navigation','selection_controls','card_selection_controls'])if(roots[key])out[key]=brief(roots[key],key);
  if(roots.map_plan)out.map_plan=brief(roots.map_plan,'map_plan',mapPlanKeys);
  if(roots.menu)out.menu=brief(roots.menu,'menu');
@@ -277,13 +269,10 @@ export function decision(state:Obj):Obj {
 }
 function mapDecision(state:Obj):Obj {
  const o=obj(state.observation),g=obj(o.game_state),screen=String(obj(o.menu).screen ?? g.screen_type ?? 'unavailable');
- // Native IDs are strings. Retain legacy conversion errors and prefix short-circuits
- // for malformed JSON action IDs without expanding normal snapshots.
  if(state.ready===true && list(state.actions).some(a=>typeof obj(a).id!=='string')){
   const full=decision(state);
   return {...pick(full,mapViewKeys),map_plan:full.map_plan ?? {status:'unavailable'}};
  }
- // Match the regular decision's screen/presence gate without traversing unrelated roots.
  const plan=screen==='MAP' && Object.keys(g).length && present(g.map_plan) && g.map_plan;
  return {...decisionHeader(state,screen),map_plan:plan?brief(plan,'map_plan',mapPlanKeys):{status:'unavailable'}};
 }
