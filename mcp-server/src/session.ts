@@ -1,5 +1,5 @@
 import {obj,list,type Obj} from './view.js';
-import {injectFixedArguments} from './action-projection.js';
+import {assertPublicArguments,injectFixedArguments} from './action-projection.js';
 export interface Act {session_id:string;state_id:number;action_id:string;request_id:string;arguments:Obj;}
 export interface PresentedAct {action_id:string;request_id:string;arguments:Obj;}
 interface Pending {request:Act;receipt?:Obj;resolve:(value:Obj)=>void;timer:ReturnType<typeof setTimeout>;receiptSequence?:number;}
@@ -53,7 +53,8 @@ export class GameSession {
    action=obj(offered[index]);const native=action.id;if(typeof native!=='string'||!native)throw new Error('Action is not offered in the current ready state.');action_id=native;
   }else action=obj(offered.find(value=>obj(value).id===action_id));
   if(!action||!Object.keys(action).length)throw new Error('Action is not offered in the current ready state.');
-  const argumentsWithPinnedConstants=injectFixedArguments(action.parameters,request.arguments);
+  const publicArguments=assertPublicArguments(action.parameters,request.arguments);
+  const argumentsWithPinnedConstants=injectFixedArguments(action.parameters,publicArguments);
   return this.act({session_id:String(state.session_id),state_id:Number(state.state_id),...request,action_id,arguments:argumentsWithPinnedConstants},timeout);
  }
  act(request:Act,timeout:number):Promise<Obj> {
