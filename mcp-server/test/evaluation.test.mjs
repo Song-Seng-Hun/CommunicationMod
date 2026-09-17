@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import path from 'node:path';
-import {Client} from '@modelcontextprotocol/sdk/client/index.js';import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
-const payload=r=>JSON.parse(r.content[0].text);
+import {Client} from '@modelcontextprotocol/sdk/client/index.js';import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';import {decode} from '@toon-format/toon';
+const payload=r=>{const text=r.content[0].text;return text.startsWith('TOON:')?decode(text.slice(text.indexOf('\n')+1),{strict:true}):JSON.parse(text);};
 test('ten frozen read-only evaluation answers remain reachable through lean MCP tools',async()=>{
  const client=new Client({name:'frozen-verifier',version:'1'});await client.connect(new StdioClientTransport({command:process.execPath,args:[path.resolve('evaluation/server.mjs')],stderr:'pipe'}));
  try{
