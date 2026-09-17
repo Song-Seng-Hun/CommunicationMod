@@ -45,8 +45,14 @@ export class GameSession {
   return this.assertState(this.presented.session_id,this.presented.state_id);
  }
  actPresented(request:PresentedAct,timeout:number):Promise<Obj> {
-  const state=this.assertPresented();
-  return this.act({session_id:String(state.session_id),state_id:Number(state.state_id),...request},timeout);
+  const state=this.assertPresented();let action_id=request.action_id;
+  const alias=/^a(0|[1-9]\d*)$/.exec(action_id);
+  if(alias){
+   const offered=list(state.actions),index=Number(alias[1]),native=obj(offered[index]).id;
+   if(index>=offered.length||typeof native!=='string'||!native)throw new Error('Action is not offered in the current ready state.');
+   action_id=native;
+  }
+  return this.act({session_id:String(state.session_id),state_id:Number(state.state_id),...request,action_id},timeout);
  }
  act(request:Act,timeout:number):Promise<Obj> {
   if(this.used.has(request.request_id)||this.receipts.has(request.request_id))throw new Error('Duplicate request ID: inspect sts_get_request; not resent.');
