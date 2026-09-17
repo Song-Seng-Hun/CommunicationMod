@@ -26,8 +26,10 @@
 | Transport | UTF-8, LF/CRLF, 1 MiB input bound, EOF termination, invalid-input/output failure shutdown | Real reader/writer thread tests; legacy command dispatch remains held off |
 | Existing fixes | Hidden draw order policy and null keyword tooltip guard retained | Existing focused headless regressions; gameplay not verified |
 | Public descriptions | Cached card text, dynamic variable values, localized keyword/standard extra hover tooltips, language marker, relic/potion/power text and player stance | Pure text/tooltip/privacy tests and installed-bytecode binding checks; character-break/CN cache, StSLib render-only tooltip extensions and displayed cost explicitly incomplete; custom rendering/getter purity and gameplay unverified |
+| Upgrade comparisons | Current-instance next-step previews on rewards/shop/grid and event/rest deck context; event preview cards; native upgrade confirmation, active branch choice and multi-upgrade tree | Repeat/cost/effect/copy/cache/visibility tests, installed Searing Blow/Strike/Hermit upgrade bodies with headless dependencies, native tree field/wiring checks, MCP projection tests; actual gameplay and arbitrary extension hook purity unverified |
+| Run usability | Native rest/shop/chest/boss-relic/grid/reward/potion controls; target-specific card availability; observed rendered cost text; bounded public character panels | Fresh production/input/policy/projection and installed binding tests. See [exact controls and gaps](RUN-USABILITY.md); alternate-resource costs, full character coverage and live UI acceptance remain incomplete |
 | Dialogue/situation | Rendered speech/event words, known-origin speaker labels, bounded recent history and public situation; final-frame publication and known overlay filtering | JDK tests and actual-method insertion plus generated render-order fixture; custom renderers, pixel occlusion, actual patch loading/gameplay unverified |
-| Downfall map coordinates | Optional adapter calls Downfall's actual first-node and boss UI helpers; graph connections remain the game's own normal/Flight/boot checks | Pure graph and installed-bytecode binding checks; real reverse-map/boss/act/endless play not yet verified |
+| Downfall map coordinates | Optional adapter calls Downfall's actual first-node and boss UI helpers; graph connections remain the game's own normal/Flight/boot checks; v2 boss action and copied-runtime boss click hook connected | Pure graph, actual helper bodies in isolated fixtures, guarded input and installed-bytecode binding checks; real reverse-map/boss/act/endless play not yet verified |
 | Offline bytecode preparation | Pinned four JAR hashes; new nonlaunchable copies; Steam/native entrypoints and LibGDX HTTP/socket/browser boundaries disabled; active metrics senders disabled | Java 8 transformation and artifact checks; original packaged bootstrap preserved byte-for-byte; NOT full native/OS/save/cloud isolation |
 | Local observer profile | Separate hash-checked copy, passive v2 transport, human controls, test submission paths disabled | No VM required; initialization and process round trip checked, actual gameplay unverified |
 | Base/workshop environments | Missing in the examined Steam library | Need legitimate installed game and normal MTS/BaseMod/StSLib/Downfall artifacts |
@@ -117,8 +119,9 @@ are unchanged; this is not a complete hidden-information audit.
 `Settings.lineBreakViaCharacter` selects a different cached encoding: damage can be
 bare `D`, while block/magic can be `!B!!`/`!M!!`. This encoding is currently withheld
 with `cn_cached_encoding_unsupported`, not falsely marked decoded. Displayed cost is
-also explicitly unavailable. Custom render-time hooks, cache freshness, upgrade popups,
-and arbitrary extension getter purity remain unverified. Description completeness
+also explicitly unavailable. Native upgrade confirmation and detached next-step comparisons
+are now separately exposed; see [CARD-UPGRADE-PREVIEWS.md](CARD-UPGRADE-PREVIEWS.md).
+Custom render-time hooks, cache freshness and arbitrary extension getter purity remain unverified. Description completeness
 only concerns cached text/token resolution, not complete/pixel-identical UI support.
 
 The map adapter calls `FlipMap$FirstRoom.isValidFirstNode` and
@@ -127,7 +130,41 @@ invalid-act, actual startY and ending-map rules rather than hardcoding reversed 
 Displayed choices and actual boss dispatch share `bossNodeAvailable`. Missing/failing
 optional bindings disable map choices and emit a single local diagnostic; no base-map
 fallback is used when a loaded Downfall adapter fails. Base play has no symbolic
-Downfall dependency. Real gameplay and adapter failure injection remain unverified.
+Downfall dependency. Missing-helper failure injection is now covered below; real
+gameplay and runtime invocation-failure injection remain unverified.
+
+### Map work resumed (2026-09-12)
+
+The earlier coordinate adapter was already committed in `328140e`. The remaining
+live-control mismatch was in `RunUi`: it explicitly excluded boss-ready maps, and
+`BuildLocalObserver` installed node hover input but no boss hover input. This work
+resumes that map task; ChatGPT tunnel setup is unrelated and is not a prerequisite.
+
+- v2 now offers `run.map.boss` using the same `bossNodeAvailable` predicate as
+  observations and `makeMapChoice`. It queues the existing native input path, not
+  direct room/act mutation. Other map actions retain the game's connection checks.
+- Both paths reject changed source node/map identity, pending input, non-map screens,
+  incomplete rooms and unavailable Downfall bindings before queuing a choice.
+- The copied runtime inserts `DungeonMapPatch.Insert` exactly once, after the boss
+  hitbox update and before native handling, only with explicit local play control.
+  The hook consumes stale requests without injecting a click outside an eligible
+  map/room. Idle frames preserve human input.
+- Regression first failed on the missing `run.map.boss` action, then independently
+  failed on stale input outside MAP. Both now pass. `MapCoordinatesTest` executes
+  the actual installed helper method bodies through the real optional adapter
+  with field-only dependencies: normal/reverse, non-default startY, ending,
+  excluded act, base-only and missing-helper cases. No live game state is created.
+- `prepare-local-test.ps1` passed including input/order/submission/hash checks;
+  evidence: `target/map-resume-verification.log`. New retained test copy:
+  `target/local-test-20260912-035601-12f52f24` (23 patched classes). The additional
+  coordinate fixture was run separately after preparation and passed too.
+
+This copy has not been launched, and prior test preferences/saves were not copied
+into it. Original Steam files and existing test copies/saves remain unchanged.
+The ready pointer now identifies the new copy; migrate only the intended test
+profile before continuing a saved run. Actual reverse-map boss entry, boss rewards,
+act/endless transitions and base/workshop live acceptance remain open. Do not
+interpret this headless milestone as full Downfall compatibility.
 
 ## Resource discipline after interrupted run
 
@@ -135,6 +172,22 @@ The user requested fewer subagents after PC overload. Resume work locally withou
 new worker fan-out; run builds/tests sequentially. Map and description verification
 JVMs use bounded heaps. Do not assume other user-owned sessions may be terminated.
 Full compatibility remains the task, not the status of this partial milestone.
+
+## Human ink and MCP route planning (2026-09-12)
+
+`MAP-PLANNER.md` documents the map overlay: mouse pen, semantic node-route tool,
+stroke eraser, bounded undo/clear, and annotation-only `run.map.plan`. Actual map
+hitboxes anchor the route; ink uses map-space coordinates. Native mouse/controller
+travel is guarded while editing, without rewriting global input or suppressing wheel
+scroll. Plans and actual current/next positions are separate observations.
+
+`sts_get_state(view="map_plan")` provides a small allowlisted summary; full route
+lists are on-demand through `map_plan` context. Ink coordinates never enter snapshots.
+The model, installed-method hooks, real v2 action against fixtures, MCP integration,
+13 Node tests, full copied-runtime preparation and installed local-plugin schemas
+passed. Current copy: `target/local-test-20260912-043110-2640ad6a`; plugin version:
+`0.1.0+codex.20260911193435`. No game launch or gameplay occurred in this feature task.
+Session-only annotations and live visual acceptance limits are explicit in the guide.
 
 ## Card and keyword text milestone (2026-09-08)
 
@@ -411,3 +464,11 @@ choices. Client error log is empty. The JVM remained responsive; no screenshot
 or visible-window verification is claimed. This validates one standard event's
 before/after reading and map return, not all events or special card selectors.
 No new build/regression-suite run was needed for this documentation-only change.
+
+## 2026-09-12 — Native character resources and special costs
+
+Filled the public resource bindings for the pinned fourteen-character catalog: Gremlin formation HP, Collector resources/collections, Awakened spells, Champ techniques, Guardian sockets/stasis, Slime summon/form details, Snecko public origin, mixed encode/flame panels and Inferno prose. Native energy/reserves/reserve-only/X/Pyre payment components now use final post-modifier rendered text. Unknown/hidden costs and unknown providers remain incomplete; future rolls and collection draw order are withheld.
+
+The full regression/preparation pipeline passed for `local-test-20260912-070947-48b5b5fc` (27 patched classes, original hashes unchanged). MCP tests passed 17/17; installed plugin `0.1.0+codex.20260911221416` passed read-only bundle/schema/status verification with the game stopped and zero gameplay actions. A reviewed hidden-X classification issue was reproduced and fixed. Live per-character acceptance remains separate; no save edits, commits or pushes were made.
+
+Detailed bindings, tested native methods and remaining boundaries: [character resources and cost matrix](CHARACTER-RESOURCES-AND-COSTS.md). Execution record: [implementation plan](superpowers/plans/2026-09-12-character-resources-costs.md).

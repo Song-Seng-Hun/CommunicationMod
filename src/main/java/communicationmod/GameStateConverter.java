@@ -34,6 +34,7 @@ import com.megacrit.cardcrawl.ui.buttons.LargeDialogOptionButton;
 import com.megacrit.cardcrawl.ui.panels.EnergyPanel;
 import communicationmod.observation.DialogueObservation;
 import communicationmod.observation.CardObservation;
+import communicationmod.observation.CardUpgradeObservation;
 import communicationmod.observation.PublicDescription;
 
 import java.lang.reflect.Field;
@@ -99,6 +100,7 @@ public class GameStateConverter {
      */
     private static HashMap<String, Object> getGameState() {
         HashMap<String, Object> state = new HashMap<>();
+        CardUpgradeObservation.begin();
 
         state.put("screen_name", AbstractDungeon.screen.name());
         state.put("is_screen_up", AbstractDungeon.isScreenUp);
@@ -117,6 +119,8 @@ public class GameStateConverter {
         state.put("gold", AbstractDungeon.player.gold);
         state.put("seed", Settings.seed);
         state.put("class", AbstractDungeon.player.chosenClass.name());
+        if (!communicationmod.observation.CombatObservation.inCombat())
+            state.put("mechanics",communicationmod.observation.PlayerMechanicsObservation.capture(AbstractDungeon.player,GameStateConverter::convertCardToJson));
         state.put("ascension_level", AbstractDungeon.ascensionLevel);
 
         ArrayList<Object> relics = new ArrayList<>();
@@ -127,20 +131,25 @@ public class GameStateConverter {
         state.put("relics", relics);
 
         ArrayList<Object> deck = new ArrayList<>();
+        String decisionScreen=ChoiceScreenUtils.getCurrentChoiceType().name();
+        boolean previewDeck=!AbstractDungeon.getCurrRoom().phase.equals(AbstractRoom.RoomPhase.COMBAT)
+            && (decisionScreen.equals("REST") || decisionScreen.equals("EVENT") || decisionScreen.equals("GRID"));
         for(AbstractCard card : AbstractDungeon.player.masterDeck.group) {
-            deck.add(convertCardToJson(card));
+            deck.add(previewDeck?convertDecisionCardToJson(card):convertCardToJson(card));
         }
 
         state.put("deck", deck);
 
         ArrayList<Object> potions = new ArrayList<>();
-        for(AbstractPotion potion : AbstractDungeon.player.potions) {
-            potions.add(convertPotionToJson(potion));
+        for(int slot=0;slot<AbstractDungeon.player.potions.size();slot++) {
+            HashMap<String,Object> potion=convertPotionToJson(AbstractDungeon.player.potions.get(slot));
+            potion.put("slot",slot);potions.add(potion);
         }
 
         state.put("potions", potions);
 
         state.put("map", convertMapToJson());
+        state.put("map_plan", communicationmod.map.MapDrawing.observation());
         if(CommandExecutor.isChooseCommandAvailable()) {
             state.put("choice_list", ChoiceScreenUtils.getCurrentChoiceList());
         }
@@ -155,7 +164,7 @@ public class GameStateConverter {
         keys.put("emerald", Settings.hasEmeraldKey);
         keys.put("sapphire", Settings.hasSapphireKey);
         state.put("keys", keys);
-
+        CardUpgradeObservation.finish(state);
         return state;
     }
 
@@ -211,6 +220,8 @@ public class GameStateConverter {
                 json_button.put("text", removeTextFormatting(button.msg));
                 json_button.put("disabled", button.isDisabled);
                 json_button.put("label", ChoiceScreenUtils.getOptionName(button.msg));
+                AbstractCard preview=CardUpgradeObservation.eventCard(button);
+                if(preview!=null)json_button.put("card_preview",convertDecisionCardToJson(preview));
                 if (!button.isDisabled) {
                     json_button.put("choice_index", choice_index);
                     choice_index += 1;
@@ -262,7 +273,7 @@ public class GameStateConverter {
         state.put("skip_available", ChoiceScreenUtils.isCardRewardSkipAvailable());
         ArrayList<Object> cardRewardJson = new ArrayList<>();
         for(AbstractCard card : AbstractDungeon.cardRewardScreen.rewardGroup) {
-            cardRewardJson.add(convertCardToJson(card));
+            cardRewardJson.add(convertDecisionCardToJson(card));
         }
         state.put("cards", cardRewardJson);
         return state;
@@ -358,7 +369,7 @@ public class GameStateConverter {
         ArrayList<Object> shopRelics = new ArrayList<>();
         ArrayList<Object> shopPotions = new ArrayList<>();
         for(AbstractCard card : ChoiceScreenUtils.getShopScreenCards()) {
-            HashMap<String, Object> jsonCard = convertCardToJson(card);
+            HashMap<String, Object> jsonCard = convertDecisionCardToJson(card);
             jsonCard.put("price", card.price);
             shopCards.add(jsonCard);
         }
@@ -399,10 +410,10 @@ public class GameStateConverter {
         ArrayList<AbstractCard> gridCards = ChoiceScreenUtils.getGridScreenCards();
         GridCardSelectScreen screen = AbstractDungeon.gridSelectScreen;
         for(AbstractCard card : gridCards) {
-            gridJson.add(convertCardToJson(card));
+            gridJson.add(convertDecisionCardToJson(card));
         }
         for(AbstractCard card : screen.selectedCards) {
-            gridSelectedJson.add(convertCardToJson(card));
+            gridSelectedJson.add(convertDecisionCardToJson(card));
         }
         int numCards = (int) ReflectionHacks.getPrivate(screen, GridCardSelectScreen.class, "numCards");
         boolean forUpgrade = (boolean) ReflectionHacks.getPrivate(screen, GridCardSelectScreen.class, "forUpgrade");
@@ -416,6 +427,7 @@ public class GameStateConverter {
         state.put("for_transform", forTransform);
         state.put("for_purge", forPurge);
         state.put("confirm_up", screen.confirmScreenUp || screen.isJustForConfirming);
+        if(forUpgrade)state.put("upgrade_selection_preview",CardUpgradeObservation.nativeGridPreview(screen));
         return state;
     }
 
@@ -628,6 +640,12 @@ public class GameStateConverter {
         return jsonNode;
     }
 
+    private static HashMap<String, Object> convertDecisionCardToJson(AbstractCard card) {
+        HashMap<String,Object> json=convertCardToJson(card);
+        CardUpgradeObservation.offer(json,card);
+        return json;
+    }
+
     /**
      * Creates a GSON-compatible representation of the given cards
      * The card object contains:
@@ -654,9 +672,11 @@ public class GameStateConverter {
             jsonCard.put("misc", card.misc);
         }
         if(AbstractDungeon.getMonsters() != null) {
-            boolean decisionReady = !communicationmod.observation.CombatObservation.inCombat()
-                || communicationmod.observation.CombatObservation.handComplete();
-            jsonCard.put("is_playable", decisionReady && card.canUse(AbstractDungeon.player, null));
+            boolean decisionReady = communicationmod.observation.CombatObservation.inCombat()
+                && communicationmod.observation.CombatObservation.handComplete();
+            jsonCard.put("is_playable",false);
+            if(decisionReady && AbstractDungeon.player.hand.group.contains(card))
+                communicationmod.observation.CardPlayObservation.addTo(jsonCard,card);
         }
         jsonCard.put("cost", card.costForTurn);
         jsonCard.put("upgrades", card.timesUpgraded);
@@ -765,6 +785,7 @@ public class GameStateConverter {
             orbs.add(convertOrbToJson(orb));
         }
         jsonPlayer.put("orbs", orbs);
+        jsonPlayer.put("mechanics",communicationmod.observation.PlayerMechanicsObservation.capture(player,GameStateConverter::convertCardToJson));
         return jsonPlayer;
     }
 
@@ -896,7 +917,7 @@ public class GameStateConverter {
         }
         jsonPotion.put("can_use", canUse);
         jsonPotion.put("can_discard", canDiscard);
-        jsonPotion.put("requires_target", potion.isThrown);
+        jsonPotion.put("requires_target", potion.targetRequired);
         return jsonPotion;
     }
 
@@ -912,10 +933,15 @@ public class GameStateConverter {
      */
     private static HashMap<String, Object> convertOrbToJson(AbstractOrb orb) {
         HashMap<String, Object> jsonOrb =  new HashMap<>();
+        if(!communicationmod.observation.PlayerMechanicsObservation.orbVisible(orb)) {
+            jsonOrb.put("details_complete",false);jsonOrb.put("unavailable_reason","orb_not_rendered");return jsonOrb;
+        }
         jsonOrb.put("id", orb.ID);
         jsonOrb.put("name", orb.name);
         jsonOrb.put("evoke_amount", orb.evokeAmount);
         jsonOrb.put("passive_amount", orb.passiveAmount);
+        jsonOrb.putAll(PublicDescription.format(orb.description, key -> null));
+        jsonOrb.putAll(communicationmod.observation.PlayerMechanicsObservation.orbDetails(orb,GameStateConverter::convertCardToJson));
         return jsonOrb;
     }
 

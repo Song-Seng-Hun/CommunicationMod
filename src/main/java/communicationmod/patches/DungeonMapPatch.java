@@ -5,6 +5,9 @@ import com.evacipated.cardcrawl.modthespire.patcher.PatchingException;
 import com.megacrit.cardcrawl.helpers.Hitbox;
 import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.map.DungeonMap;
+import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
+import com.megacrit.cardcrawl.rooms.AbstractRoom;
+import communicationmod.ChoiceScreenUtils;
 import javassist.CannotCompileException;
 import javassist.CtBehavior;
 
@@ -24,9 +27,14 @@ public class DungeonMapPatch {
     public static void Insert(DungeonMap _instance) {
 
         if(doBossHover) {
+            // Consume even when a manual transition made this queued input stale.
+            doBossHover = false;
+            if (AbstractDungeon.screen != AbstractDungeon.CurrentScreen.MAP
+                    || AbstractDungeon.getCurrRoom() == null
+                    || AbstractDungeon.getCurrRoom().phase != AbstractRoom.RoomPhase.COMPLETE
+                    || !ChoiceScreenUtils.bossNodeAvailable()) return;
             _instance.bossHb.hovered = true;
             InputHelper.justClickedLeft = true;
-            doBossHover = false;
         }
     }
 

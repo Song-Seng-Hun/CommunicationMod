@@ -6,10 +6,14 @@ $game = Join-Path $DownfallPath 'desktop-1.0-modded.jar'
 $evil = Join-Path $DownfallPath 'package\EvilWithin-modded.jar'
 $java = Join-Path $DownfallPath 'jre\bin\java.exe'
 New-Item -ItemType Directory -Force -Path $tests | Out-Null
-& javac '-J-Xmx256m' --release 8 -cp $game -d $tests "$root\src\main\java\communicationmod\compat\MapChoicePolicy.java" "$PSScriptRoot\MapChoicePolicyTest.java" "$PSScriptRoot\MapBindingTest.java"
+& javac '-J-Xmx256m' --release 8 -cp $game -d $tests "$root\src\main\java\communicationmod\compat\MapChoicePolicy.java" "$PSScriptRoot\MapChoicePolicyTest.java" "$PSScriptRoot\MapBindingTest.java" "$PSScriptRoot\MapInputTest.java" "$PSScriptRoot\MapCoordinatesTest.java"
 if ($LASTEXITCODE -ne 0) { throw 'Map tests compilation failed' }
 & $java '-Xmx128m' -cp $tests MapChoicePolicyTest
 if ($LASTEXITCODE -ne 0) { throw 'Map policy regression failed' }
 # Build the current project before invoking this standalone script; stale JARs fail the binding check.
 & $java '-Xmx256m' -cp "$tests;$game" MapBindingTest "$root\target\CommunicationMod.jar" $evil
 if ($LASTEXITCODE -ne 0) { throw 'Map binding regression failed (build the current sources first)' }
+& $java '-Xmx128m' -cp "$tests;$game" MapInputTest "$root\target\CommunicationMod.jar"
+if ($LASTEXITCODE -ne 0) { throw 'Map input regression failed' }
+& $java '-Xmx128m' -cp "$tests;$game" MapCoordinatesTest "$root\target\CommunicationMod.jar" $evil
+if ($LASTEXITCODE -ne 0) { throw 'Map coordinate adapter regression failed' }

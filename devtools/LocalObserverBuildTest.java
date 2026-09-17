@@ -22,6 +22,16 @@ public final class LocalObserverBuildTest {
         int observer=find(calls,"LocalObserver.tick");
         expect(observer>find(calls,"CombatObservation.completeFrame") && observer>find(calls,"DialogueObservation.completeFrame"),"capture after completed frames");
         expect(observer>=0,"live observer tick installed");
+        expect(find(calls,"CardCostObservation.completeFrame")>=0 && find(calls,"CardCostObservation.completeFrame")<observer,"cost frame completes before observations");
+        expect(count(calls(pool.get("com.megacrit.cardcrawl.helpers.Hitbox").getDeclaredMethod("update",new CtClass[0])),"afterHitbox")==1,"native input hook installed once");
+        expect(find(calls(pool.get("com.megacrit.cardcrawl.screens.select.GridCardSelectScreen").getDeclaredMethod("updateCardPositionsAndHoverLogic")),"GridSelectionUi.hover")>=0,"scoped grid selection hook installed");
+        List<String> energyCalls=calls(pool.get("com.megacrit.cardcrawl.cards.AbstractCard").getDeclaredMethod("renderEnergy"));
+        expect(find(energyCalls,"CardCostObservation.rendered")>find(energyCalls,"RenderEnergySwitch.Insert"),"final post-modifier rendered cost observed");
+        expect(find(calls(pool.get("com.megacrit.cardcrawl.cards.AbstractCard").getDeclaredMethod("getCost")),"CardCostObservation.rendered")==-1,"raw getCost does not claim final text");
+        List<String> upgradeCalls=calls(pool.get("com.megacrit.cardcrawl.cards.AbstractCard").getDeclaredMethod("update"));
+        expect(count(upgradeCalls,"NativeUiInput.afterHitbox")==2,"both upgrade choices have scoped hover override");
+        for(int i=0;i<upgradeCalls.size();i++)if(upgradeCalls.get(i).contains("$SelectMultiUpgrade.Postfix") || upgradeCalls.get(i).contains("$SelectBranchedUpgrade.Postfix"))
+            expect(i>0 && upgradeCalls.get(i-1).endsWith("NativeUiInput.afterHitbox"),"hover override immediately before native upgrade choice");
         expect(find(calls(pool.get("com.megacrit.cardcrawl.screens.CardRewardScreen").getDeclaredMethod("cardSelectUpdate")),"RewardUi.hover")>=0,"scoped card reward hover hook installed");
         expect(find(calls(pool.get("com.megacrit.cardcrawl.screens.select.HandCardSelectScreen").getDeclaredMethod("updateSelectedCards")),"HandSelectionUi.hover")>=0,"scoped hand deselection hook installed");
         CtClass bridge=pool.get("communicationmod.observation.LocalObserver");
@@ -35,6 +45,17 @@ public final class LocalObserverBuildTest {
         expect(find(calls,"GameStateListener.signalTurnStart")>=0,"real turn start bound");
         calls=calls(pool.get("com.megacrit.cardcrawl.map.MapRoomNode").getDeclaredMethod("update"));
         expect(find(calls,"MapRoomNodeHoverPatch.Insert")>=0 && find(calls,"java.lang.Boolean.getBoolean")>=0,"map selection hook explicitly gated to local play control");
+        calls=calls(pool.get("com.megacrit.cardcrawl.map.DungeonMap").getDeclaredMethod("update"));
+        expect(count(calls,"DungeonMapPatch.Insert")==1 && find(calls,"java.lang.Boolean.getBoolean")>=0,
+            "boss selection hook installed once and explicitly gated to local play control");
+        expect(find(calls,"DungeonMapPatch.Insert")>find(calls,"Hitbox.update") &&
+            find(calls,"DungeonMapPatch.Insert")<find(calls,"DungeonMap.updateReticle"),
+            "boss input injected after hitbox refresh and before native click handling");
+        CtClass mapScreen=pool.get("com.megacrit.cardcrawl.screens.DungeonMapScreen");
+        expect(find(calls(mapScreen.getDeclaredMethod("update")),"MapDrawing.beforeUpdate")==0,"drawing owns input before native map update");
+        expect(find(calls(mapScreen.getDeclaredMethod("render")),"MapDrawing.render")>=0,"map drawing rendered in copied runtime");
+        for(String method:new String[]{"updateMouse","updateYOffset","updateControllerInput"})
+            expect(find(calls(mapScreen.getDeclaredMethod(method)),"MapDrawing.blocksNavigation")>=0,"editor input guard "+method);
         CtClass steam=pool.get("com.megacrit.cardcrawl.integrations.steam.SteamIntegration");
         for(CtBehavior method:steam.getDeclaredBehaviors())expect(!calls(method).toString().contains("steamworks"),"test integration cannot submit Steam records");
         for(String name:new String[]{"Metrics","BotDataUploader"}) {

@@ -1,6 +1,7 @@
 import {obj,list,type Obj} from './view.js';
 export interface Act {session_id:string;state_id:number;action_id:string;request_id:string;arguments:Obj;}
 interface Pending {request:Act;receipt?:Obj;resolve:(value:Obj)=>void;timer:ReturnType<typeof setTimeout>;receiptSequence?:number;}
+interface WaitOptions {changed?:(state:Obj)=>boolean;signal?:AbortSignal;}
 export class GameSession {
  private latest:Obj={ready:false,actions:[]};private receivedAt=0;private online=false;private sequence=0;
  private pending?:Pending;private remotePending?:string;private used=new Set<string>();private receipts=new Map<string,Obj>();
@@ -45,15 +46,40 @@ export class GameSession {
     resolve(this.answer(p,p.receipt?'applied_waiting':'unknown'));
     // Keep the single-flight lock until an authoritative receipt and next state arrive.
    },timeout)};this.pending=p;
-   try{this.send({type:'act',...request});}catch{this.online=false;clearTimeout(p.timer);resolve(this.answer(p,'unknown'));}
+   for(const wake of [...this.waiters])wake();
+   try{this.send({type:'act',...request});}catch{this.online=false;clearTimeout(p.timer);resolve(this.answer(p,'unknown'));for(const wake of [...this.waiters])wake();}
   });
  }
  private answer(p:Pending,outcome:string):Obj{return {request_id:p.request.request_id,outcome,receipt:p.receipt ?? null,state:this.current(),retry_allowed:false};}
  private finish(p:Pending,outcome:string):void{clearTimeout(p.timer);this.pending=undefined;p.resolve(this.answer(p,outcome));}
  request(id:string):Obj{return {request_id:id,receipt:this.receipts.get(id) ?? null,pending:this.pending?.request.request_id===id || this.remotePending===id,retry_allowed:false};}
- async wait(timeout:number):Promise<Obj> {
-  if(this.current().ready===true || timeout===0)return this.current();
-  await new Promise<void>(resolve=>{const done=()=>{clearTimeout(timer);this.waiters.delete(wake);resolve();};const wake=()=>{if(this.current().ready===true || !this.online)done();};const timer=setTimeout(done,timeout);this.waiters.add(wake);});return this.current();
+ async wait(timeout:number,options:WaitOptions={}):Promise<Obj> {
+  const {signal}=options,changed=options.changed ?? ((state:Obj)=>state.ready===true);
+  signal?.throwIfAborted();
+  if(timeout===0 || changed(this.current()))return this.current();
+  await new Promise<void>((resolve,reject)=>{
+   let settled=false,freshness:ReturnType<typeof setTimeout>|undefined;
+   const done=(error?:unknown)=>{
+    if(settled)return;settled=true;clearTimeout(deadline);clearTimeout(freshness);
+    this.waiters.delete(wake);signal?.removeEventListener('abort',abort);
+    if(error!==undefined)reject(error);else resolve();
+   };
+   const abort=()=>done(signal?.reason ?? new Error('Wait aborted'));
+   const wake=()=>{
+    if(settled)return;
+    try{
+     if(changed(this.current()) || !this.online){done();return;}
+     clearTimeout(freshness);
+     const remaining=5000-(Date.now()-this.receivedAt);
+     if(remaining<=0){done();return;}
+     freshness=setTimeout(wake,remaining);
+    }catch(error){done(error);}
+   };
+   // Absolute request deadline; heartbeat only rearms the freshness deadline.
+   const deadline=setTimeout(()=>done(),timeout);
+   this.waiters.add(wake);signal?.addEventListener('abort',abort,{once:true});
+   if(signal?.aborted)abort();else wake();
+  });return this.current();
  }
  close():void{this.online=false;if(this.pending){clearTimeout(this.pending.timer);this.pending.resolve(this.answer(this.pending,this.pending.receipt?'applied_waiting':'unknown'));}for(const wake of [...this.waiters])wake();}
 }

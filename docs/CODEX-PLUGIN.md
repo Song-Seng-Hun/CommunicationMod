@@ -45,7 +45,15 @@
 - 기존 온라인 제출 차단, 공개 정보 필터, 손패 완성 대기, 이벤트 읽기 계약을 유지합니다. 모든 계정 위험이나 전체 다운폴 호환을 보장한다는 뜻은 아닙니다.
 - `PATHEXT`가 생략되는 MCP 환경에서는 Windows 실행 확장자 기본값만 보충합니다. 전역 환경을 변경하지 않습니다.
 
-## 2026-09-08 검증 결과
+## 2026-09-12 compact 응답 업데이트
+
+사용자 요청으로 `downfall-agent@personal`을 `0.1.0+codex.20260912053309`로 로컬 업데이트했습니다. CLI에서 installed/enabled를 확인했습니다. 설치 전 48개 Node 테스트, 런처 안전 경계 검사, 플러그인/스킬 검증을 통과했습니다. 설치 스크립트가 이전 개인 소스와 설정을 `target/plugin-source-backup-74b1404b00e94624b6a18d368f474a86` 및 `target/plugin-settings-backup-e87ed4bbae544d30b76d5be700845c8c.json`에 백업했습니다.
+
+`node mcp-server/scripts/verify-compact-plugin.mjs '<설치 캐시 경로>'`로 설치 캐시의 시작 스크립트와 서버를 실제 MCP SDK로 검사했습니다. 서버 JS 7개와 package/lock 파일이 현재 빌드와 일치하며, 도구 6개 노출, compact TOON 무손실 복원, JSON 복귀, 오래된 상태 거부를 확인했습니다. 검사는 임시 가상 백엔드만 사용했으며 실제 게임 연결/실행/행동은 0회입니다. 기존 준비 런타임 `target/local-test-20260912-124552-af471f87`, 원본 설치와 세이브는 변경하지 않았습니다.
+
+큰 목록의 `sts_get_context`에 `response_format: compact`를 선택할 수 있습니다. 기존 기본값은 JSON입니다. 새 Codex 작업에서 Downfall Agent를 선택해야 갱신된 도구를 확실히 읽을 수 있습니다. 현재 대화의 자동 재로드나 실제 게임 플레이 검증까지 완료했다는 뜻은 아닙니다.
+
+## 2026-09-08 검증 결과 (이전 기록)
 
 ### 창 표시 회귀 수정
 

@@ -16,8 +16,13 @@ import java.util.*;
 public final class RewardUi {
     private final List<ProtocolSession.Action> offered=new ArrayList<>();
     private static AbstractCard selecting;
+    private String decision;
     public List<ProtocolSession.Action> actions(){return new ArrayList<>(offered);}
     public void capture(JsonObject view,JsonObject status) {
+        capture(view,status,null);
+    }
+    public void capture(JsonObject view,JsonObject status,String decision) {
+        this.decision=decision;
         offered.clear();enabled();
         if(AbstractDungeon.screen==AbstractDungeon.CurrentScreen.COMBAT_REWARD)rewards(view,status);
         else if(AbstractDungeon.screen==AbstractDungeon.CurrentScreen.CARD_REWARD)cards(view,status);
@@ -43,14 +48,16 @@ public final class RewardUi {
                 ChoiceScreenUtils.makeCombatRewardChoice(index);
             });
         }
-        // Boss/event transitions have additional semantics and remain unsupported.
+        // The installed handler owns elite, boss, event and unclaimed-reward transitions.
         ProceedButton button=AbstractDungeon.overlayMenu.proceedButton;
-        if(items.isEmpty() && AbstractDungeon.getCurrRoom().getClass()==com.megacrit.cardcrawl.rooms.MonsterRoom.class && visible(button)) {
+        if(proceedAvailable(button)) {
+            JsonObject navigation=new JsonObject();navigation.addProperty("unclaimed_rewards",items.size());
+            navigation.addProperty("may_leave_unclaimed_rewards",!items.isEmpty());view.add("reward_navigation",navigation);
             add("run.reward.proceed",(String)field(button,"label"),()->{
                 check(AbstractDungeon.CurrentScreen.COMBAT_REWARD,owner,AbstractDungeon.combatRewardScreen);
-                if(!AbstractDungeon.combatRewardScreen.rewards.isEmpty() || !visible(button))throw new IllegalArgumentException("Rewards changed");
+                if(!proceedAvailable(button))throw new IllegalArgumentException("Rewards changed");
                 com.megacrit.cardcrawl.helpers.Hitbox hb=(com.megacrit.cardcrawl.helpers.Hitbox)field(button,"hb");
-                hb.clicked=true;try{button.update();}finally{hb.clicked=false;}
+                NativeUiInput.click(hb,()->button.update());
             });
         }
         if(offered.isEmpty())status.addProperty("reason","unsupported_or_pending_reward");
@@ -64,37 +71,50 @@ public final class RewardUi {
     }
     private void cards(JsonObject view,JsonObject status) {
         CardRewardScreen owner=AbstractDungeon.cardRewardScreen;
-        if(Settings.isTouchScreen || owner.cardOnly || owner.rItem==null || owner.rewardGroup.size()>3) {
-            status.addProperty("reason","unsupported_card_reward_mode");return;
-        }
-        for(String mode:new String[]{"draft","discovery","chooseOne","codex","isVoting"})if((Boolean)field(owner,mode)) {
+        if(!cardMode(owner)) {
             status.addProperty("reason","unsupported_card_reward_mode");return;
         }
         for(AbstractCard card:owner.rewardGroup)if(Math.abs(card.current_x-card.target_x)>0.5f || Math.abs(card.current_y-card.target_y)>0.5f) {
             status.addProperty("reason","card_reward_animation");return;
         }
         view.addProperty("card_reward_header",GameStateConverter.removeTextFormatting((String)field(owner,"header")));
+        JsonObject controls=new JsonObject();controls.addProperty("candidate_count",owner.rewardGroup.size());
+        controls.addProperty("kind",cardKind(owner));controls.addProperty("acquires_into_deck",cardKind(owner).equals("reward") || cardKind(owner).equals("draft"));
+        view.add("card_selection_controls",controls);
         for(AbstractCard card:owner.rewardGroup)add("run.card_reward."+card.uuid,card.name,()->{
             check(AbstractDungeon.CurrentScreen.CARD_REWARD,owner,AbstractDungeon.cardRewardScreen);
-            if(!owner.rewardGroup.contains(card) || selecting!=null)throw new IllegalArgumentException("Card reward changed");
+            if(!cardMode(owner) || !owner.rewardGroup.contains(card) || selecting!=null)throw new IllegalArgumentException("Card reward changed");
             Map<AbstractCard,Boolean> hovered=new IdentityHashMap<>();for(AbstractCard c:owner.rewardGroup)hovered.put(c,c.hb.hovered);
-            selecting=card;card.hb.clicked=true;
-            try{java.lang.reflect.Method m=CardRewardScreen.class.getDeclaredMethod("cardSelectUpdate");m.setAccessible(true);m.invoke(owner);}
-            catch(ReflectiveOperationException failure){throw new IllegalStateException("Card selection handler failed",failure);}
+            selecting=card;
+            try{NativeUiInput.click(card.hb,()->NativeUiInput.invoke(owner,"cardSelectUpdate"));}
             finally{selecting=null;card.hb.clicked=false;for(Map.Entry<AbstractCard,Boolean> entry:hovered.entrySet())entry.getKey().hb.hovered=entry.getValue();}
         });
         SkipCardButton skip=(SkipCardButton)field(owner,"skipButton");
         if(!skip.screenDisabled && visible(skip))add("run.card_reward.skip",SkipCardButton.TEXT[0],()->{
             check(AbstractDungeon.CurrentScreen.CARD_REWARD,owner,AbstractDungeon.cardRewardScreen);
             if(skip.screenDisabled || !visible(skip))throw new IllegalArgumentException("Skip changed");
-            skip.hb.clicked=true;try{skip.update();}finally{skip.hb.clicked=false;}
+            NativeUiInput.click(skip.hb,()->skip.update());
+        });
+        SingingBowlButton bowl=(SingingBowlButton)field(owner,"bowlButton");
+        if(visible(bowl))add("run.card_reward.bowl",SingingBowlButton.TEXT[0],()->{
+            check(AbstractDungeon.CurrentScreen.CARD_REWARD,owner,AbstractDungeon.cardRewardScreen);
+            if(!visible(bowl))throw new IllegalArgumentException("Bowl changed");
+            NativeUiInput.click(bowl.hb,()->bowl.update());
         });
     }
     /** Called after the original hover update, only within synchronous card selection. */
     public static void hover(AbstractCard card){if(Boolean.getBoolean("communicationmod.play_control") && selecting!=null)card.hb.hovered=card==selecting;}
     private void add(String id,String label,Runnable effect) {
-        offered.add(new ProtocolSession.Action(id,label,new JsonObject(),a->{if(!a.entrySet().isEmpty())throw new IllegalArgumentException("No arguments expected");},a->{enabled();effect.run();}));
+        final String expected=decision;
+        offered.add(new ProtocolSession.Action(id,label,new JsonObject(),a->{if(!a.entrySet().isEmpty())throw new IllegalArgumentException("No arguments expected");},a->{
+            enabled();if(expected!=null)CombatObservation.claim(expected,"selection");
+            else if(CombatObservation.inCombat())throw new IllegalArgumentException("Combat selection token missing");
+            effect.run();
+        }));
     }
+    private static boolean cardMode(CardRewardScreen owner){return RunUiPolicy.cardReward(owner.getClass()==CardRewardScreen.class,Settings.isTouchScreen || Settings.isControllerMode,(Boolean)field(owner,"isVoting"),owner.rewardGroup.size());}
+    private static String cardKind(CardRewardScreen owner){for(String name:new String[]{"draft","discovery","chooseOne","codex"})if((Boolean)field(owner,name))return name;return "reward";}
+    private static boolean proceedAvailable(ProceedButton button){return RunUiPolicy.proceed(visible(button),((com.megacrit.cardcrawl.helpers.Hitbox)field(button,"hb")).clicked,(Float)field(AbstractDungeon.combatRewardScreen,"rewardAnimTimer")>0);}
     private static void check(AbstractDungeon.CurrentScreen screen,Object expected,Object actual){enabled();if(AbstractDungeon.screen!=screen || expected!=actual)throw new IllegalArgumentException("Reward screen changed");}
     private static boolean visible(Object button){return !(Boolean)field(button,"isHidden") && Math.abs((Float)field(button,"current_x")-(Float)field(button,"target_x"))<0.5f;}
     private static Object field(Object owner,String name){try{java.lang.reflect.Field f=owner.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(owner);}catch(ReflectiveOperationException e){throw new IllegalStateException("Unsupported reward UI field: "+name,e);}}

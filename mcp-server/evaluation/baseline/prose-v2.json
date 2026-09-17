@@ -1,0 +1,246 @@
+{
+  "tools": [
+    {
+      "name": "sts_game_status",
+      "title": "Downfall process and connection status",
+      "description": "Inspect test-game process/connection without launching or playing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "sts_start_game",
+      "title": "Start Downfall and connect",
+      "description": "Start/reuse the verified test game only on a user launch/play request. Never resumes a run or chooses actions. If starting, inspect status; do not relaunch.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wait_ms": {
+            "default": 15000,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15000
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "sts_get_state",
+      "title": "Current game decision",
+      "description": "Current decision + toc of state-scoped fragments. Read needed refs with sts_get_context before acting; details_required or incomplete means do not guess. Send known_view from the previous response for a short unchanged reply; omit it to recover the summary.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wait_ms": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15000
+          },
+          "view": {
+            "default": "decision",
+            "type": "string",
+            "enum": [
+              "decision",
+              "map_plan"
+            ]
+          },
+          "known_view": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "sts_act",
+      "title": "Act and await next game decision",
+      "description": "ONE offered action with current session/state IDs. Read needed details first; never auto-discard. Unknown/applied_waiting: inspect state/request, never replay. Returns receipt and next decision.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "state_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "action_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "arguments": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "wait_ms": {
+            "default": 8000,
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 15000
+          }
+        },
+        "required": [
+          "session_id",
+          "state_id",
+          "action_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "sts_get_context",
+      "title": "Additional public game context",
+      "description": "Read 1-8 toc refs using the SAME session/state IDs. Returns short fields, child toc, or exact text chunks. Follow next_offset (row/field index; UTF-16 offset for text). No full dump. Stale: refresh state and rediscover refs. Read relevant rules fragments.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "state_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "refs": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          "offset": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "limit": {
+            "default": 20,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          }
+        },
+        "required": [
+          "session_id",
+          "state_id",
+          "refs"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "sts_get_request",
+      "title": "Inspect action outcome without replay",
+      "description": "Inspect a recent action receipt by request_id without replay. Missing is unknown, not failure; never resend.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ],
+  "rules": {
+    "act": "Use only offered actions from a ready state. Read referenced details needed for the decision. One action per call; never replay unknown/applied_waiting outcomes. Refresh state after stale rejection.",
+    "upgrade": "Before acquisition or upgrade, read the offered card upgrade_preview and relevant keyword details. It is only the next standard upgrade, not random/event/relic outcomes. Read selected_after before separate branch/tree confirmation.",
+    "event": "Read and present the current event body, situation and choices before acknowledgement. Supply the observed reading_id and meaningful commentary; discuss result pages too. Do not silently acknowledge incomplete text.",
+    "map": "Map planning draws a route, never moves the character. Use offered map_id/revision and node IDs; stale revisions are rejected. Native edges only, not predicted travel powers.",
+    "reward": "Read reward_navigation before leaving: unclaimed rewards may be abandoned. Never auto-discard a potion to make space; discarding is a separate destructive choice.",
+    "cost": "Use native displayed_cost_text and cost_components (energy/reserves/X/Pyre). Incomplete or unrendered costs are unknown. Read target_playability and unplayable_reason before playing."
+  },
+  "next_step": "sts_get_state or sts_game_status; do not start a second game"
+}

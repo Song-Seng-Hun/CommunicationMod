@@ -1,0 +1,9 @@
+{
+  "description": "Unregistered Downfall context template. Exact repository root cwd and DOWNFALL_AGENT_CONTEXT=1 required; trust/activation is separate.",
+  "hooks": {
+    "SessionStart": [{
+      "matcher": "^(startup|resume|compact)$",
+      "hooks": [{"type":"command","command":"node mcp-server/hooks/session-start.mjs","timeout":3,"additionalContextLimit":128}]
+    }]
+  }
+}

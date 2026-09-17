@@ -17,10 +17,20 @@ public final class MapBindingTest {
             requireCall(choices, "getMapScreenNodeChoices", "communicationmod.compat.MapChoicePolicy", "choices");
             requireCall(choices, "getMapScreenNodeChoices", "communicationmod.compat.DownfallMapCoordinates", "isSupported");
             requireCall(choices, "makeMapChoice", "communicationmod.ChoiceScreenUtils", "bossNodeAvailable");
+            ClassFile run = read(mod, "communicationmod.observation.RunUi");
+            requireString(run, "run.map.boss");
+            requireCall(run, "capture", "communicationmod.observation.RunUi", "mapInputPending");
             requireSignature(read(downfall, "downfall.patches.ui.map.FlipMap$FirstRoom"), "isValidFirstNode");
             requireSignature(read(downfall, "downfall.patches.ui.map.FlipMap$BossStuff"), "compatibleGetARealY");
         }
         System.out.println("PASS: optional Downfall binding and shared boss-choice dispatch; installed helper signatures present (not gameplay)");
+    }
+
+    private static void requireString(ClassFile type, String value) {
+        ConstPool cp = type.getConstPool();
+        for (int i = 1; i < cp.getSize(); i++)
+            if (cp.getTag(i) == ConstPool.CONST_String && value.equals(cp.getStringInfo(i))) return;
+        throw new AssertionError("Missing MCP map action: " + value);
     }
 
     private static ClassFile read(JarFile jar, String type) throws Exception {

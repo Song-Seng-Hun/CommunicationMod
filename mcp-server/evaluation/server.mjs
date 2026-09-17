@@ -1,6 +1,11 @@
 // Evaluation-only frozen backend. Never connects to a real game; all mutations rejected.
 import net from 'node:net';import {spawn} from 'node:child_process';import {mkdtemp,mkdir,writeFile} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';import {randomBytes} from 'node:crypto';import {fileURLToPath} from 'node:url';
 import {fixture,receipt} from './fixture.mjs';
+// A separate read-only map snapshot lets map questions run in a relevant state.
+if(process.env.COMMUNICATIONMOD_EVAL_SCREEN==='MAP'){
+ fixture.observation.game_state.screen_type='MAP';fixture.state_id=43;
+ delete fixture.observation.game_state.combat_state;delete fixture.observation.combat_decision;
+}
 const root=await mkdtemp(path.join(os.tmpdir(),'communicationmod-eval-'));
 const runtime=path.join(root,'target','fixture'),records=path.join(runtime,'recordings','frozen');await mkdir(records,{recursive:true});
 const token=randomBytes(32).toString('base64url'),peers=new Set();

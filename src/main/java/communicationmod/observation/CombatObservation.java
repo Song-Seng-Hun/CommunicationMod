@@ -144,7 +144,7 @@ public final class CombatObservation {
         if (CardCrawlGame.isPopupOpen || AbstractDungeon.isFadingIn || AbstractDungeon.isFadingOut
             || globalFade != 0 || AbstractDungeon.fadeColor == null || AbstractDungeon.fadeColor.a != 0) reason = "transition_or_popup";
         String screen = AbstractDungeon.screen == null ? "unknown" : AbstractDungeon.screen.name();
-        boolean selection = AbstractDungeon.isScreenUp && ("GRID".equals(screen) || "HAND_SELECT".equals(screen));
+        boolean selection = AbstractDungeon.isScreenUp && ("GRID".equals(screen) || "HAND_SELECT".equals(screen) || "CARD_REWARD".equals(screen));
         String mode = selection ? "selection" : "play";
         if (!selection && (AbstractDungeon.isScreenUp || !"NONE".equals(screen))) reason = "unsupported_screen";
         if (player.isDraggingCard) reason = "manual_card_drag";
@@ -161,6 +161,9 @@ public final class CombatObservation {
                 cards(key, AbstractDungeon.gridSelectScreen.targetGroup, false);
                 cards(key, AbstractDungeon.gridSelectScreen.selectedCards, false);
                 token(key, AbstractDungeon.gridSelectScreen.confirmScreenUp);
+            } else if("CARD_REWARD".equals(screen)) {
+                if(!cards(key,AbstractDungeon.cardRewardScreen.rewardGroup,true))reason="selection_cards_moving";
+                token(key, System.identityHashCode(AbstractDungeon.cardRewardScreen));
             } else {
                 cards(key, player.hand, false);
                 cards(key, AbstractDungeon.handCardSelectScreen.selectedCards, false);
