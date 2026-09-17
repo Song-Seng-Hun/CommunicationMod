@@ -43,6 +43,27 @@ test('default combat summary is flat and decision-critical',()=>{
  assert.equal(c.data,undefined);assert.equal(c.id,undefined);assert.equal(c.uuid,undefined);assert.equal(c.upgrades,undefined);
 });
 
+test('combat summary keeps current buffs debuffs and monster traits inline without raw power ids',()=>{
+ const s=state();
+ s.observation.game_state.combat_state.player.powers=[
+  {id:'Weak',name:'약화',type:'DEBUFF',amount:2,description:'공격으로 주는 피해가 25% 감소합니다.',description_complete:true},
+  {id:'Artifact',name:'인공물',type:'BUFF',amount:1,description:'다음 디버프를 무효화합니다.',description_complete:true}
+ ];
+ s.observation.game_state.combat_state.monsters=[{
+  id:'Maw',name:'아귀',current_hp:300,max_hp:300,block:0,intent:'ATTACK_DEBUFF',move_adjusted_damage:25,move_hits:1,
+  powers:[
+   {id:'Malleable',name:'말랑함',type:'BUFF',amount:3,misc:3,description:'공격 피해를 받을 때 방어도를 얻고 수치가 증가합니다.',description_complete:true},
+   {id:'Strength',name:'힘',type:'BUFF',amount:4,description:'공격 피해가 4 증가합니다.',description_complete:true}
+  ]
+ }];
+ const v=decision(s);
+ assert.equal(v.player.powers[0].name,'약화');assert.equal(v.player.powers[0].type,'DEBUFF');assert.equal(v.player.powers[0].amount,2);
+ assert.match(v.player.powers[0].description,/피해/);assert.equal(v.player.powers[0].id,undefined);
+ const monster=v.combat.monsters[0];assert.equal(monster.powers[0].name,'말랑함');assert.equal(monster.powers[0].type,'BUFF');assert.equal(monster.powers[0].amount,3);
+ assert.match(monster.powers[0].description,/방어도/);assert.equal(monster.powers[0].id,undefined);assert.equal(monster.powers[0].misc,undefined);
+ const detail=readContext(s,['monsters/0/powers/0']).fragments[0];assert.equal(detail.data.id,'Malleable');assert.equal(detail.data.misc,3);
+});
+
 test('mechanics audit boilerplate stays out of default view while gameplay resources remain',()=>{
  const s=state();s.observation.game_state.combat_state.player.mechanics={scope:'pinned_native_public_character_panels',character_supported:true,panel_bindings_complete:true,information_complete:true,information_issues:[],information_issue_count:0,audited_panels_complete:true,character_specific_complete:true,temporary_hp:0,max_orb_slots:0,reserves:2,essence:0};
  const v=decision(s);assert.equal(v.mechanics,undefined);assert.equal(v.player.reserves,2);assert.equal(v.player.essence,0);assert.equal(v.player.scope,undefined);assert.equal(v.player.character_supported,undefined);assert.ok(v.toc.some(x=>x.ref==='mechanics'));
