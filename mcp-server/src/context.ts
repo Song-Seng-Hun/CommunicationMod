@@ -73,7 +73,11 @@ function scope(state:Obj):Scope {
  return {screen,combat,roots,unsupported:Object.keys(g).some(k=>!nativeKeys.has(k)) || Object.keys(o).some(k=>!knownObservationKeys.has(k))};
 }
 function entry(ref:string,value:unknown,title?:string):Obj {
- const v=obj(value);return {ref,title:String(title ?? v.name ?? v.label ?? v.title ?? v.id ?? ref.split('/').at(-1)).slice(0,64),count:size(value)};
+ const v=obj(value),out:Obj={ref,title:String(title ?? v.name ?? v.label ?? v.title ?? v.id ?? ref.split('/').at(-1)).slice(0,64),count:size(value)};
+ // Hand TOC is a decision surface, not just navigation. Keep the current turn cost
+ // visible so Snecko/random cost changes do not require one detail read per card.
+ if(ref.startsWith('hand/') && (typeof v.cost==='number' || typeof v.cost==='string'))out.cost=v.cost;
+ return out;
 }
 function resolve(roots:Obj,ref:string):unknown {
  let value:unknown=roots;
