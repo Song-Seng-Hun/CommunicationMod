@@ -22,22 +22,24 @@ This plugin controls a prepared local test copy, not the original Steam executab
 
 ## Optional situation examples
 
-`guidance` is an optional current ref, not permission or a game fact. Read it only when the current situation is unclear. `normal`, `incomplete`, and `exception` examples are conditional examples, not assertions about the current game. Follow bindings to actual observations. Do not send `$bind` objects or copy illustrative IDs. Do not retrieve examples already understood or turn their call sequences into automatic execution.
+`guidance` may appear in the current toc. It is not permission or a game fact. Read it only when the current situation is unclear. `normal`, `incomplete`, and `exception` examples are conditional examples, not assertions about the current game. Follow bindings to actual observations. Do not send `$bind` objects or copy illustrative IDs. Do not retrieve examples already understood or turn their call sequences into automatic execution.
 
 ## Efficient play
 
-`sts_get_state` pins the exact state shown to this MCP client. `sts_get_context` and `sts_act` automatically use that pin; do not invent or carry session/state IDs. A stale pin is rejected and requires a fresh `sts_get_state`.
+`sts_get_state` pins the exact state shown to this MCP client. Session/state identity and delta hashes stay inside the server. `sts_get_context` and `sts_act` automatically use the pin. A stale pin is rejected and requires a fresh `sts_get_state`.
 
-Use `sts_act` for one offered action. Its returned next state replaces a redundant `sts_get_state` when sufficient. Read full localized card/keyword descriptions and current resources only when needed. Fetch deck/map/piles/history only when relevant. `event_reading.body_ref` points to the current event body; follow `next_offset` only when it is present.
+Use `sts_act` for one offered action. Send only its `action_id` and required gameplay `arguments`. The server creates request IDs and action timeouts internally. Its returned next state replaces a redundant `sts_get_state` when sufficient. Read full localized card/keyword descriptions and current resources only when needed. Fetch deck/map/piles/history only when relevant. `event_reading.body_ref` points to the current event body; follow `next_offset` only when it is present.
 
 | Situation | Next call rule |
 | --- | --- |
 | Needed facts already present in the pinned state | Reuse them. No duplicate lookup. |
-| State changed or stale pin rejected | Refresh with `sts_get_state`, then reconfirm dynamic cost, resources, targets, playability and action availability. |
+| Same state check | `sts_get_state({})` may return only `unchanged:true`. |
+| Wait for change | `sts_get_state({wait_ms:15000})`; the server compares with the last shown view. After two consecutive unchanged waits, stop and report. |
+| Full summary needed again | `sts_get_state({refresh:true})`. |
+| State changed or stale pin rejected | Refresh state, then reconfirm dynamic cost, resources, targets, playability and action availability. |
 | Action has no `parameters_ref` | Call it with empty/default `arguments`; this does not mean gameplay evidence is sufficient. |
 | `parameters_ref` present | Read that ref for arguments; follow child refs only if needed. |
 | Several needed refs | Batch 1–8 refs in `sts_get_context`. Different `offset` values require separate calls. Multiple card refs may return summaries; read one card ref alone for full detail. |
-| Waiting for change | `sts_get_state({known_view:previous_view_id,wait_ms:15000})`. After two consecutive unchanged waits, stop and report; no automatic heartbeat. |
 | Selected card | Use its explicit ref. A single-card read can return full descriptions, keywords and upgrade details. |
 | Format | Default JSON for ordinary reads. Use `response_format:"compact"` only for large list/directory pages when it materially reduces tokens. |
 
@@ -47,7 +49,7 @@ Never play from an unready or incomplete hand. Preserve hidden draw order unless
 
 Present event body, situation and choices before `acknowledge_event_reading`, with its observed `reading_id` and meaningful commentary; discuss result pages too. Do not acknowledge silently or fabricate missing text.
 
-`unknown` / `applied_waiting` does not mean failure: use the returned `request_id` with `sts_get_request`; never replay an uncertain action. Normal successful actions do not need request IDs. A new game session may require reconnecting the MCP server after resolving an old pending outcome; never restart the game to obtain different results.
+`unknown` / `applied_waiting` does not mean failure: use the returned `request_id` with `sts_get_request`; never replay an uncertain action. Normal successful actions do not expose request IDs. A new game session may require reconnecting the MCP server after resolving an old pending outcome; never restart the game to obtain different results.
 
 ## User's current verification run
 
