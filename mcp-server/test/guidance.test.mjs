@@ -10,13 +10,16 @@ test('decision advertises guidance only as one toc entry',()=>{
  const dir=readContext(s,['guidance']).fragments[0];assert.ok(dir.toc.length>0);for(const item of dir.toc)assert.ok(!/map|event|lifecycle/.test(item.ref),item.ref);
 });
 
-test('guidance directory pages and capsules remain exact on demand without transport boilerplate',()=>{
+test('guidance directory pages and capsules remain exact on demand without transport or pinned-constant boilerplate',()=>{
  const s=state();let offset=0,refs=[];do{const p=readContext(s,['guidance'],offset,1).fragments[0];refs.push(...(p.toc??[]).map(x=>x.ref));offset=p.next_offset??null;}while(offset!==null);assert.equal(new Set(refs).size,refs.length);
  for(const ref of refs){const cases=readContext(s,[ref]).fragments[0];assert.equal(cases.toc.length,3);for(const row of cases.toc){
   const capsule=readContext(s,[row.ref]).fragments[0];assert.equal(capsule.ref,row.ref);assert.ok(capsule.data);for(const key of ['format','page_complete','next_offset','revision'])assert.equal(capsule[key]??capsule.data[key],undefined,key);
   for(const field of ['when','not_when','requires','bindings','calls','expect','stop'])assert.ok(Object.hasOwn(capsule.data,field),field);
-  assert.ok(!JSON.stringify(capsule).includes('session_id'));assert.ok(!JSON.stringify(capsule).includes('state_id'));
-  for(const call of capsule.data.calls)if(call.tool==='sts_act'){assert.equal(call.arguments.request_id,undefined);assert.equal(call.arguments.wait_ms,undefined);}
+  const text=JSON.stringify(capsule);for(const hidden of ['session_id','state_id','decision_id','reading_id'])assert.ok(!text.includes(hidden),`${row.ref}: ${hidden}`);
+  for(const call of capsule.data.calls)if(call.tool==='sts_act'){
+   assert.equal(call.arguments.request_id,undefined);assert.equal(call.arguments.wait_ms,undefined);
+   for(const hidden of ['decision_id','reading_id','map_id','revision'])assert.equal(call.arguments.arguments?.[hidden],undefined,`${row.ref}: ${hidden}`);
+  }
   assert.throws(()=>readContext(s,[row.ref+'/calls']),/not available/);assert.throws(()=>readContext(s,[row.ref],1),/offset/i);
  }}
 });
