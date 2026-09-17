@@ -24,10 +24,12 @@ public final class MenuControlSession {
     public boolean connected(){return connected;}
 
     public String receive(String line) {
-        // Manual UI changes must invalidate even between publication and dispatch.
+        // Manual UI or offered-action changes must invalidate even between publication and dispatch.
         String before=null;
         if(connected) {
-            before=decisionKey(observe.get());
+            JsonObject current=observe.get();
+            List<ProtocolSession.Action> offered=actions.get();
+            before=decisionKey(current,offered);
             if(awaitingChangeFrom!=null) {
                 if(!before.equals(awaitingChangeFrom))reset();
             } else if(!before.equals(lastView))reset();
@@ -43,7 +45,7 @@ public final class MenuControlSession {
         } else if(type.equals("result")) {
             // A successful dispatch is not proof that the next screen has finished rendering.
             // Do not re-arm the exact same decision while its click/transition is still being
-            // consumed; wait until the observed decision key actually changes.
+            // consumed; wait until the visible decision OR offered action set actually changes.
             awaitingChangeFrom="applied".equals(reply.has("status")?reply.get("status").getAsString():"")?before:null;
             lastView=null;published=null;stableFrames=0;
         }
@@ -52,7 +54,9 @@ public final class MenuControlSession {
 
     public String update(JsonObject runtime) {
         if(!connected)return null;
-        JsonObject view=observe.get();String key=decisionKey(view);
+        JsonObject view=observe.get();
+        List<ProtocolSession.Action> offered=actions.get();
+        String key=decisionKey(view,offered);
         if(awaitingChangeFrom!=null) {
             if(key.equals(awaitingChangeFrom)) {
                 if(!key.equals(lastView)){protocol.invalidate();lastView=key;}
@@ -71,17 +75,21 @@ public final class MenuControlSession {
         String next=key+"/"+ready;
         if(next.equals(published))return null;
         published=next;
-        return protocol.publish(runtime,view,ready?actions.get():Collections.emptyList(),ready,
+        return protocol.publish(runtime,view,ready?offered:Collections.emptyList(),ready,
             stable?"supported":"unsupported_or_transition");
     }
     private void reset(){protocol.invalidate();lastView=null;published=null;stableFrames=0;awaitingChangeFrom=null;}
-    private String decisionKey(JsonObject view) {
-        if(!playControl)return view.toString();
-        JsonObject key=new JsonParser().parse(view.toString()).getAsJsonObject();
-        if(key.has("game_state")) {
-            JsonObject game=key.getAsJsonObject("game_state");
-            if(game.has("narrative"))game.getAsJsonObject("narrative").remove("render_frame");
+    private String decisionKey(JsonObject view,List<ProtocolSession.Action> offered) {
+        String viewKey;
+        if(!playControl)viewKey=view.toString();
+        else {
+            JsonObject key=new JsonParser().parse(view.toString()).getAsJsonObject();
+            if(key.has("game_state")) {
+                JsonObject game=key.getAsJsonObject("game_state");
+                if(game.has("narrative"))game.getAsJsonObject("narrative").remove("render_frame");
+            }
+            viewKey=key.toString();
         }
-        return key.toString();
+        return viewKey+"\nACTIONS="+ProtocolSession.actionKey(offered);
     }
 }
