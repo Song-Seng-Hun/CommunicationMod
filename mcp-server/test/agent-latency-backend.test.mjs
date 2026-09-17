@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile} from 'node:fs/promises';
 import os from 'node:os';import path from 'node:path';import {fileURLToPath} from 'node:url';
-import {Client} from '@modelcontextprotocol/sdk/client/index.js';import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
+import {Client} from '@modelcontextprotocol/sdk/client/index.js';import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';import {decode} from '@toon-format/toon';
 import {scenario,judge} from '../evaluation/agent-latency/scenarios.mjs';
 const server=fileURLToPath(new URL('../evaluation/agent-latency/server.mjs',import.meta.url)),dist=fileURLToPath(new URL('../dist',import.meta.url));
-async function connect(id){const root=await mkdtemp(path.join(os.tmpdir(),'latency-test-')),log=path.join(root,'proxy.jsonl'),client=new Client({name:'fixture-test',version:'1'});await client.connect(new StdioClientTransport({command:process.execPath,args:[server,String(id),dist,log],stderr:'pipe'}));const call=async(name,args={})=>{const r=await client.callTool({name,arguments:args});return JSON.parse(r.content[0].text);};return {client,call,log};}
+const restore=text=>text.startsWith('TOON:')?decode(text.slice(text.indexOf('\n')+1),{strict:true}):JSON.parse(text);
+async function connect(id){const root=await mkdtemp(path.join(os.tmpdir(),'latency-test-')),log=path.join(root,'proxy.jsonl'),client=new Client({name:'fixture-test',version:'1'});await client.connect(new StdioClientTransport({command:process.execPath,args:[server,String(id),dist,log],stderr:'pipe'}));const call=async(name,args={})=>{const r=await client.callTool({name,arguments:args});return restore(r.content[0].text);};return {client,call,log};}
 
 test('isolated evaluation runs pinned action/state guards, never game lifecycle',async()=>{
  const {client,call,log}=await connect(1);try{assert.equal((await client.listTools()).tools.length,6);await call('sts_get_state');const result=await call('sts_act',{action_id:'run.proceed'});assert.equal(result.outcome,undefined);assert.equal(result.state.screen,'VICTORY');const duplicate=await client.callTool({name:'sts_act',arguments:{action_id:'run.proceed'}});assert.equal(duplicate.isError,true);}finally{await client.close();}
