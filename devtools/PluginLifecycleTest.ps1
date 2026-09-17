@@ -13,6 +13,10 @@ $style = @($elements | Where-Object {$_ -is [Management.Automation.Language.Comm
 if ($style.Count -ne 1) { throw 'Game launch must explicitly request a visible window' }
 $styleIndex = [array]::IndexOf($elements, $style[0])
 if ($elements[$styleIndex + 1].Extent.Text -ne 'Normal') { throw 'Game window must use WindowStyle Normal, not Hidden' }
+$text = Get-Content -LiteralPath $manager -Raw
+if ($text -notmatch 'Focus-GameWindow\s+\$started') { throw 'Interactive launch must request a foreground window after Start-Process' }
+if ($text -notmatch 'SetForegroundWindow' -or $text -notmatch 'ShowWindowAsync') { throw 'Foreground helper must restore and foreground the actual game window' }
+if ($text -notmatch 'catch\s*\{\s*\}') { throw 'Foreground activation must remain best-effort and never fail the game launch' }
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('comm-plugin-test-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path "$fixture\target\copy\launcher" -Force | Out-Null
 [IO.File]::WriteAllText("$fixture\target\copy\launcher\LocalObserverLaunch.class", 'fixture')
@@ -31,4 +35,4 @@ Reject 'Launcher changed'
 Ready "$fixture\target\copy" $hash
 Reject 'manifest'
 # Tests only create disposable synthetic files; no real game is started or modified.
-'PASS: outside-runtime, hash mismatch and missing manifest fail before process launch'
+'PASS: visible/foreground launch contract plus outside-runtime, hash mismatch and missing manifest guards'
