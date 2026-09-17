@@ -14,6 +14,7 @@ const controlKeys=['tutorial','selection_controls','reward_controls','card_rewar
 const knownObservationKeys=new Set(['in_game','game_state','combat_decision','menu',...controlKeys]);
 const mapPlanKeys=['map_id','revision','route_author','current_node','next_planned_node','status','editing'];
 const mapViewKeys=['ready','screen','connection'];
+const mechanicsZeroNoise=new Set(['temporary_hp','max_orb_slots']);
 const rules:Record<string,string>={
  act:'Use only offered actions from the current state. Read needed referenced details. One action per call; never replay unknown/applied_waiting. Refresh state after stale rejection.',
  cost:'The scalar cost is the current card.costForTurn energy cost and must be considered for ordinary cards, including Snecko-randomized costs. Use displayed_cost_text and cost_components to qualify X/alternate-resource/special costs. Read target_playability and unplayable_reason before playing.',
@@ -25,6 +26,20 @@ const rules:Record<string,string>={
 interface Scope {screen:string;combat:boolean;roots:Obj;unsupported:boolean;}
 const handVisible=(c:Obj,o:Obj)=> (c.hand_complete===true || obj(o.combat_decision).hand_complete===true)
  && c.hand_complete!==false && obj(o.combat_decision).hand_complete!==false && obj(o.combat_decision).mode!=='selection';
+function mechanicsMeaningful(value:unknown):boolean {
+ const v=obj(value);
+ for(const [key,item] of Object.entries(v)){
+  if(['scope','collection','combat_collection'].includes(key))continue;
+  if(key==='character_supported'){if(item===false)return true;continue;}
+  if(key==='information_issues'){if(Array.isArray(item)&&item.length)return true;continue;}
+  if(key==='information_issue_count'){if(typeof item==='number'&&item>0)return true;continue;}
+  if(key.endsWith('_complete')){if(item===false)return true;continue;}
+  if(key.endsWith('_unavailable_reason')){if(item!=null)return true;continue;}
+  if(mechanicsZeroNoise.has(key)&&item===0)continue;
+  if(present(item))return true;
+ }
+ return false;
+}
 function scope(state:Obj):Scope {
  const o=obj(state.observation),g=obj(o.game_state),c=obj(g.combat_state);
  const screen=String(obj(o.menu).screen ?? g.screen_type ?? 'unavailable');
@@ -38,7 +53,8 @@ function scope(state:Obj):Scope {
   add('player',{...pick(g,['class','act','floor','ascension_level','current_hp','max_hp','gold','keys','relics','potions']),...(combat?obj(c.player):{})});
   add('deck',g.deck);add('screen',g.screen_state);
   const mechanics=combat?obj(c.player).mechanics ?? g.mechanics:g.mechanics;
-  add('mechanics',mechanics);add('collection',obj(mechanics).collection);
+  if(mechanicsMeaningful(mechanics))add('mechanics',mechanics);
+  add('collection',obj(mechanics).collection);
   if(combat){
    const combatMeta:Obj=pick(c,['turn','cards_discarded_this_turn','times_damaged']);if(!handVisible(c,o))combatMeta.hand_complete=false;add('combat',combatMeta);
    add('card_in_play',c.card_in_play);add('combat_collection',obj(mechanics).combat_collection);if(handVisible(c,o))add('hand',c.hand);add('monsters',c.monsters);
@@ -62,6 +78,29 @@ const scalar=(v:unknown,max=160)=>v===null||typeof v==='boolean'||typeof v==='nu
 function inlineSummary(value:unknown,keys?:string[]):Obj {
  const v=obj(value),source=keys?pick(v,keys):v,out:Obj={};for(const [key,item] of Object.entries(source))if(!provenance.has(key)&&scalar(item,200))out[key]=item;return out;
 }
+function mechanicsDecisionSummary(value:unknown):Obj {
+ const v=obj(value),out:Obj={};let incomplete=false;
+ for(const [key,item] of Object.entries(v)){
+  if(['scope','collection','combat_collection'].includes(key))continue;
+  if(key==='character_supported'){if(item===false)incomplete=true;continue;}
+  if(key==='information_issues'){if(Array.isArray(item)&&item.length)incomplete=true;continue;}
+  if(key==='information_issue_count'){if(typeof item==='number'&&item>0)incomplete=true;continue;}
+  if(key.endsWith('_complete')){if(item===false)incomplete=true;continue;}
+  if(key.endsWith('_unavailable_reason')){if(item!=null)incomplete=true;continue;}
+  if(mechanicsZeroNoise.has(key)&&item===0)continue;
+  if(scalar(item,120))out[key]=item;
+ }
+ if(incomplete)out.mechanics_incomplete=true;
+ return out;
+}
+const actionAlias=(index:number)=>'a'+index;
+function publicAction(value:unknown,index:number):Obj {
+ const action=obj(value),out:Obj={id:actionAlias(index)};
+ if(typeof action.label==='string'){out.label=action.label.slice(0,160);if(action.label.length>160)out.label_truncated=true;}
+ const parameters=action.parameters,objectParameters=parameters!==null&&typeof parameters==='object'&&!Array.isArray(parameters);
+ if(objectParameters&&Object.keys(parameters as Obj).length)out.parameters_ref=child('actions/'+index,'parameters');
+ return out;
+}
 function refSummary(value:unknown,ref:string,keys?:string[]):Obj {return {ref,...inlineSummary(value,keys)};}
 function entry(ref:string,value:unknown,title?:string):Obj {
  const v=obj(value),out:Obj={ref},leaf=ref.split('/').at(-1)??ref,label=String(title??v.name??v.label??v.title??v.id??leaf).slice(0,64);
@@ -71,6 +110,15 @@ function entry(ref:string,value:unknown,title?:string):Obj {
 function resolve(roots:Obj,ref:string):unknown {
  let value:unknown=roots;for(const encoded of ref.split('/')){let key:string;try{key=decodeURIComponent(encoded);}catch{throw new Error('Reference not available in current state.');}
   if(!key||['__proto__','constructor','prototype'].includes(key)||value===null||typeof value!=='object'||!Object.hasOwn(value,key)||(Array.isArray(value)&&!/^(0|[1-9]\d*)$/.test(key)))throw new Error('Reference not available in current state.');value=(value as Obj)[key];}return value;
+}
+function publicResolve(roots:Obj,ref:string):unknown {
+ if(ref==='actions')return list(roots.actions).map(publicAction);
+ const match=/^actions\/(0|[1-9]\d*)(?:\/(.*))?$/.exec(ref);
+ if(!match)return resolve(roots,ref);
+ const index=Number(match[1]),actions=list(roots.actions);if(index>=actions.length)throw new Error('Reference not available in current state.');
+ const rest=match[2];if(!rest)return publicAction(actions[index],index);
+ if(rest==='parameters'||rest.startsWith('parameters/'))return resolve(roots,ref);
+ throw new Error('Reference not available in current state.');
 }
 const cardRef=(ref:string)=>/^(?:(?:hand|deck|screen\/cards|collection\/cards|combat_collection\/cards)\/\d+|card_in_play)$/.test(ref);
 function cardSummary(ref:string,value:unknown,budget:number,forceDetails=true):Obj {
@@ -107,7 +155,7 @@ function fragment(ref:string,value:unknown,offset:number,limit:number,budget=240
 export function readContext(state:Obj,refs:string[],offset=0,limit=20):Obj {
  if(!Array.isArray(refs)||refs.length<1||refs.length>8||refs.some(r=>typeof r!=='string'||r.length<1||r.length>512)||!Number.isSafeInteger(offset)||offset<0||!Number.isInteger(limit)||limit<1||limit>30)throw new Error('Invalid fragment request.');
  const current=scope(state),{roots}=current,unique=[...new Set(refs)],perFragment=Math.max(360,Math.floor(3600/unique.length)),needed=unique.some(ref=>ref==='guidance'||ref.startsWith('guidance/')),guidance=needed?selectGuidance(state,current):undefined;if(guidance)roots.guidance=guidance.directory;
- return {fragments:unique.map(ref=>{if(ref==='guidance'||ref.startsWith('guidance/')){const capsule=guidanceFragment(guidance,ref,offset);if(capsule)return capsule;}return fragment(ref,resolve(roots,ref),offset,limit,perFragment);})};
+ return {fragments:unique.map(ref=>{if(ref==='guidance'||ref.startsWith('guidance/')){const capsule=guidanceFragment(guidance,ref,offset);if(capsule)return capsule;}return fragment(ref,publicResolve(roots,ref),offset,limit,perFragment);})};
 }
 function combatEvidence(card:Obj,budget:number):Obj|undefined {
  if(budget<=2)return;const fields=['cost_components','cost_components_scope','cost_components_unavailable_reason','target_playability','available_energy','available_reserves','displayed_cost_kind','x_resource_budget','x_resource_budget_complete','x_resource_budget_scope'],out:Obj={};let found=false;
@@ -118,7 +166,6 @@ function ensureToc(out:Obj,ref:string,value:unknown){const toc=list(out.toc) as 
 function trimDecision(out:Obj,roots:Obj,actions:unknown[]):Obj {
  const combat=obj(out.combat),hand=list(combat.hand) as Obj[];
  if(bytes(out)>4400)for(const card of hand)if(card.description!==undefined){delete card.description;delete card.description_truncated;card.details_required=true;}
- if(bytes(out)>4400&&out.mechanics!==undefined)delete out.mechanics;
  if(bytes(out)>4400&&list(combat.monsters).length>4){combat.monsters=list(combat.monsters).slice(0,4);combat.monsters_more='monsters';}
  if(bytes(out)>4400&&Array.isArray(out.offers)&&out.offers.length>6){out.offers=out.offers.slice(0,6);out.offers_more='screen/cards';}
  const reading=obj(out.event_reading);if(bytes(out)>4400&&Array.isArray(reading.options)&&reading.options.length>6){reading.options=reading.options.slice(0,6);reading.options_more='screen/event_reading/options';}
@@ -129,8 +176,12 @@ function trimDecision(out:Obj,roots:Obj,actions:unknown[]):Obj {
 /** Compact default decision; detail roots remain available through toc/context. */
 export function decision(state:Obj):Obj {
  const current=scope(state),{screen,combat,roots,unsupported}=current,o=obj(state.observation),c=obj(obj(o.game_state).combat_state),out:Obj=decisionHeader(state,screen);if(unsupported)out.unsupported_information=true;
- if(roots.player){const keys=combat?['current_hp','max_hp','gold','energy','block','stance']:['class','act','floor','current_hp','max_hp','gold'];out.player=inlineSummary(roots.player,keys);}
- const actions=list(roots.actions);out.actions=actions.slice(0,12).map((a,i)=>{const action=obj(a),parameters=action.parameters,summary:Obj=pick(action,['id']);if(typeof action.label==='string'){summary.label=action.label.slice(0,160);if(action.label.length>160)summary.label_truncated=true;}const objectParameters=parameters!==null&&typeof parameters==='object'&&!Array.isArray(parameters);if(objectParameters&&Object.keys(parameters).length)summary.parameters_ref=child('actions/'+i,'parameters');return summary;});if(actions.length>12)out.actions_more='actions';
+ if(roots.player){
+  const keys=combat?['current_hp','max_hp','gold','energy','block']:['class','act','floor','current_hp','max_hp','gold'],player=inlineSummary(roots.player,keys),stance=obj(obj(roots.player).stance),stanceName=stance.name??stance.id;
+  if(typeof stanceName==='string'&&stanceName)player.stance=stanceName;
+  Object.assign(player,mechanicsDecisionSummary(roots.mechanics));if(Object.keys(player).length)out.player=player;
+ }
+ const actions=list(roots.actions);out.actions=actions.slice(0,12).map(publicAction);if(actions.length>12)out.actions_more='actions';
  if(combat){
   const complete=handVisible(c,o),hand=complete?list(roots.hand):[],monsters=list(roots.monsters),shownHand=hand.slice(0,10);
   const groupedHand=hand.length<=10?groupEquivalentCards(shownHand):shownHand.map((value,index)=>({value,index,copies:1}));
@@ -139,12 +190,12 @@ export function decision(state:Obj):Obj {
   const combatOut:Obj={hand:groupedHand.map((group,i)=>{const summary=flatCardSummary('hand/'+group.index,group.value,perCard,false);if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);if(group.copies>1)summary.copies=group.copies;return summary;}),monsters:monsters.slice(0,8).map((v,i)=>refSummary(v,'monsters/'+i,['name','current_hp','max_hp','block','intent','move_adjusted_damage','move_hits','is_gone','is_dead','half_dead']))};
   if(!complete)combatOut.hand_complete=false;out.combat=combatOut;Object.assign(combatOut,inlineSummary(roots.combat));if(hand.length>10)combatOut.hand_more='hand';if(monsters.length>8)combatOut.monsters_more='monsters';
  }
- if(roots.mechanics)out.mechanics=inlineSummary(roots.mechanics);if(roots.screen)out.screen_state=inlineSummary(roots.screen,['body_text','event_id','event_name','for_upgrade']);
+ if(roots.screen){const screenState=inlineSummary(roots.screen,['body_text','event_id','event_name','for_upgrade']);if(Object.keys(screenState).length)out.screen_state=screenState;}
  if(screen==='EVENT'&&present(obj(roots.screen).event_reading)){const reading=obj(obj(roots.screen).event_reading);out.event_reading={...inlineSummary(reading,['reading_id','body_complete','options_complete','status']),body_ref:'screen/event_reading/body_text',options:list(reading.options).slice(0,12).map((value,i)=>refSummary(value,'screen/event_reading/options/'+i,['text','disabled','choice_index']))};}
  for(const key of ['rest_controls','reward_controls'])if(roots[key])out[key]=list(roots[key]).slice(0,12).map((value,i)=>refSummary(value,child(key,String(i))));
  if(['SHOP_SCREEN','CARD_REWARD','GRID','BOSS_REWARD'].includes(screen)&&Array.isArray(obj(roots.screen).cards)){const offerKeys=screen==='SHOP_SCREEN'?['name','type','price','available','affordable','unavailable_reason']:['name','type','description','displayed_cost_text','displayed_cost_complete'];out.offers=list(obj(roots.screen).cards).slice(0,12).map((value,i)=>refSummary(value,'screen/cards/'+i,offerKeys));}
- for(const key of ['reward_navigation','selection_controls','card_selection_controls'])if(roots[key])out[key]=inlineSummary(roots[key]);if(roots.map_plan)out.map_plan=inlineSummary(roots.map_plan,mapPlanKeys);
- const menu=obj(roots.menu);if(roots.menu&&(state.ready!==true||menu.reason!==undefined))out.menu=inlineSummary(roots.menu,['reason','game_screen']);
+ for(const key of ['reward_navigation','selection_controls','card_selection_controls'])if(roots[key]){const summary=inlineSummary(roots[key]);if(Object.keys(summary).length)out[key]=summary;}if(roots.map_plan)out.map_plan=inlineSummary(roots.map_plan,mapPlanKeys);
+ const menu=obj(roots.menu);if(roots.menu&&(state.ready!==true||menu.reason!==undefined)){const summary=inlineSummary(roots.menu,['reason','game_screen']);if(Object.keys(summary).length)out.menu=summary;}
  const skip=new Set(['combat','menu']);if(actions.length<=12)skip.add('actions');out.toc=Object.entries(roots).filter(([ref])=>!skip.has(ref)).map(([ref,value])=>entry(ref,value,ref));
  const guidance=selectGuidance(state,current);if(guidance)list(out.toc).push({ref:'guidance'});return trimDecision(out,roots,actions);
 }
