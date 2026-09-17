@@ -830,6 +830,9 @@ public class GameStateConverter {
             HashMap<String, Object> json_power = new HashMap<>();
             json_power.put("id", power.ID);
             json_power.put("name", power.name);
+            if (power.type != null) {
+                json_power.put("type", power.type.name());
+            }
             json_power.put("amount", power.amount);
             json_power.putAll(PublicDescription.format(power.description, key -> null));
             Object damage = getFieldIfExists(power, "damage");
