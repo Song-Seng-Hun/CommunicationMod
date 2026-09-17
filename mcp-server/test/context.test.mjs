@@ -72,8 +72,8 @@ test('combat metadata and current card have reachable short references',async()=
  assert.equal(readContext(s,['combat']).fragments[0].data.turn,4);assert.equal(readContext(s,['card_in_play']).fragments[0].data.id,'a');
 });
 test('current shop prices and card refs avoid traversing an entire screen',async()=>{
- const {decision}=await api(),s=state('SHOP_SCREEN');s.observation.shop_controls=[{id:'buy',price:75,available:true}];s.observation.game_state.screen_state={cards:[{name:'카드',description:'카드 효과',upgrade_preview:{after:{description:'강화'}}}]};
- const v=decision(s);assert.equal(v.shop_controls[0].price,75);assert.equal(v.offers[0].ref,'screen/cards/0');assert.equal(v.offers[0].name,'카드');
+ const {decision}=await api(),s=state('SHOP_SCREEN');s.actions=[{id:'run.shop.card.u',label:'카드',parameters:{}}];s.observation.shop_controls=[{id:'buy',price:75,available:true}];s.observation.game_state.screen_state={cards:[{name:'카드',price:75,description:'카드 효과',upgrade_preview:{after:{description:'강화'}}}]};
+ const v=decision(s);assert.equal(v.shop_controls,undefined);assert.ok(v.toc.some(x=>x.ref==='shop_controls'));assert.equal(v.offers[0].ref,'screen/cards/0');assert.equal(v.offers[0].name,'카드');assert.equal(v.offers[0].price,75);
 });
 test('a selected small card is one atomic fragment, not a chain of tiny reads',async()=>{
  const {readContext}=await api(),s=state();s.observation.game_state.deck[0].tooltips=[{title:'취약',description:'추가 피해'}];
