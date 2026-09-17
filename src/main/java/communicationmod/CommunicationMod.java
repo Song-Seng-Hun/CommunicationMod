@@ -13,6 +13,7 @@ import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.helpers.FontHelper;
 import com.megacrit.cardcrawl.helpers.ImageMaster;
 import communicationmod.patches.InputActionPatch;
+import communicationmod.safety.AutomationSafety;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -84,6 +85,7 @@ public class CommunicationMod implements PostInitializeSubscriber, PostUpdateSub
     }
 
     public void receivePreUpdate() {
+        if (!AutomationSafety.isAutomationAllowed()) return;
         if(listener != null && !listener.isAlive() && writeThread != null && writeThread.isAlive()) {
             logger.info("Child process has died...");
             writeThread.interrupt();
@@ -120,6 +122,7 @@ public class CommunicationMod implements PostInitializeSubscriber, PostUpdateSub
     }
 
     public static void queueCommand(String command) {
+        AutomationSafety.requireAutomationAllowed();
         readQueue.add(command);
     }
 
@@ -301,6 +304,10 @@ public class CommunicationMod implements PostInitializeSubscriber, PostUpdateSub
     }
 
     private boolean startExternalProcess() {
+        if (!AutomationSafety.isAutomationAllowed()) {
+            logger.warn(AutomationSafety.REASON);
+            return false;
+        }
         if(readThread != null) {
             readThread.interrupt();
         }

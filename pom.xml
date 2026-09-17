@@ -11,11 +11,16 @@
     <description>Used to help external programs communicate with Slay the Spire</description>
 
     <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <SlayTheSpire.version>11-30-2020</SlayTheSpire.version>
         <ModTheSpire.version>3.18.1</ModTheSpire.version>
         <BaseMod.version>5.27.0</BaseMod.version>
+        <sts.jar>${basedir}/../lib/desktop-1.0.jar</sts.jar>
+        <mts.jar>${basedir}/../lib/ModTheSpire.jar</mts.jar>
+        <basemod.jar>${basedir}/../lib/BaseMod.jar</basemod.jar>
+        <deploy.dir>${basedir}/target/dev-deploy</deploy.dir>
     </properties>
 
     <dependencies>
@@ -24,21 +29,21 @@
             <artifactId>slaythespire</artifactId>
             <version>${SlayTheSpire.version}</version>
             <scope>system</scope>
-            <systemPath>${basedir}/../lib/desktop-1.0.jar</systemPath>
+            <systemPath>${sts.jar}</systemPath>
         </dependency>
         <dependency>
             <groupId>com.evacipated.cardcrawl</groupId>
             <artifactId>ModTheSpire</artifactId>
             <version>${ModTheSpire.version}</version>
             <scope>system</scope>
-            <systemPath>${basedir}/../lib/ModTheSpire.jar</systemPath>
+            <systemPath>${mts.jar}</systemPath>
         </dependency>
         <dependency>
             <groupId>com.evacipated.cardcrawl</groupId>
             <artifactId>BaseMod</artifactId>
             <version>${BaseMod.version}</version>
             <scope>system</scope>
-            <systemPath>${basedir}/../lib/BaseMod.jar</systemPath>
+            <systemPath>${basemod.jar}</systemPath>
         </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>
@@ -53,7 +58,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>2.4.2</version>
+                <version>3.5.3</version>
                 <executions>
                     <execution>
                         <id>CommunicationMod</id>
@@ -88,7 +93,7 @@
                         <phase>package</phase>
                         <configuration>
                             <target>
-                                <copy file="target/CommunicationMod.jar" tofile="../_ModTheSpire/mods/CommunicationMod.jar"/>
+                                <copy file="target/CommunicationMod.jar" tofile="${deploy.dir}/CommunicationMod.jar"/>
                             </target>
                         </configuration>
                         <goals>

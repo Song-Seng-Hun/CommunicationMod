@@ -1,0 +1,19 @@
+{
+  "name": "downfall-agent",
+  "version": "0.1.0",
+  "description": "Launch the local Downfall test game and control it through focused MCP observations.",
+  "author": {
+    "name": "Song-Seng-Hun"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Downfall Agent",
+    "shortDescription": "다운폴 실행부터 에이전트 플레이까지",
+    "longDescription": "검증된 로컬 다운폴 테스트 게임을 실행하고 MCP로 연결합니다. 현재 화면의 카드 설명과 가능한 행동을 전달하며 원본 Steam 설치를 변경하지 않습니다. Windows, Node 22+, PowerShell 7 및 준비된 CommunicationMod 작업 폴더가 필요합니다.",
+    "developerName": "Song-Seng-Hun",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": ["다운폴을 실행하고 MCP로 연결해줘", "현재 게임 상태와 가능한 행동을 보여줘", "현재 허밋 런을 이어서 플레이해줘"]
+  },
+  "mcpServers": "./.mcp.json"
+}

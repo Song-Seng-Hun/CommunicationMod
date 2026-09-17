@@ -19,6 +19,7 @@ import com.megacrit.cardcrawl.potions.AbstractPotion;
 import com.megacrit.cardcrawl.potions.PotionSlot;
 import com.megacrit.cardcrawl.powers.AbstractPower;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
+import com.megacrit.cardcrawl.relics.FrozenEye;
 import com.megacrit.cardcrawl.relics.RunicDome;
 import com.megacrit.cardcrawl.rewards.RewardItem;
 import com.megacrit.cardcrawl.rooms.*;
@@ -31,7 +32,9 @@ import com.megacrit.cardcrawl.shop.StorePotion;
 import com.megacrit.cardcrawl.shop.StoreRelic;
 import com.megacrit.cardcrawl.ui.buttons.LargeDialogOptionButton;
 import com.megacrit.cardcrawl.ui.panels.EnergyPanel;
-import communicationmod.patches.UpdateBodyTextPatch;
+import communicationmod.observation.DialogueObservation;
+import communicationmod.observation.CardObservation;
+import communicationmod.observation.PublicDescription;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -50,6 +53,7 @@ public class GameStateConverter {
      */
     public static String getCommunicationState() {
         HashMap<String, Object> response = new HashMap<>();
+        response.put("combat_decision", communicationmod.observation.CombatObservation.observation());
         response.put("available_commands", CommandExecutor.getAvailableCommands());
         response.put("ready_for_command", GameStateListener.isWaitingForCommand());
         boolean isInGame = CommandExecutor.isInDungeon();
@@ -57,6 +61,7 @@ public class GameStateConverter {
         if(isInGame) {
             response.put("game_state", getGameState());
         }
+        communicationmod.observation.CombatObservation.finishObservation(response);
         Gson gson = new Gson();
         return gson.toJson(response);
     }
@@ -143,6 +148,7 @@ public class GameStateConverter {
             state.put("combat_state", getCombatState());
         }
         state.put("screen_state", getScreenState());
+        state.put("narrative", DialogueObservation.snapshot());
 
         HashMap<String, Boolean> keys = new HashMap<>();
         keys.put("ruby", Settings.hasRubyKey);
@@ -176,7 +182,7 @@ public class GameStateConverter {
      * @param text The text for which the formatting should be removed
      * @return The input text, with the formatting characters removed
      */
-    private static String removeTextFormatting(String text) {
+    public static String removeTextFormatting(String text) {
         text = text.replaceAll("~|@(\\S+)~|@", "$1");
         return text.replaceAll("#.|NL", "");
     }
@@ -211,7 +217,8 @@ public class GameStateConverter {
                 }
                 options.add(json_button);
             }
-            state.put("body_text", removeTextFormatting(UpdateBodyTextPatch.bodyText));
+            state.put("body_text", DialogueObservation.eventBody());
+            state.put("body_text_source", "rendered_dialog_words");
         } else {
             for (String misc_option : ChoiceScreenUtils.getEventScreenChoices()) {
                 HashMap<String, Object> json_button = new HashMap<>();
@@ -238,6 +245,7 @@ public class GameStateConverter {
             state.put("event_id", ReflectionHacks.getPrivateStatic(event.getClass(), "ID"));
         }
         state.put("options", options);
+        state.put("event_reading", DialogueObservation.eventReading());
         return state;
     }
 
@@ -497,7 +505,8 @@ public class GameStateConverter {
     /**
      * Gets the state of the current combat in game.
      * The combat state object contains:
-     * "draw_pile" (list): The list of cards in your draw pile
+     * "draw_pile" (list): Cards in your draw pile, in display order unless order is visible.
+     * "draw_pile_order_visible" (boolean): With Frozen Eye, draw_pile is bottom-to-top (last card drawn next).
      * "discard_pile" (list): The list of cards in your discard pile
      * "exhaust_pile" (list): The list of cards in your exhaust pile
      * "hand" (list): The list of cards in your hand
@@ -508,7 +517,6 @@ public class GameStateConverter {
      * "turn" (int): The current turn (or round) number of the combat.
      * "cards_discarded_this_turn" (int): The number of cards discarded this turn.
      * "times_damaged" (int): The number of times the player has been damaged this combat (for Blood for Blood).
-     * Note: The order of the draw pile is not currently randomized when sent to the client.
      * @return The combat state object
      */
     private static HashMap<String, Object> getCombatState() {
@@ -518,7 +526,8 @@ public class GameStateConverter {
             monsters.add(convertMonsterToJson(monster));
         }
         state.put("monsters", monsters);
-        ArrayList<Object> draw_pile = new ArrayList<>();
+        boolean drawPileOrderVisible = AbstractDungeon.player.hasRelic(FrozenEye.ID);
+        ArrayList<HashMap<String, Object>> draw_pile = new ArrayList<>();
         for(AbstractCard card : AbstractDungeon.player.drawPile.group) {
             draw_pile.add(convertCardToJson(card));
         }
@@ -531,14 +540,23 @@ public class GameStateConverter {
             exhaust_pile.add(convertCardToJson(card));
         }
         ArrayList<Object> hand = new ArrayList<>();
-        for(AbstractCard card : AbstractDungeon.player.hand.group) {
-            hand.add(convertCardToJson(card));
+        boolean handComplete = communicationmod.observation.CombatObservation.handComplete();
+        if (handComplete) {
+            int index = 0;
+            for(AbstractCard card : AbstractDungeon.player.hand.group) {
+                HashMap<String,Object> row = convertCardToJson(card);
+                communicationmod.observation.CombatObservation.addHandPosition(row, card, index++);
+                hand.add(row);
+            }
         }
+        state.put("hand_complete", handComplete);
+        state.put("hand_unavailable_reason", handComplete ? null : "not_a_stable_play_decision_use_selection_screen_if_present");
         ArrayList<Object> limbo = new ArrayList<>();
         for(AbstractCard card : AbstractDungeon.player.limbo.group) {
             limbo.add(convertCardToJson(card));
         }
-        state.put("draw_pile", draw_pile);
+        state.put("draw_pile", DrawPileVisibility.orderForPlayer(draw_pile, drawPileOrderVisible));
+        state.put("draw_pile_order_visible", drawPileOrderVisible);
         state.put("discard_pile", discard_pile);
         state.put("exhaust_pile", exhaust_pile);
         state.put("hand", hand);
@@ -636,7 +654,9 @@ public class GameStateConverter {
             jsonCard.put("misc", card.misc);
         }
         if(AbstractDungeon.getMonsters() != null) {
-            jsonCard.put("is_playable", card.canUse(AbstractDungeon.player, null));
+            boolean decisionReady = !communicationmod.observation.CombatObservation.inCombat()
+                || communicationmod.observation.CombatObservation.handComplete();
+            jsonCard.put("is_playable", decisionReady && card.canUse(AbstractDungeon.player, null));
         }
         jsonCard.put("cost", card.costForTurn);
         jsonCard.put("upgrades", card.timesUpgraded);
@@ -646,6 +666,7 @@ public class GameStateConverter {
         jsonCard.put("has_target", card.target== AbstractCard.CardTarget.SELF_AND_ENEMY || card.target == AbstractCard.CardTarget.ENEMY);
         jsonCard.put("exhausts", card.exhaust);
         jsonCard.put("ethereal", card.isEthereal);
+        CardObservation.addTo(jsonCard, card);
         return jsonCard;
     }
 
@@ -732,6 +753,13 @@ public class GameStateConverter {
         jsonPlayer.put("powers", convertCreaturePowersToJson(player));
         jsonPlayer.put("energy", EnergyPanel.totalCount);
         jsonPlayer.put("block", player.currentBlock);
+        if (player.stance != null) {
+            HashMap<String, Object> stance = new HashMap<>();
+            stance.put("id", player.stance.ID);
+            stance.put("name", player.stance.name);
+            stance.putAll(PublicDescription.format(player.stance.description, key -> null));
+            jsonPlayer.put("stance", stance);
+        }
         ArrayList<Object> orbs = new ArrayList<>();
         for(AbstractOrb orb : player.orbs) {
             orbs.add(convertOrbToJson(orb));
@@ -782,6 +810,7 @@ public class GameStateConverter {
             json_power.put("id", power.ID);
             json_power.put("name", power.name);
             json_power.put("amount", power.amount);
+            json_power.putAll(PublicDescription.format(power.description, key -> null));
             Object damage = getFieldIfExists(power, "damage");
             if (damage != null) {
                 json_power.put("damage", (int)damage);
@@ -840,6 +869,7 @@ public class GameStateConverter {
         jsonRelic.put("id", relic.relicId);
         jsonRelic.put("name", relic.name);
         jsonRelic.put("counter", relic.counter);
+        jsonRelic.putAll(PublicDescription.format(relic.description, key -> null));
         return jsonRelic;
     }
 
@@ -858,6 +888,7 @@ public class GameStateConverter {
         HashMap<String, Object> jsonPotion = new HashMap<>();
         jsonPotion.put("id", potion.ID);
         jsonPotion.put("name", potion.name);
+        jsonPotion.putAll(PublicDescription.format(potion.description, key -> null));
         boolean canUse = potion.canUse();
         boolean canDiscard = potion.canDiscard();
         if (potion instanceof PotionSlot) {

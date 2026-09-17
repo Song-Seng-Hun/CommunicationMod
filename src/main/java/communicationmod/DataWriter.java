@@ -44,15 +44,15 @@ public class DataWriter implements Runnable {
                 logger.info("Communications writing thread interrupted.");
                 Thread.currentThread().interrupt();
             } catch (IOException e) {
-                logger.error("Message could not be sent to child process: " + message);
-                e.printStackTrace();
+                logger.error("Transport output failed; writing stopped.", e);
+                return;
             }
         }
     }
 
     /**
      * Card-heavy decision screens can easily exceed tool output limits because the normal game state
-     * repeats the full deck/map as well as the cards currently being offered.  Keep the normal protocol
+     * repeats the full deck/map as well as the cards currently being offered. Keep the normal protocol
      * everywhere else, but make GRID and SHOP_SCREEN states action-oriented and small enough for tool
      * clients to receive inline.
      */
@@ -91,22 +91,18 @@ public class DataWriter implements Runnable {
 
             String compact = gson.toJson(root);
 
-            // Preserve strategic deck context when possible, but never let it hide the actionable choices.
             if (utf8Length(compact) > TARGET_MESSAGE_BYTES && gameState.has("deck")) {
                 gameState.remove("deck");
                 gameState.addProperty("context_truncated", true);
                 compact = gson.toJson(root);
             }
 
-            // choice_list duplicates the indexed choices on these screens. Drop it only when necessary.
             if (utf8Length(compact) > TARGET_MESSAGE_BYTES && gameState.has("choice_list")) {
                 gameState.remove("choice_list");
                 gameState.addProperty("context_truncated", true);
                 compact = gson.toJson(root);
             }
 
-            // Extremely large purge/upgrade decks still need to remain operable. In that rare case use
-            // a terse "index:name+upgrade" representation; the index is the exact argument for choose.
             if (utf8Length(compact) > TARGET_MESSAGE_BYTES && "GRID".equals(screenType)) {
                 makeGridChoicesTerse(screenState);
                 gameState.addProperty("context_truncated", true);
@@ -152,8 +148,6 @@ public class DataWriter implements Runnable {
             screenState.add("selected_cards", selected);
         }
 
-        // Purge/upgrade/transform grids already contain the relevant deck cards, so the master deck is
-        // redundant. Other grids (for example The Library) keep a compact deck for strategic context.
         if (deckIsSelectionTarget) {
             gameState.remove("deck");
         } else {
@@ -180,8 +174,6 @@ public class DataWriter implements Runnable {
         choiceIndex = appendAffordableShopItems(choices, screenState, "relics", "relic", gold, choiceIndex);
         appendAffordableShopItems(choices, screenState, "potions", "potion", gold, choiceIndex);
 
-        // These three arrays contain unaffordable inventory too and their positions are NOT choose indices.
-        // Expose one canonical list whose choice_index matches ChoiceScreenUtils.getAvailableShopItems().
         screenState.remove("cards");
         screenState.remove("relics");
         screenState.remove("potions");

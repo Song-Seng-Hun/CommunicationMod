@@ -27,6 +27,7 @@ public class GameStateListener {
      * and hasStateChanged() should indicate a state change when the state next becomes stable.
      */
     public static void registerStateChange() {
+        communicationmod.observation.CombatObservation.invalidate();
         externalChange = true;
         waitingForCommand = false;
     }
@@ -43,6 +44,7 @@ public class GameStateListener {
      * Used to indicate that an external command has been executed
      */
     public static void registerCommandExecution() {
+        communicationmod.observation.CombatObservation.invalidate();
         waitingForCommand = false;
     }
 
@@ -50,6 +52,7 @@ public class GameStateListener {
      * Prevents hasStateChanged() from indicating a state change until resumeStateUpdate() is called.
      */
     public static void blockStateUpdate() {
+        communicationmod.observation.CombatObservation.invalidate();
         blocked = true;
     }
 
@@ -57,6 +60,7 @@ public class GameStateListener {
      * Removes the block instantiated by blockStateChanged()
      */
     public static void resumeStateUpdate() {
+        communicationmod.observation.CombatObservation.invalidate();
         blocked = false;
     }
 
@@ -65,6 +69,7 @@ public class GameStateListener {
      * when it is not our turn in combat, as we cannot take action until then.
      */
     public static void signalTurnStart() {
+        communicationmod.observation.CombatObservation.invalidate();
         myTurn = true;
     }
 
@@ -72,6 +77,7 @@ public class GameStateListener {
      * Used by patches in the game to signal the end of your turn (or the end of combat).
      */
     public static void signalTurnEnd() {
+        communicationmod.observation.CombatObservation.invalidate();
         myTurn = false;
     }
 
@@ -79,6 +85,7 @@ public class GameStateListener {
      * Resets all state detection variables for the start of a new run.
      */
     public static void resetStateVariables() {
+        communicationmod.observation.CombatObservation.invalidate();
         previousScreen = null;
         previousScreenUp = false;
         previousPhase = null;
@@ -243,6 +250,9 @@ public class GameStateListener {
     }
 
     public static boolean isWaitingForCommand() {
+        if (communicationmod.observation.CombatObservation.inCombat()) return communicationmod.observation.CombatObservation.ready();
         return waitingForCommand;
     }
+    public static boolean isPlayerTurn() { return myTurn; }
+    public static boolean isStateUpdateBlocked() { return blocked; }
 }

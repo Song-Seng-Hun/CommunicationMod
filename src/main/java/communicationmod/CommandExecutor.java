@@ -21,6 +21,7 @@ import com.megacrit.cardcrawl.random.Random;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.*;
 import communicationmod.patches.InputActionPatch;
+import communicationmod.safety.AutomationSafety;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -31,6 +32,7 @@ public class CommandExecutor {
     private static final Logger logger = LogManager.getLogger(CommandExecutor.class.getName());
 
     public static boolean executeCommand(String command) throws InvalidCommandException {
+        AutomationSafety.requireAutomationAllowed();
         command = command.toLowerCase();
         String [] tokens = command.split("\\s+");
         if(tokens.length == 0) {
@@ -87,6 +89,15 @@ public class CommandExecutor {
 
     public static ArrayList<String> getAvailableCommands() {
         ArrayList<String> availableCommands = new ArrayList<>();
+        if (communicationmod.observation.CombatObservation.inCombat()) {
+            availableCommands.add("state"); availableCommands.add("wait");
+            return availableCommands;
+        }
+        if (communicationmod.observation.DialogueObservation.inEventContext()) {
+            if (isChooseCommandAvailable()) availableCommands.add("choose");
+            availableCommands.add("state"); availableCommands.add("wait");
+            return availableCommands;
+        }
         if (isPlayCommandAvailable()) {
             availableCommands.add("play");
         }
@@ -118,6 +129,8 @@ public class CommandExecutor {
     }
 
     public static boolean isCommandAvailable(String command) {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand(command)) return false;
+        if (!communicationmod.observation.DialogueObservation.allowsEventCommand(command)) return false;
         if(command.equals("confirm") || command.equalsIgnoreCase("proceed")) {
             return isConfirmCommandAvailable();
         } else if (command.equals("skip") || command.equals("cancel") || command.equals("return") || command.equals("leave")) {
@@ -132,6 +145,7 @@ public class CommandExecutor {
     }
 
     private static boolean isPlayCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("play")) return false;
         if(isInDungeon()) {
             if(AbstractDungeon.getCurrRoom().phase == AbstractRoom.RoomPhase.COMBAT && !AbstractDungeon.isScreenUp) {
                 // Play command is not available if none of the cards are playable.
@@ -147,10 +161,13 @@ public class CommandExecutor {
     }
 
     public static boolean isEndCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("end")) return false;
         return isInDungeon() && AbstractDungeon.getCurrRoom().phase == AbstractRoom.RoomPhase.COMBAT && !AbstractDungeon.isScreenUp;
     }
 
     public static boolean isChooseCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("choose")) return false;
+        if (!communicationmod.observation.DialogueObservation.allowsEventCommand("choose")) return false;
         if(isInDungeon()) {
             return !isPlayCommandAvailable() && !ChoiceScreenUtils.getCurrentChoiceList().isEmpty();
         } else {
@@ -159,6 +176,7 @@ public class CommandExecutor {
     }
 
     public static boolean isPotionCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("potion")) return false;
         if(isInDungeon()) {
             for(AbstractPotion potion : AbstractDungeon.player.potions) {
                 if(!(potion instanceof PotionSlot)) {
@@ -170,6 +188,8 @@ public class CommandExecutor {
     }
 
     public static boolean isConfirmCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("confirm")) return false;
+        if (!communicationmod.observation.DialogueObservation.allowsEventCommand("confirm")) return false;
         if(isInDungeon()) {
             return ChoiceScreenUtils.isConfirmButtonAvailable();
         } else {
@@ -178,6 +198,8 @@ public class CommandExecutor {
     }
 
     public static boolean isCancelCommandAvailable() {
+        if (!communicationmod.observation.CombatObservation.allowsLegacyCommand("cancel")) return false;
+        if (!communicationmod.observation.DialogueObservation.allowsEventCommand("cancel")) return false;
         if(isInDungeon()) {
             return ChoiceScreenUtils.isCancelButtonAvailable();
         } else {

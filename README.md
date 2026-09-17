@@ -1,6 +1,32 @@
 # CommunicationMod
 Slay the Spire mod that provides a protocol for allowing another process to control the game
 
+## Fork development status: local observation tests available
+
+Use `devtools/prepare-local-test.ps1`, then `Start-Downfall-Test.cmd` for a separate
+human-play Downfall observation copy. No VM is required. The passive v2 client records
+localized text, dialogue and full-hand readiness; it does not play cards or select
+events. The copied test profile disables audited Steam recording/metrics paths and
+uses separate local storage. It does not change Steam Play or installed game files.
+See [local test instructions](docs/LOCAL-OBSERVER-TEST.md).
+
+See [implementation and acceptance ledger](docs/DOWNFALL-IMPLEMENTATION.md) and
+[v2 protocol core](docs/PROTOCOL-V2.md). Live action dispatch and actual gameplay
+acceptance remain unfinished. Old development launchers and legacy agent commands
+remain blocked; setup/v1 instructions below are historical reference.
+
+Offline preparation now blocks the audited Steam and LibGDX upload surfaces in
+new, nonlaunchable local JAR copies. Run `devtools/verify-offline-bytecode.ps1`
+for headless checks; `-PrepareArtifacts` also builds and checks those copies.
+This does **not** establish process/native/save/cloud isolation or enable gameplay.
+See [storage and direct-upload audit](docs/OFFLINE-STORAGE-AUDIT.md).
+
+The fork also adds partial cached UI descriptions/dynamic values and stance data,
+plus optional Downfall map-coordinate helpers for first-room and boss choices.
+These have headless/binding checks, **not** actual gameplay acceptance. Character-break
+description encoding, effective displayed cost, custom render hooks, and the remaining
+Downfall mechanics are not marked fully supported. See the acceptance ledger for gaps.
+
 ## Requirements
 
 - Slay the Spire
@@ -18,6 +44,33 @@ command=python C\:\\Path\\To\\Script\\main.py
 ```
 
 ## What does this mod do?
+
+### Draw pile visibility (this fork)
+
+`game_state.combat_state.draw_pile` always includes the remaining cards, but no
+longer reveals their actual draw order without **Frozen Eye**. The accompanying
+`draw_pile_order_visible` boolean is checked on every state update:
+
+- `false`: the array uses deterministic display ordering (card ID, then canonical
+  serialized card fields). Array positions **do not mean draw positions**. This
+  is not intended to reproduce the UI's exact visual sorting.
+- `true`: the existing bottom-to-top array order is preserved; the **last** card
+  is the next card drawn. This matches the information available with Frozen Eye.
+
+Card fields and duplicate counts are preserved. Only the outgoing list is sorted;
+the live pile and game RNG are untouched. The rule is shared by base-game and
+Downfall characters, matching the installed Downfall draw-pile screen's relic
+check. Other mods' custom partial-reveal mechanics are not automatically inferred.
+Choice-screen indexes and the order of the hand/discard/exhaust piles are unchanged.
+This change addresses draw-pile order, not a full audit of all player-hidden data.
+The older full-state example below predates this additional boolean.
+
+Run `./devtools/verify-draw-pile-visibility.ps1` for the headless regression checks
+and build, or add `-UpdateDevelopmentRuntime` to refresh the local development
+mod JAR. Neither command overwrites the Steam installation. Restart the development
+game to load the new JAR; an already running process is not hot-patched.
+
+### Process protocol
 
 CommunicationMod launches a specified process and communicates with this process through stdin and stdout, with the following protocol:
 
