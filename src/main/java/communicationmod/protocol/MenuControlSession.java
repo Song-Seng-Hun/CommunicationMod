@@ -28,7 +28,9 @@ public final class MenuControlSession {
         String before=null;
         if(connected) {
             before=decisionKey(observe.get());
-            if(!before.equals(lastView))reset();
+            if(awaitingChangeFrom!=null) {
+                if(!before.equals(awaitingChangeFrom))reset();
+            } else if(!before.equals(lastView))reset();
         }
         String response=protocol.receive(line);
         JsonObject reply=new JsonParser().parse(response).getAsJsonObject();
