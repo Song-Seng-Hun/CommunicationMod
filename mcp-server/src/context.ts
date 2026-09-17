@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {obj,list,type Obj} from './view.js';
 import {selectGuidance,guidanceFragment} from './guidance.js';
+import {groupEquivalentCards} from './hand-dedupe.js';
 
 const pick=(o:Obj,keys:string[]):Obj=>Object.fromEntries(keys.filter(k=>k in o).map(k=>[k,o[k]]));
 const present=(v:unknown)=>v!=null && (Array.isArray(v)?v.length>0:typeof v==='object'?Object.keys(obj(v)).length>0:true);
@@ -131,9 +132,11 @@ export function decision(state:Obj):Obj {
  if(roots.player){const keys=combat?['current_hp','max_hp','gold','energy','block','stance']:['class','act','floor','current_hp','max_hp','gold'];out.player=inlineSummary(roots.player,keys);}
  const actions=list(roots.actions);out.actions=actions.slice(0,12).map((a,i)=>{const action=obj(a),parameters=action.parameters,summary:Obj=pick(action,['id']);if(typeof action.label==='string'){summary.label=action.label.slice(0,160);if(action.label.length>160)summary.label_truncated=true;}const objectParameters=parameters!==null&&typeof parameters==='object'&&!Array.isArray(parameters);if(objectParameters&&Object.keys(parameters).length)summary.parameters_ref=child('actions/'+i,'parameters');return summary;});if(actions.length>12)out.actions_more='actions';
  if(combat){
-  const complete=handVisible(c,o),hand=complete?list(roots.hand):[],monsters=list(roots.monsters),shownHand=hand.slice(0,10),perCard=Math.max(145,Math.floor(1800/Math.max(1,shownHand.length))),evidence=shownHand.map(v=>combatEvidence(obj(v),220));
-  const inlineEvidence=hand.length<=10&&shownHand.every((v,i)=>evidence[i]!==undefined||!['cost_components','target_playability'].some(k=>Object.hasOwn(obj(v),k)))&&evidence.reduce((n,v)=>n+(v?bytes(v):0),0)<=480;
-  const combatOut:Obj={hand:shownHand.map((v,i)=>{const summary=flatCardSummary('hand/'+i,v,perCard,false);if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);return summary;}),monsters:monsters.slice(0,8).map((v,i)=>refSummary(v,'monsters/'+i,['name','current_hp','max_hp','block','intent','move_adjusted_damage','move_hits','is_gone','is_dead','half_dead']))};
+  const complete=handVisible(c,o),hand=complete?list(roots.hand):[],monsters=list(roots.monsters),shownHand=hand.slice(0,10);
+  const groupedHand=hand.length<=10?groupEquivalentCards(shownHand):shownHand.map((value,index)=>({value,index,copies:1}));
+  const perCard=Math.max(145,Math.floor(1800/Math.max(1,groupedHand.length))),evidence=groupedHand.map(group=>combatEvidence(obj(group.value),220));
+  const inlineEvidence=hand.length<=10&&groupedHand.every((group,i)=>evidence[i]!==undefined||!['cost_components','target_playability'].some(k=>Object.hasOwn(obj(group.value),k)))&&evidence.reduce((n,v)=>n+(v?bytes(v):0),0)<=480;
+  const combatOut:Obj={hand:groupedHand.map((group,i)=>{const summary=flatCardSummary('hand/'+group.index,group.value,perCard,false);if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);if(group.copies>1)summary.copies=group.copies;return summary;}),monsters:monsters.slice(0,8).map((v,i)=>refSummary(v,'monsters/'+i,['name','current_hp','max_hp','block','intent','move_adjusted_damage','move_hits','is_gone','is_dead','half_dead']))};
   if(!complete)combatOut.hand_complete=false;out.combat=combatOut;Object.assign(combatOut,inlineSummary(roots.combat));if(hand.length>10)combatOut.hand_more='hand';if(monsters.length>8)combatOut.monsters_more='monsters';
  }
  if(roots.mechanics)out.mechanics=inlineSummary(roots.mechanics);if(roots.screen)out.screen_state=inlineSummary(roots.screen,['body_text','event_id','event_name','for_upgrade']);
