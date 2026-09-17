@@ -46,6 +46,36 @@ function Validate-Game($gameProfile) {
   if ($LASTEXITCODE -ne 0) { throw "Prepared runtime verification failed (exit $LASTEXITCODE): $check" }
  } finally { Pop-Location }
 }
+function Focus-GameWindow([Diagnostics.Process]$Process) {
+ # WindowStyle=Normal creates a visible window but Windows does not guarantee that
+ # a GUI spawned from a background MCP host becomes the foreground window. This is
+ # best-effort only: failure to focus must never turn a successful game launch into
+ # a lifecycle failure.
+ try {
+  if (-not ('CommunicationMod.GameWindow' -as [type])) {
+   Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace CommunicationMod {
+ public static class GameWindow {
+  [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+ }
+}
+'@
+  }
+  for ($i=0; $i -lt 40; $i++) {
+   Start-Sleep -Milliseconds 100
+   $Process.Refresh()
+   if ($Process.HasExited) { return }
+   if ($Process.MainWindowHandle -ne [IntPtr]::Zero) {
+    [CommunicationMod.GameWindow]::ShowWindowAsync($Process.MainWindowHandle, 9) | Out-Null
+    [CommunicationMod.GameWindow]::SetForegroundWindow($Process.MainWindowHandle) | Out-Null
+    return
+   }
+  }
+ } catch { }
+}
 
 $gameProfile = Get-Profile
 if ($Operation -eq 'Validate') { Validate-Game $gameProfile; @{phase='validated';runtime=$gameProfile.runtime} | ConvertTo-Json -Compress; exit }
@@ -70,6 +100,7 @@ try {
   $arguments=@('-Xmx768m','-Dfile.encoding=UTF-8','-cp',('"'+$gameProfile.cp+'"'),'LocalObserverLaunch','--mcp-control')
   # Unlike the MCP/PowerShell helper, this is the interactive game the user wants to see.
   $started = Start-Process -FilePath $gameProfile.java -ArgumentList $arguments -WorkingDirectory $gameProfile.runtime -WindowStyle Normal -PassThru -RedirectStandardOutput (Join-Path $gameProfile.runtime "plugin-$stamp.stdout.log") -RedirectStandardError (Join-Path $gameProfile.runtime "plugin-$stamp.stderr.log")
+  Focus-GameWindow $started
  } finally { $env:LOCALAPPDATA=$oldLocal; $env:APPDATA=$oldRoaming }
  @{phase='running';pid=$started.Id;runtime=$gameProfile.runtime;test_submissions='disabled_in_test_copy'} | ConvertTo-Json -Compress
 } finally { if($held){$mutex.ReleaseMutex()}; if($mutex){$mutex.Dispose()} }
