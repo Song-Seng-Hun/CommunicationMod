@@ -39,7 +39,8 @@ function scope(state:Obj):Scope {
   const mechanics=combat?obj(c.player).mechanics ?? g.mechanics:g.mechanics;
   add('mechanics',mechanics);add('collection',obj(mechanics).collection);
   if(combat){
-   add('combat',{...pick(c,['turn','cards_discarded_this_turn','times_damaged']),hand_complete:handVisible(c,o)});
+   const combatMeta:Obj=pick(c,['turn','cards_discarded_this_turn','times_damaged']);
+   if(!handVisible(c,o))combatMeta.hand_complete=false;add('combat',combatMeta);
    add('card_in_play',c.card_in_play);
    add('combat_collection',obj(mechanics).combat_collection);
    if(handVisible(c,o))add('hand',c.hand);
@@ -82,7 +83,6 @@ function entry(ref:string,value:unknown,title?:string):Obj {
  const label=String(title ?? v.name ?? v.label ?? v.title ?? v.id ?? leaf).slice(0,64);
  if(label!==ref&&label!==leaf)out.title=label;
  if(Array.isArray(value)||typeof value==='string')out.count=size(value);
- // Hand TOC is itself a decision surface: name + current turn cost are enough to compare cards.
  if(ref.startsWith('hand/')){
   if(typeof v.name==='string')out.title=v.name.slice(0,64);
   if(typeof v.cost==='number'||typeof v.cost==='string')out.cost=v.cost;
@@ -120,6 +120,9 @@ function cardSummary(ref:string,value:unknown,budget:number):Obj {
   if(bytes(out)>budget){delete data.description;delete data.description_truncated;}
  }
  return out;
+}
+function flatCardSummary(ref:string,value:unknown,budget:number):Obj {
+ const compact=cardSummary(ref,value,budget);return {ref,...obj(compact.data),details_required:true};
 }
 /** One shallow fragment; offset is a field/row index, or a UTF-16 text offset. */
 function fragment(ref:string,value:unknown,offset:number,limit:number,budget=2400):Obj {
@@ -251,7 +254,7 @@ export function decision(state:Obj):Obj {
  const {screen,combat,roots,unsupported}=scope(state),o=obj(state.observation),g=obj(o.game_state),c=obj(g.combat_state);
  const out:Obj=decisionHeader(state,screen);
  if(unsupported)out.unsupported_information=true;
- if(roots.player)out.player=brief(roots.player,'player',['class','act','floor','current_hp','max_hp','gold','energy','block']);
+ if(roots.player){const keys=combat?['current_hp','max_hp','gold','energy','block']:['class','act','floor','current_hp','max_hp','gold'];out.player=brief(roots.player,'player',keys);}
  const actions=list(roots.actions);
  out.actions=actions.slice(0,12).map((a,i)=>{
   const action=obj(a),parameters=action.parameters,ref='actions/'+i,summary:Obj=pick(action,['id','label']);
@@ -262,16 +265,14 @@ export function decision(state:Obj):Obj {
  });
  if(actions.length>12)out.actions_more='actions';
  if(combat){
-  const hand=c.hand_complete===false?[]:list(roots.hand),monsters=list(roots.monsters);
+  const complete=handVisible(c,o),hand=complete?list(roots.hand):[],monsters=list(roots.monsters);
   const shownHand=hand.slice(0,10),evidence=shownHand.map(v=>combatEvidence(obj(v),384));
   const inlineEvidence=hand.length<=10
    && shownHand.every((v,i)=>evidence[i]!==undefined || !['cost_components','target_playability'].some(k=>Object.hasOwn(obj(v),k)))
    && evidence.reduce((n,v)=>n+(v?JSON.stringify(v).length:0),0)<=768;
-  out.combat={hand_complete:c.hand_complete ?? obj(o.combat_decision).hand_complete ?? false,
-   hand:shownHand.map((v,i)=>{
-    const summary=cardSummary('hand/'+i,v,620);if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);return summary;
-   }),
+  const combatOut:Obj={hand:shownHand.map((v,i)=>{const summary=flatCardSummary('hand/'+i,v,620);if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);return summary;}),
    monsters:monsters.slice(0,8).map((v,i)=>brief(v,'monsters/'+i))};
+  if(!complete)combatOut.hand_complete=false;out.combat=combatOut;
   if(roots.combat)Object.assign(obj(out.combat),roots.combat);
   if(hand.length>10)obj(out.combat).hand_more='hand';if(monsters.length>8)obj(out.combat).monsters_more='monsters';
  }
@@ -291,7 +292,7 @@ export function decision(state:Obj):Obj {
  }
  for(const key of ['reward_navigation','selection_controls','card_selection_controls'])if(roots[key])out[key]=brief(roots[key],key);
  if(roots.map_plan)out.map_plan=brief(roots.map_plan,'map_plan',mapPlanKeys);
- if(roots.menu)out.menu=brief(roots.menu,'menu');
+ const menu=obj(roots.menu);if(roots.menu&&(state.ready!==true||menu.reason!==undefined))out.menu=brief(roots.menu,'menu',['reason','game_screen']);
  out.toc=Object.entries(roots).map(([ref,value])=>entry(ref,value,ref));
  const guidance=selectGuidance(state,{screen,roots,unsupported});
  if(guidance){out.guidance=guidance.summary;list(out.toc).push({ref:'guidance'});}
@@ -307,7 +308,6 @@ function mapDecision(state:Obj):Obj {
 }
 export function conditionalDecision(state:Obj,knownView?:string,mode:'decision'|'map_plan'='decision'):Obj {
  const view=mode==='map_plan'?mapDecision(state):decision(state);
- // Session/state identity remains part of the hash for stale/restart invalidation, but is not model-visible.
  const viewId=createHash('sha256').update(mode+'|'+String(state.session_id)+'|'+String(state.state_id)+'|'+JSON.stringify(view)).digest('hex').slice(0,24);
  if(knownView===viewId)return {view_id:viewId,unchanged:true};
  return {...view,view_id:viewId};
