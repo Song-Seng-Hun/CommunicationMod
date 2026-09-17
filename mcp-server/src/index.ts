@@ -2,7 +2,7 @@ import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js';
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
 import {randomUUID} from 'node:crypto';import {fileURLToPath} from 'node:url';import path from 'node:path';
 import {toolSchemas} from './tool-schemas.js';
-import {Connection} from './connection.js';import {obj,pick as _unused,type Obj} from './view.js';
+import {Connection} from './connection.js';import {obj,type Obj} from './view.js';
 import {conditionalDecision,readContext} from './context.js';
 import {formatContext,type ContextFormat} from './format.js';
 import {Lifecycle} from './lifecycle.js';
