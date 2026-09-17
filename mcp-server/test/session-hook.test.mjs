@@ -30,7 +30,7 @@ test('missing or stale module artifacts silence hook without reading user transc
  for(const name of await readdir(new URL('../dist',import.meta.url)))if(name.endsWith('.js')||name==='guidance-bundle.json')await copyFile(new URL('../dist/'+name,import.meta.url),path.join(dist,name));
  const input={hook_event_name:'SessionStart',source:'resume',cwd:root},env={DOWNFALL_AGENT_CONTEXT:'1'};
  assert.ok(await missing(input,env));
- for(const name of ['session.js','hand-dedupe.js']){
+ for(const name of ['session.js','action-projection.js','hand-dedupe.js']){
   const file=path.join(dist,name),original=await readFile(file,'utf8');await writeFile(file,original+'\n// drift\n');
   assert.equal(await missing(input,env),'',name);await writeFile(file,original);
  }
