@@ -18,9 +18,9 @@ export interface GroupedCard {value:unknown;index:number;copies:number;}
 export function groupEquivalentCards(cards:unknown[]):GroupedCard[] {
  const groups:GroupedCard[]=[],seen=new Map<string,GroupedCard>();
  for(let index=0;index<cards.length;index++){
-  const value=cards[index],key=JSON.stringify(canonical(value)),existing=seen.get(key);
+  const value=cards[index],key=JSON.stringify(canonical(value))??'undefined',existing=seen.get(key);
   if(existing){existing.copies++;continue;}
-  const group={value,index,copies:1};groups.push(group);seen.set(key,group);
+  const group:GroupedCard={value,index,copies:1};groups.push(group);seen.set(key,group);
  }
  return groups;
 }
