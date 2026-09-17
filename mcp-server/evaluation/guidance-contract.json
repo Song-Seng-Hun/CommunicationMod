@@ -1,5 +1,5 @@
 {
-  "revision": "2026-09-17-lean-pinned-v1",
-  "files": 101,
-  "basis": "2026-09-17 reviewed MCP economy refactor: public tools pin state server-side instead of exposing session/state IDs; JSON payloads are single-copy; normal transport/success metadata is omitted; hand TOC carries current cost; multi-card reads share an inline budget; guidance transport bindings are stripped before public validation/output. Stale-action, uncertain-receipt, native-fact, hidden-order, event-reading, map, and destructive-action safety semantics remain covered by dedicated tests. No live-game acceptance claim."
+  "revision": "2026-09-17-lean-pinned-v2",
+  "files": 102,
+  "basis": "2026-09-17 reviewed MCP economy refactor plus safe duplicate-hand collapsing: public tools keep transport identity server-side; JSON payloads are single-copy; normal transport/success metadata is omitted; hand TOC carries current cost; multi-card reads share an inline budget; default combat hand collapses only cards whose complete observed state differs solely by UUID/hand-index/render provenance, preserving positional facts such as Hermit Dead On; exact physical hand refs remain available through context. Guidance transport bindings remain stripped before public validation/output. No live-game acceptance claim."
 }
