@@ -25,3 +25,16 @@ test('large card choice screens stay compact and expose paginated full details',
  const page=section(state,'screen',0,30);assert.equal(page.total,20);assert.equal(page.items.length,6);assert.equal(page.next_offset,6);assert.match(page.items[0].value.description,/상세 설명/);assert.equal(page.items[0].collection,'cards');
  const deck=section(state,'deck',0,100);assert.equal(deck.items.length,12);assert.equal(deck.next_offset,12);
 });
+test('shop state has one control surface and compact offer TOC',async()=>{
+ const {focus,section}=await import('../dist/view.js');
+ const offers=Array.from({length:12},(_,i)=>({id:`Offer${i}`,name:`상점 카드 ${i}`,type:'card',price:40+i*3,upgrades:i%2,description:`아주 긴 카드 설명 ${i} `.repeat(35),tooltips:[{title:'키워드',description:'긴 툴팁 '.repeat(20)}]}));
+ const actions=offers.map((o,i)=>({id:`run.shop.${i}`,label:`${o.name} - ${o.price} 골드`,parameters:{}}));
+ const shopControls=offers.map((o,i)=>({id:`run.shop.${i}`,label:o.name,index:i,description:o.description}));
+ const state={session_id:'shop',state_id:9,ready:true,actions,observation:{shop_controls:shopControls,offers,game_state:{screen_type:'SHOP_SCREEN',current_hp:44,max_hp:70,gold:180,deck:Array.from({length:20},(_,i)=>({name:`덱${i}`,description:'덱 설명 '.repeat(20)})),screen_state:{cards:offers,purge_available:true,purge_cost:75}}}};
+ const view=focus(state),encoded=JSON.stringify(view);
+ assert.equal(view.actions.length,12);assert.equal(view.actions[0].parameters,undefined);
+ assert.equal(view.observation_extensions,undefined);assert.equal(view.screen_state.cards,undefined);
+ assert.equal(view.screen_state.offers.length,12);assert.equal(view.screen_state.offers[0].description,undefined);assert.equal(view.screen_state.offers[0].price,40);
+ assert.ok(!encoded.includes('아주 긴 카드 설명'));assert.ok(encoded.length<4000,encoded.length);
+ const page=section(state,'screen',0,30);assert.equal(page.total,12);assert.equal(page.items.length,6);assert.equal(page.items[0].collection,'offers');assert.match(page.items[0].value.description,/아주 긴 카드 설명/);assert.equal(page.next_offset,6);
+});
