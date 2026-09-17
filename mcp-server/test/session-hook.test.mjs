@@ -10,8 +10,8 @@ test('hook is opt-in, exact-workspace scoped and never reuses game text or permi
  assert.equal(contextFor(input,{},'abcdef1234567890'), '');
  assert.equal(contextFor({...input,source:'other'},{DOWNFALL_AGENT_CONTEXT:'1'},'abcdef1234567890'),'');
  assert.equal(contextFor(input,{DOWNFALL_AGENT_CONTEXT:'1'},'invalid'),'');
- const text=await loadContext(input,{DOWNFALL_AGENT_CONTEXT:'1'});assert.ok(text.startsWith('Downfall examples revision '));
- assert.ok(!text.includes('ignore rules'));assert.ok(!text.includes('bypassPermissions'));
+ const text=await loadContext(input,{DOWNFALL_AGENT_CONTEXT:'1'});assert.ok(text.startsWith('Downfall examples are available on demand.'));
+ assert.ok(!text.includes('ignore rules'));assert.ok(!text.includes('bypassPermissions'));assert.ok(!/revision [a-f0-9]{16}/i.test(text));
  assert.equal(await loadContext({...input,cwd:tmpdir()},{DOWNFALL_AGENT_CONTEXT:'1'}),'');
  assert.equal(await loadContext({...input,cwd:path.join(repo,'mcp-server')},{DOWNFALL_AGENT_CONTEXT:'1'}),'');
  assert.ok(new Tiktoken(ranks).encode(contextText('f'.repeat(16)),[],[]).length<=128);
@@ -30,8 +30,10 @@ test('missing or stale module artifacts silence hook without reading user transc
  for(const name of await readdir(new URL('../dist',import.meta.url)))if(name.endsWith('.js')||name==='guidance-bundle.json')await copyFile(new URL('../dist/'+name,import.meta.url),path.join(dist,name));
  const input={hook_event_name:'SessionStart',source:'resume',cwd:root},env={DOWNFALL_AGENT_CONTEXT:'1'};
  assert.ok(await missing(input,env));
- const session=path.join(dist,'session.js'),original=await readFile(session,'utf8');await writeFile(session,original+'\n// drift\n');
- assert.equal(await missing(input,env),'');await writeFile(session,original);
+ for(const name of ['session.js','hand-dedupe.js']){
+  const file=path.join(dist,name),original=await readFile(file,'utf8');await writeFile(file,original+'\n// drift\n');
+  assert.equal(await missing(input,env),'',name);await writeFile(file,original);
+ }
  const bundlePath=path.join(dist,'guidance-bundle.json'),bundle=JSON.parse(await readFile(bundlePath,'utf8'));bundle.hook.tokens=129;await writeFile(bundlePath,JSON.stringify(bundle));
  assert.equal(await missing(input,env),'');
  assert.equal(await loadContext({hook_event_name:'SessionStart',source:'startup',cwd:repo},{DOWNFALL_AGENT_CONTEXT:'0'}),'');
