@@ -42,6 +42,19 @@ public final class NativeUiInputTest {
         try{press=input.getMethod("press",hitbox,Runnable.class);}catch(NoSuchMethodException missing){throw new AssertionError("Missing native press handler for merchant and upgrade choices",missing);}
         press.invoke(null,target,(Runnable)()->{try{check(flags.getField("justClickedLeft").getBoolean(null),"press-only handler sees mouse press");}catch(Exception e){throw new RuntimeException(e);}});
         check(!flags.getField("justClickedLeft").getBoolean(null),"press restored");
+
+        Method defer=input.getMethod("deferClick",hitbox),pending=input.getMethod("pending");
+        Object deferred=hitbox.newInstance();
+        defer.invoke(null,deferred);
+        check((Boolean)pending.invoke(null),"deferred click queued");
+        hook.invoke(null,other);
+        check((Boolean)pending.invoke(null),"unrelated hitbox does not consume deferred click");
+        expectRejected(click,target,()->called[0]++);
+        hook.invoke(null,deferred);
+        check(hitbox.getField("hovered").getBoolean(deferred),"deferred target hovered on native update");
+        check(hitbox.getField("clicked").getBoolean(deferred),"deferred target clicked on native update");
+        check(!(Boolean)pending.invoke(null),"deferred click consumed once");
+
         try{click.invoke(null,target,(Runnable)()->{throw new IllegalArgumentException("handler failure");});throw new AssertionError("failure swallowed");}
         catch(InvocationTargetException expected){check(expected.getCause() instanceof IllegalArgumentException,"original failure preserved");}
         hook.invoke(null,other);check(!hitbox.getField("clicked").getBoolean(other),"hook idle after failure");
@@ -49,7 +62,7 @@ public final class NativeUiInputTest {
         expectRejected(click,target,()->called[0]++);
         check(called[0]==1,"pending human click not executed");hitbox.getField("clicked").setBoolean(target,false);
         System.clearProperty("communicationmod.play_control");expectRejected(click,target,()->called[0]++);
-        System.out.println("PASS: native input scope, one handler, inactive/pending guards, cleanup on success/failure");
+        System.out.println("PASS: native input scope, synchronous/deferred clicks, inactive/pending guards, cleanup on success/failure");
     }
     static void expectRejected(Method method,Object target,Runnable action)throws Exception{try{method.invoke(null,target,action);throw new AssertionError("unsafe click accepted");}catch(InvocationTargetException expected){check(expected.getCause() instanceof IllegalStateException,"input rejected");}}
     static void fixture(ClassPool p,Map<String,byte[]> bytes,String name,String[] fields)throws Exception{CtClass c=p.makeClass(name);for(String f:fields)c.addField(CtField.make(f,c));c.addConstructor(CtNewConstructor.defaultConstructor(c));bytes.put(name,c.toBytecode());}
