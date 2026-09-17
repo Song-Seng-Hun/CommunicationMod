@@ -12,30 +12,32 @@ function fixed(schema:unknown):{fixed:boolean;value?:unknown}{
  if(values.length===1)return {fixed:true,value:values[0]};
  return {fixed:false};
 }
+const requiredKeys=(schema:Obj)=>new Set(list(schema.required).filter((key):key is string=>typeof key==='string'));
 
-/** Hide parameters fully determined by the pinned native action. */
+/** Hide only required parameters fully determined by the exact pinned native action. */
 export function publicParameterSchema(value:unknown):Obj {
  const source=obj(value);if(!Object.keys(source).length)return {};
  const schema=clone(source),properties=obj(schema.properties);
  if(!Object.keys(properties).length)return schema;
- const visible:Obj={},hidden=new Set<string>();
+ const required=requiredKeys(schema),visible:Obj={},hidden=new Set<string>();
  for(const [key,property] of Object.entries(properties)){
-  if(fixed(property).fixed)hidden.add(key);else visible[key]=property;
+  if(required.has(key)&&fixed(property).fixed)hidden.add(key);else visible[key]=property;
  }
  schema.properties=visible;
  if(Array.isArray(schema.required)){
-  const required=schema.required.filter(key=>typeof key==='string'&&!hidden.has(key));
-  if(required.length)schema.required=required;else delete schema.required;
+  const publicRequired=schema.required.filter(key=>typeof key==='string'&&!hidden.has(key));
+  if(publicRequired.length)schema.required=publicRequired;else delete schema.required;
  }
  const structural=new Set(['type','additionalProperties','properties','required']);
  if(!Object.keys(visible).length&&Object.keys(schema).every(key=>structural.has(key)))return {};
  return schema;
 }
 
-/** Reinsert fixed parameters from the exact action schema selected in the pinned state. */
+/** Reinsert only required fixed parameters from the exact action schema selected in the pinned state. */
 export function injectFixedArguments(schemaValue:unknown,argumentsValue:unknown):Obj {
- const out=clone(obj(argumentsValue)),properties=obj(obj(schemaValue).properties);
+ const schema=obj(schemaValue),out=clone(obj(argumentsValue)),properties=obj(schema.properties),required=requiredKeys(schema);
  for(const [key,property] of Object.entries(properties)){
+  if(!required.has(key))continue;
   const item=fixed(property);if(!item.fixed)continue;
   if(Object.hasOwn(out,key)&&!same(out[key],item.value))throw new Error('Fixed action parameter does not match the pinned state.');
   out[key]=clone(item.value);
