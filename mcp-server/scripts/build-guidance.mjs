@@ -4,21 +4,28 @@ import {readFile,writeFile,readdir} from 'node:fs/promises';import {createHash} 
 import {Tiktoken} from 'js-tiktoken/lite';import ranks from 'js-tiktoken/ranks/o200k_base';
 import {toolSchemas} from '../dist/tool-schemas.js';import {contextText} from '../hooks/session-start.mjs';
 
-const REVIEWED_CONTRACT='2026-09-17-lean-pinned-v2',digest=v=>createHash('sha256').update(v).digest('hex'),object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const REVIEWED_CONTRACT='2026-09-17-lean-pinned-v3',digest=v=>createHash('sha256').update(v).digest('hex'),object=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const sources=new Map(Object.entries({
  'current.observed_refs':'array','last.fragment.next_offset':'number','current.offered_action.id':'string','last.request_id':'string',
  'agent.arguments_validated_against_current.offered_action.parameters_and_complete_relevant_evidence':'object','current.event_reading.reading_id':'string','agent.commentary_already_presented_to_user_for_current.event_reading.reading_id':'string',
  'current.offered_action.parameters.properties.map_id.const':'string','current.offered_action.parameters.properties.revision.const':'number','agent.selected_node_ids_from_current.observed_map_validated_against_drawn_edges_and_offered_route_schema':'array'
 }));
 export async function sourceContract(){
- const root=new URL('../../',import.meta.url),files=['mcp-server/src/tool-schemas.ts','mcp-server/src/context.ts','mcp-server/src/hand-dedupe.ts','mcp-server/src/view.ts','mcp-server/src/session.ts'];
+ const root=new URL('../../',import.meta.url),files=['mcp-server/src/tool-schemas.ts','mcp-server/src/context.ts','mcp-server/src/action-projection.ts','mcp-server/src/hand-dedupe.ts','mcp-server/src/view.ts','mcp-server/src/session.ts'];
  const walk=async relative=>{for(const entry of await readdir(new URL(relative+'/',root),{withFileTypes:true})){const name=relative+'/'+entry.name;if(entry.isDirectory())await walk(name);else if(name.endsWith('.java'))files.push(name);}};
  await walk('src/main/java/communicationmod');files.sort();const parts=[];for(const file of files)parts.push([file,digest((await readFile(new URL(file,root),'utf8')).replace(/\r\n/g,'\n'))]);
  return {revision:REVIEWED_CONTRACT,fingerprint:digest(JSON.stringify(parts)),files:files.length};
 }
 export function validateSourceContract(expected,actual){assert.equal(actual.revision,expected.revision,'Guidance reviewed contract revision changed: revalidate examples/tests and bump the explicit reviewed revision.');assert.equal(actual.files,expected.files,'Guidance source file set changed: revalidate examples/tests and update the reviewed contract.');}
-const cleanProse=text=>text.replace(/same current session\/state;?\s*/gi,'').replace(/current session\/state and\s*/gi,'').replace(/Stale required IDs\/refs/gi,'Stale refs').replace(/No current IDs\/refs for context/gi,'No current refs for context').replace(/current IDs\/refs/gi,'current refs').replace(/whether its view_id changed/gi,'whether the visible decision changed').replace(/omit known_view and recover it/gi,'request a full refresh').replace(/\bview_id\b/gi,'visible decision').replace(/\bknown_view\b/gi,'delta baseline');
-const publicArguments=(tool,args)=>{const out=Object.fromEntries(Object.entries(args??{}).filter(([key])=>key!=='session_id'&&key!=='state_id'));if(tool==='sts_act'){delete out.request_id;delete out.wait_ms;}if(tool==='sts_get_state')delete out.known_view;return out;};
+const cleanProse=text=>text.replace(/same current session\/state;?\s*/gi,'').replace(/current session\/state and\s*/gi,'').replace(/Stale required IDs\/refs/gi,'Stale refs').replace(/No current IDs\/refs for context/gi,'No current refs for context').replace(/current IDs\/refs/gi,'current refs').replace(/whether its view_id changed/gi,'whether the visible decision changed').replace(/omit known_view and recover it/gi,'request a full refresh').replace(/\bview_id\b/gi,'visible decision').replace(/\bknown_view\b/gi,'delta baseline').replace(/current map_id\/revision/gi,'pinned current map state').replace(/map_id\/revision/gi,'map state').replace(/observed reading_id/gi,'pinned current event page').replace(/current event_reading\.reading_id/gi,'pinned current event page');
+const publicArguments=(tool,args)=>{
+ const out=Object.fromEntries(Object.entries(args??{}).filter(([key])=>key!=='session_id'&&key!=='state_id'));
+ if(tool==='sts_act'){
+  delete out.request_id;delete out.wait_ms;
+  if(object(out.arguments)){const payload={...out.arguments};for(const key of ['reading_id','map_id','revision'])delete payload[key];out.arguments=payload;}
+ }
+ if(tool==='sts_get_state')delete out.known_view;return out;
+};
 const bindingNames=(value,out=new Set())=>{if(object(value)&&Object.hasOwn(value,'$bind')){out.add(value.$bind);return out;}if(Array.isArray(value))for(const child of value)bindingNames(child,out);else if(object(value))for(const child of Object.values(value))bindingNames(child,out);return out;};
 const usedBindings=(calls,bindings)=>{const used=new Set();for(const call of calls)bindingNames(publicArguments(call.tool,call.arguments),used);return Object.fromEntries(Object.entries(bindings??{}).filter(([key])=>used.has(key)));};
 const publicCapsule=source=>{const c=structuredClone(source);delete c.revision;for(const call of c.calls)call.arguments=publicArguments(call.tool,call.arguments);c.bindings=usedBindings(c.calls,c.bindings);for(const key of ['when','not_when','requires','expect','stop'])c[key]=cleanProse(c[key]);return c;};
@@ -34,7 +41,7 @@ export function validateCatalog(capabilities){
 }
 export async function buildGuidance(){
  const contract=await sourceContract();validateSourceContract(JSON.parse(await readFile(new URL('../evaluation/guidance-contract.json',import.meta.url),'utf8')),contract);
- const {capabilities}=await import('../dist/guidance-catalog.js'),report=validateCatalog(capabilities),encoder=new Tiktoken(ranks),modules={};for(const name of ['context.js','hand-dedupe.js','view.js','session.js','guidance.js','guidance-catalog.js','tool-schemas.js'])modules[name]=digest(await readFile(new URL('../dist/'+name,import.meta.url),'utf8'));
+ const {capabilities}=await import('../dist/guidance-catalog.js'),report=validateCatalog(capabilities),encoder=new Tiktoken(ranks),modules={};for(const name of ['context.js','action-projection.js','hand-dedupe.js','view.js','session.js','guidance.js','guidance-catalog.js','tool-schemas.js'])modules[name]=digest(await readFile(new URL('../dist/'+name,import.meta.url),'utf8'));
  const stamps={};for(const c of capabilities){const normal=publicCapsule(c.cases.find(x=>x.case==='normal')),tokens=encoder.encode(JSON.stringify(normal),[],[]).length;stamps[c.id]={digest:digest(JSON.stringify(c)),public_tokens:tokens};}
  const revision=digest(JSON.stringify(stamps)).slice(0,16),hookTokens=encoder.encode(contextText(revision),[],[]).length;assert.ok(hookTokens<=128,'SessionStart context exceeds 128 token budget');const hook={revision,tokens:hookTokens,digest:digest(await readFile(new URL('../hooks/session-start.mjs',import.meta.url)))},bundle={version:2,contract,modules,capabilities:stamps,hook};await writeFile(new URL('../dist/guidance-bundle.json',import.meta.url),JSON.stringify(bundle)+'\n');console.log(JSON.stringify({guidance:report.examples,capabilities:report.capabilities.length}));return bundle;
 }
