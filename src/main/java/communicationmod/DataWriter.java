@@ -58,7 +58,7 @@ public class DataWriter implements Runnable {
      */
     private static String compactChoiceState(String message) {
         try {
-            JsonElement parsed = JsonParser.parseString(message);
+            JsonElement parsed = new JsonParser().parse(message);
             if (!parsed.isJsonObject()) {
                 return message;
             }
