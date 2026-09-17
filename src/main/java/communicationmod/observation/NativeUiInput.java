@@ -9,7 +9,6 @@ import java.util.*;
 /** A synchronous, opt-in click delivered only inside an audited native input handler. */
 public final class NativeUiInput {
     private static Hitbox target;
-    private static Hitbox deferredTarget;
     private static final Map<Hitbox,boolean[]> saved=new IdentityHashMap<>();
     private NativeUiInput() { }
     public static void click(Hitbox box,Runnable handler) {
@@ -18,27 +17,12 @@ public final class NativeUiInput {
     public static void press(Hitbox box,Runnable handler) {
         run(box,handler,true);
     }
-    /**
-     * Queue one click for the target's next real Hitbox.update(). This is for UI paths
-     * whose decision is made later in the owner's normal update method (not inside a
-     * callable sub-handler). The copied runtime already calls afterHitbox() immediately
-     * after every native Hitbox.update, so no extra game loop or synthetic owner.update()
-     * is required.
-     */
-    public static void deferClick(Hitbox box) {
-        if(!Boolean.getBoolean("communicationmod.play_control") || Settings.isTouchScreen || Settings.isControllerMode
-            || target!=null || deferredTarget!=null || box==null || box.clicked || box.clickStarted)
-            throw new IllegalStateException("Native input unavailable or pending");
-        if(InputHelper.justClickedLeft || InputHelper.justClickedRight || InputHelper.justReleasedClickLeft)
-            throw new IllegalStateException("Human input pending");
-        deferredTarget=box;
-    }
     public static boolean pending() {
-        return target!=null || deferredTarget!=null;
+        return target!=null;
     }
     private static void run(Hitbox box,Runnable handler,boolean press) {
         if(!Boolean.getBoolean("communicationmod.play_control") || Settings.isTouchScreen || Settings.isControllerMode
-            || target!=null || deferredTarget!=null || box==null || box.clicked || box.clickStarted)throw new IllegalStateException("Native input unavailable or pending");
+            || target!=null || box==null || box.clicked || box.clickStarted)throw new IllegalStateException("Native input unavailable or pending");
         boolean left=InputHelper.justClickedLeft,right=InputHelper.justClickedRight,released=InputHelper.justReleasedClickLeft;
         if(left || right || released)throw new IllegalStateException("Human input pending");
         target=box;
@@ -56,16 +40,7 @@ public final class NativeUiInput {
     }
     /** Copied-runtime Hitbox.update postfix. Inert during human play and ordinary observation. */
     public static void afterHitbox(Hitbox box) {
-        if(target==null) {
-            if(deferredTarget==box) {
-                // Leave these flags in the native post-update state for the rest of the
-                // current game update. ShopScreen.update() consumes card.hb.clicked later
-                // in that same frame, then the next native Hitbox.update clears it normally.
-                box.hovered=true;box.clicked=true;box.clickStarted=false;box.justHovered=false;
-                deferredTarget=null;
-            }
-            return;
-        }
+        if(target==null)return;
         if(!saved.containsKey(box))saved.put(box,new boolean[]{box.hovered,box.clicked,box.clickStarted,box.justHovered});
         box.hovered=box==target;box.clicked=box==target;box.clickStarted=false;box.justHovered=false;
     }
@@ -78,6 +53,15 @@ public final class NativeUiInput {
     public static void invoke(Object owner,String name) {
         for(Class<?> type=owner.getClass();type!=null;type=type.getSuperclass())try {
             Method method=type.getDeclaredMethod(name);method.setAccessible(true);method.invoke(owner);return;
+        }catch(NoSuchMethodException missing){}catch(InvocationTargetException failure){
+            Throwable cause=failure.getCause();if(cause instanceof RuntimeException)throw (RuntimeException)cause;
+            if(cause instanceof Error)throw (Error)cause;throw new IllegalStateException("Native UI handler failed: "+name,cause);
+        }catch(IllegalAccessException failure){throw new IllegalStateException("Native UI handler inaccessible: "+name,failure);}
+        throw new IllegalStateException("Unsupported native UI handler: "+name);
+    }
+    public static void invoke(Object owner,String name,Class<?> parameterType,Object argument) {
+        for(Class<?> type=owner.getClass();type!=null;type=type.getSuperclass())try {
+            Method method=type.getDeclaredMethod(name,parameterType);method.setAccessible(true);method.invoke(owner,argument);return;
         }catch(NoSuchMethodException missing){}catch(InvocationTargetException failure){
             Throwable cause=failure.getCause();if(cause instanceof RuntimeException)throw (RuntimeException)cause;
             if(cause instanceof Error)throw (Error)cause;throw new IllegalStateException("Native UI handler failed: "+name,cause);
