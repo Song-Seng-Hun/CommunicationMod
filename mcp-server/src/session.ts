@@ -1,11 +1,12 @@
 import {obj,list,type Obj} from './view.js';
 export interface Act {session_id:string;state_id:number;action_id:string;request_id:string;arguments:Obj;}
+export interface PresentedAct {action_id:string;request_id:string;arguments:Obj;}
 interface Pending {request:Act;receipt?:Obj;resolve:(value:Obj)=>void;timer:ReturnType<typeof setTimeout>;receiptSequence?:number;}
 interface WaitOptions {changed?:(state:Obj)=>boolean;signal?:AbortSignal;}
 export class GameSession {
  private latest:Obj={ready:false,actions:[]};private receivedAt=0;private online=false;private sequence=0;
  private pending?:Pending;private remotePending?:string;private used=new Set<string>();private receipts=new Map<string,Obj>();
- private waiters=new Set<()=>void>();
+ private waiters=new Set<()=>void>();private presented?:{session_id:string;state_id:number};
  constructor(private send:(command:Obj)=>void){}
  receive(message:Obj):void {
   ++this.sequence;
@@ -30,9 +31,22 @@ export class GameSession {
   const fresh=this.online && Date.now()-this.receivedAt<5000;
   return {...this.latest,ready:fresh && this.latest.ready===true,actions:fresh?this.latest.actions:[],connection:{status:fresh?'connected':'disconnected_or_stale',age_ms:this.receivedAt?Date.now()-this.receivedAt:null,pending_request_id:this.pending?.request.request_id ?? this.remotePending ?? null}};
  }
+ /** Remember exactly the state shown to this MCP client. Public tools can then stay stateless-looking without weakening stale checks. */
+ present(state:Obj):Obj {
+  if(typeof state.session_id!=='string'||!state.session_id||!Number.isSafeInteger(state.state_id)||Number(state.state_id)<0)throw new Error('State identity unavailable; refresh game state.');
+  this.presented={session_id:state.session_id,state_id:Number(state.state_id)};return state;
+ }
  assertState(session:string,state:number):Obj {
   const current=this.current();if(current.session_id!==session || current.state_id!==state)throw new Error('Stale state: call sts_get_state; do not repeat the old action.');
   if(obj(current.connection).status!=='connected')throw new Error('Game connection unavailable; reconnect and inspect state.');return current;
+ }
+ assertPresented():Obj {
+  if(!this.presented)throw new Error('No presented state: call sts_get_state first.');
+  return this.assertState(this.presented.session_id,this.presented.state_id);
+ }
+ actPresented(request:PresentedAct,timeout:number):Promise<Obj> {
+  const state=this.assertPresented();
+  return this.act({session_id:String(state.session_id),state_id:Number(state.state_id),...request},timeout);
  }
  act(request:Act,timeout:number):Promise<Obj> {
   if(this.used.has(request.request_id)||this.receipts.has(request.request_id))throw new Error('Duplicate request ID: inspect sts_get_request; not resent.');
@@ -81,5 +95,5 @@ export class GameSession {
    if(signal?.aborted)abort();else wake();
   });return this.current();
  }
- close():void{this.online=false;if(this.pending){clearTimeout(this.pending.timer);this.pending.resolve(this.answer(this.pending,this.pending.receipt?'applied_waiting':'unknown'));}for(const wake of [...this.waiters])wake();}
+ close():void{this.online=false;this.presented=undefined;if(this.pending){clearTimeout(this.pending.timer);this.pending.resolve(this.answer(this.pending,this.pending.receipt?'applied_waiting':'unknown'));}for(const wake of [...this.waiters])wake();}
 }
