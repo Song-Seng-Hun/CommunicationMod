@@ -15,15 +15,19 @@ public final class RunUsabilityBindingTest {
         } else if(mode.equals("grid")) {
             String calls=calls(p,"communicationmod.observation.GridSelectionUi");
             for(String expected:new String[]{"GridCardSelectScreen.update","NativeUiInput.click","RoomUi.action"})check(calls.contains(expected),expected);
+            check(!calls.contains("RoomUi.settled"),"grid choices must not wait for pixel-perfect animation convergence");
             check(calls(p,"communicationmod.observation.RoomUi").contains("CombatObservation.claim"),"shared action claims selection token");
             CtClass grid=p.get("com.megacrit.cardcrawl.screens.select.GridCardSelectScreen");
             for(String field:new String[]{"tipMsg","numCards","canCancel","confirmButton","targetGroup","selectedCards","hoveredCard"})grid.getDeclaredField(field);
             check(calls(p,"communicationmod.observation.RunUi").contains("GridSelectionUi.capture"),"grid route");
         } else if(mode.equals("room")) {
             String calls=calls(p,"communicationmod.observation.RoomUi");
-            for(String expected:new String[]{"NativeUiInput.click","NativeUiInput.deferClick","AbstractCampfireOption.update","AbstractChest.update","BossRelicSelectScreen.update"})check(calls.contains(expected),expected);
+            for(String expected:new String[]{"NativeUiInput.click","NativeUiInput.invoke","AbstractCampfireOption.update","AbstractChest.update","BossRelicSelectScreen.update"})check(calls.contains(expected),expected);
+            check(!calls.contains("NativeUiInput.deferClick"),"shop card purchase must use native purchase routine, not deferred hitbox state");
             check(!calls.contains("Merchant.update"),"merchant entry must wait for the normal game update");
             check(fieldWrites(p,"communicationmod.observation.RoomUi").contains("communicationmod.patches.MerchantPatch.visitMerchant"),"merchant entry queues native merchant patch");
+            CtClass shop=p.get("com.megacrit.cardcrawl.shop.ShopScreen");
+            shop.getDeclaredMethod("purchaseCard",new CtClass[]{p.get("com.megacrit.cardcrawl.cards.AbstractCard")});
             check(!calls.contains("CommandExecutor.executeCommand")&&!calls.contains("loseGold")&&!calls.contains("gainGold"),"native UI only");
             check(calls(p,"communicationmod.observation.RunUi").contains("RoomUi.capture"),"room route");
             check(calls.contains("PotionUi.idle") && calls.contains("NativeUiInput.pending"),"pending native input blocks every room action");
