@@ -33,12 +33,20 @@ public final class MenuControlSessionTest {
         check(reply(request.toString()).get("code").getAsString().equals("INVALID_ARGUMENTS"),"extra arguments rejected");
         request.add("arguments",new JsonObject());
         check(reply(request.toString()).get("status").getAsString().equals("applied") && calls.get()==1,"one UI action");
-        check(reply(request.toString()).get("code").getAsString().equals("DUPLICATE_REQUEST") && calls.get()==1,"duplicate cannot replay");
-        tick();state=tick();
-        request=request(state,"manual-change");view=menu("CHAR_SELECT",true);
+        check(reply(request.toString()).get("code").getAsString().equals("DUPLICATE_REQUEST") && calls.get()==1,"duplicate cannot replay while transition is pending");
+
+        JsonObject same=tick();
+        check(same!=null && !same.get("ready").getAsBoolean() && same.getAsJsonArray("actions").size()==0,
+            "applied action re-armed before the observed decision changed");
+        check(tick()==null,"unchanged post-action transition must stay unready without flooding");
+
+        view=menu("CHAR_SELECT",true);
+        JsonObject changed=tick();check(!changed.get("ready").getAsBoolean(),"changed decision still requires a stable frame");
+        state=tick();check(state.get("ready").getAsBoolean(),"changed decision becomes ready after stability");
+        request=request(state,"manual-change");view=menu("MAIN_MENU",true);
         check(reply(request.toString()).get("code").getAsString().equals("STALE_STATE") && calls.get()==1,"manual change rechecked before command");
         tick();state=tick();
-        view=menu("CHAR_SELECT",false);
+        view=menu("MAIN_MENU",false);
         check(reply(request(state,"overlay").toString()).get("code").getAsString().equals("STALE_STATE"),"overlay invalidates before action");
         check(!tick().get("ready").getAsBoolean(),"overlay not ready");
         check(tick()==null,"blocked state not flooded");
@@ -58,7 +66,7 @@ public final class MenuControlSessionTest {
         tick();narrative.addProperty("render_frame",2);
         check(tick().get("ready").getAsBoolean(),"diagnostic render counters must not prevent a stable decision");
         narrative.addProperty("render_frame",3);check(tick()==null,"render counter alone retains decision state ID");
-        System.out.println("PASS: menu v2 mode, two-frame stability, retained state IDs, localization, stale/manual/overlay/duplicate/argument guards");
+        System.out.println("PASS: menu v2 mode, two-frame stability, post-action transition hold, localization, stale/manual/overlay/duplicate/argument guards");
     }
     private static JsonObject menu(String screen,boolean stable){JsonObject root=new JsonObject(),menu=new JsonObject();menu.addProperty("screen",screen);menu.addProperty("stable",stable);root.add("menu",menu);return root;}
     private static JsonObject tick()throws Exception{String value=(String)update.invoke(session,new JsonObject());return value==null?null:new JsonParser().parse(value).getAsJsonObject();}
