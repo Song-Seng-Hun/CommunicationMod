@@ -28,7 +28,8 @@ const publicArguments=(tool,args)=>{
 };
 const bindingNames=(value,out=new Set())=>{if(object(value)&&Object.hasOwn(value,'$bind')){out.add(value.$bind);return out;}if(Array.isArray(value))for(const child of value)bindingNames(child,out);else if(object(value))for(const child of Object.values(value))bindingNames(child,out);return out;};
 const usedBindings=(calls,bindings)=>{const used=new Set();for(const call of calls)bindingNames(publicArguments(call.tool,call.arguments),used);return Object.fromEntries(Object.entries(bindings??{}).filter(([key])=>used.has(key)));};
-const publicCapsule=source=>{const c=structuredClone(source);delete c.revision;for(const call of c.calls)call.arguments=publicArguments(call.tool,call.arguments);c.bindings=usedBindings(c.calls,c.bindings);for(const key of ['when','not_when','requires','expect','stop'])c[key]=cleanProse(c[key]);return c;};
+const cleanBindingSource=source=>String(source).replace(/agent\.commentary_already_presented_to_user_for_current\.event_reading\.reading_id/g,'agent.commentary_already_presented_for_pinned_event_page').replace(/current\.event_reading\.reading_id/g,'pinned_event_page');
+const publicCapsule=source=>{const c=structuredClone(source);delete c.revision;for(const call of c.calls)call.arguments=publicArguments(call.tool,call.arguments);c.bindings=usedBindings(c.calls,c.bindings);for(const binding of Object.values(c.bindings))binding.source=cleanBindingSource(binding.source);for(const key of ['when','not_when','requires','expect','stop'])c[key]=cleanProse(c[key]);return c;};
 export function bindCall(call,bindings,values){
  const template=publicArguments(call.tool,call.arguments),names=bindingNames(template),active=Object.fromEntries(Object.entries(bindings??{}).filter(([key])=>names.has(key)));
  for(const binding of Object.values(active))assert.equal(sources.get(binding.source),binding.type,'Unknown or mistyped binding source: '+binding.source);
