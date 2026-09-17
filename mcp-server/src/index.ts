@@ -12,16 +12,7 @@ const link=new Connection(root),server=new McpServer({name:'communicationmod-mcp
 const lifecycle=new Lifecycle(root,link);
 const metrics=createMetrics(root);
 const read={readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false};
-function textPreview(data:Obj):string {
- const raw=JSON.stringify(data);if(raw.length<=1800)return raw;
- const keys=['session_id','state_id','ready','screen','status','outcome','request_id','view_id','unchanged'];
- const preview:Obj=Object.fromEntries(keys.filter(k=>k in data).map(k=>[k,data[k]]));
- if(Array.isArray(data.actions))preview.action_count=data.actions.length;
- if(Array.isArray(data.toc))preview.toc_count=data.toc.length;
- preview.structured_result=true;preview.note='Full result is in structuredContent.data.';
- return JSON.stringify(preview);
-}
-function response(data:Obj){return {content:[{type:'text' as const,text:textPreview(data)}],structuredContent:{data}};}
+const response=(data:Obj)=>({content:[{type:'text' as const,text:JSON.stringify(data)}]});
 type TimedWait=(run:()=>Promise<Obj>)=>Promise<Obj>;
 async function guard(tool:string,run:(wait:TimedWait)=>Promise<Obj>,format:ContextFormat='json',lifecycleOnly=false,signal?:AbortSignal){
  const span=metrics.start(tool);let connect_ms=0,wait_ms=0,error_class:MetricsErrorClass='none',connecting=false;
@@ -42,16 +33,30 @@ server.registerTool('sts_game_status',{title:'Downfall status',description:"Test
  ()=>guard('sts_game_status',()=>lifecycle.status(),'json',true));
 server.registerTool('sts_start_game',{title:'Start Downfall',description:"Start/reuse verified test game only on user launch/play request. Never resumes runs; never chooses actions. Starting: inspect status; no relaunch.",inputSchema:toolSchemas.sts_start_game,annotations:{...read,readOnlyHint:false}},
  ({wait_ms})=>guard('sts_start_game',()=>lifecycle.start(wait_ms),'json',true));
-server.registerTool('sts_get_state',{title:'Current decision',description:"Current decision + state-scoped toc. Read needed refs via sts_get_context before acting. details_required or incomplete: never guess. known_view=previous view_id: short unchanged reply. Omit to recover summary.",inputSchema:toolSchemas.sts_get_state,annotations:read},
- ({wait_ms,view,known_view},extra)=>guard('sts_get_state',async wait=>conditionalDecision(await wait(()=>link.game.wait(wait_ms,{signal:extra.signal,
-  ...(known_view!==undefined?{changed:(state:Obj)=>conditionalDecision(state,undefined,view).view_id!==known_view}:{})})),known_view,view),'json',false,extra.signal));
-server.registerTool('sts_act',{title:'Act + next decision',description:"One offered action; current session/state IDs. Read needed details first; never auto-discard. Unknown/applied_waiting: inspect state/request, never replay. Receipt + next decision.",
+server.registerTool('sts_get_state',{title:'Current decision',description:"Current decision + state-scoped toc. The server pins this state for later context/action calls. Read needed refs via sts_get_context before acting. known_view=previous view_id: short unchanged reply.",inputSchema:toolSchemas.sts_get_state,annotations:read},
+ ({wait_ms,view,known_view},extra)=>guard('sts_get_state',async wait=>{
+  const state=await wait(()=>link.game.wait(wait_ms,{signal:extra.signal,
+   ...(known_view!==undefined?{changed:(candidate:Obj)=>conditionalDecision(candidate,undefined,view).view_id!==known_view}:{})}));
+  link.game.present(state);return conditionalDecision(state,known_view,view);
+ },'json',false,extra.signal));
+server.registerTool('sts_act',{title:'Act + next decision',description:"One offered action from the pinned state. Read needed details first; never auto-discard. Unknown/applied_waiting: inspect request; never replay. Successful calls return the next decision directly.",
  inputSchema:toolSchemas.sts_act,annotations:{...read,readOnlyHint:false,destructiveHint:true,idempotentHint:false}},
- args=>guard('sts_act',async wait=>{if(JSON.stringify(args.arguments).length>8000)throw new Error('Arguments too large.');const result=await wait(()=>link.game.act({...args,request_id:args.request_id ?? randomUUID()},args.wait_ms));return {...result,state:conditionalDecision(obj(result.state))};}));
-server.registerTool('sts_get_context',{title:'Public context fragments',description:"Read 1-8 toc refs; same session/state IDs. Multiple refs share an inline response budget: card refs may return card_summary; read one card ref alone for full card detail. Short fields, child toc, exact text chunks. Follow next_offset: row/field index; text: UTF-16 offset. No full dump. Stale: refresh state, rediscover refs. Read relevant rules.",
+ args=>guard('sts_act',async wait=>{
+  if(JSON.stringify(args.arguments).length>8000)throw new Error('Arguments too large.');
+  const result=await wait(()=>link.game.actPresented({action_id:args.action_id,arguments:args.arguments,request_id:args.request_id ?? randomUUID()},args.wait_ms));
+  const next=obj(result.state);link.game.present(next);
+  const outcome=String(result.outcome),data:Obj={outcome,state:conditionalDecision(next)};
+  if(outcome==='unknown'||outcome==='applied_waiting')data.request_id=result.request_id;
+  if(outcome==='rejected'){
+   const receipt=obj(result.receipt),reason=receipt.message ?? receipt.error ?? receipt.reason ?? receipt.status;
+   if(reason!==undefined)data.reason=reason;
+  }
+  return data;
+ }));
+server.registerTool('sts_get_context',{title:'Public context fragments',description:"Read 1-8 refs from the pinned state. Multiple refs share an inline response budget: card refs may return card_summary; read one card ref alone for full detail. Follow next_offset when present. Stale pin: refresh state. Read relevant rules.",
  inputSchema:toolSchemas.sts_get_context,annotations:read},
- args=>guard('sts_get_context',async()=>readContext(link.game.assertState(args.session_id,args.state_id),args.refs,args.offset,args.limit),args.response_format));
-server.registerTool('sts_get_request',{title:'Action receipt',description:"Inspect recent receipt by request_id without replay. Missing: unknown, not failure; never resend.",inputSchema:toolSchemas.sts_get_request,annotations:read},
+ args=>guard('sts_get_context',async()=>readContext(link.game.assertPresented(),args.refs,args.offset,args.limit),args.response_format));
+server.registerTool('sts_get_request',{title:'Action receipt',description:"Inspect an uncertain recent action by request_id without replay. Missing: unknown, not failure; never resend.",inputSchema:toolSchemas.sts_get_request,annotations:read},
  ({request_id})=>guard('sts_get_request',async()=>link.game.request(request_id)));
 process.on('SIGTERM',()=>{link.close();process.exit(0);});process.on('SIGINT',()=>{link.close();process.exit(0);});process.stdin.on('end',()=>link.close());
 await server.connect(new StdioServerTransport());
