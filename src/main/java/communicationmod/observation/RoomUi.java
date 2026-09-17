@@ -70,10 +70,10 @@ public final class RoomUi {
         if(owner.getClass()!=ShopScreen.class || !owner.isActive || (Float)NativeUiInput.field(owner,"rugY")!=0f)return;
         for(AbstractCard card:ChoiceScreenUtils.getShopScreenCards()) {
             final int price=card.price;String id="run.shop.card."+card.uuid;
-            boolean available=price>=0 && AbstractDungeon.player.gold>=price && settled(card);
-            row(controls,id,card.name,price,available,available?null:"insufficient_gold_or_card_moving");
-            if(available)actions.add(action(id,card.name,null,"play",()->shopSame(owner) && ChoiceScreenUtils.getShopScreenCards().contains(card) && card.price==price && AbstractDungeon.player.gold>=price && settled(card),
-                ()->NativeUiInput.deferClick(card.hb)));
+            boolean available=price>=0 && AbstractDungeon.player.gold>=price;
+            row(controls,id,card.name,price,available,available?null:"insufficient_gold");
+            if(available)actions.add(action(id,card.name,null,"play",()->shopSame(owner) && ChoiceScreenUtils.getShopScreenCards().contains(card) && card.price==price && AbstractDungeon.player.gold>=price,
+                ()->NativeUiInput.invoke(owner,"purchaseCard",AbstractCard.class,card)));
         }
         List<StoreRelic> relics=ChoiceScreenUtils.getShopScreenRelics();
         for(int i=0;i<relics.size();i++) {
