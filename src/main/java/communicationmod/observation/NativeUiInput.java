@@ -9,6 +9,7 @@ import java.util.*;
 /** A synchronous, opt-in click delivered only inside an audited native input handler. */
 public final class NativeUiInput {
     private static Hitbox target;
+    private static Hitbox deferredTarget;
     private static final Map<Hitbox,boolean[]> saved=new IdentityHashMap<>();
     private NativeUiInput() { }
     public static void click(Hitbox box,Runnable handler) {
@@ -17,9 +18,27 @@ public final class NativeUiInput {
     public static void press(Hitbox box,Runnable handler) {
         run(box,handler,true);
     }
+    /**
+     * Queue one click for the target's next real Hitbox.update(). This is for UI paths
+     * whose decision is made later in the owner's normal update method (not inside a
+     * callable sub-handler). The copied runtime already calls afterHitbox() immediately
+     * after every native Hitbox.update, so no extra game loop or synthetic owner.update()
+     * is required.
+     */
+    public static void deferClick(Hitbox box) {
+        if(!Boolean.getBoolean("communicationmod.play_control") || Settings.isTouchScreen || Settings.isControllerMode
+            || target!=null || deferredTarget!=null || box==null || box.clicked || box.clickStarted)
+            throw new IllegalStateException("Native input unavailable or pending");
+        if(InputHelper.justClickedLeft || InputHelper.justClickedRight || InputHelper.justReleasedClickLeft)
+            throw new IllegalStateException("Human input pending");
+        deferredTarget=box;
+    }
+    public static boolean pending() {
+        return target!=null || deferredTarget!=null;
+    }
     private static void run(Hitbox box,Runnable handler,boolean press) {
         if(!Boolean.getBoolean("communicationmod.play_control") || Settings.isTouchScreen || Settings.isControllerMode
-            || target!=null || box==null || box.clicked || box.clickStarted)throw new IllegalStateException("Native input unavailable or pending");
+            || target!=null || deferredTarget!=null || box==null || box.clicked || box.clickStarted)throw new IllegalStateException("Native input unavailable or pending");
         boolean left=InputHelper.justClickedLeft,right=InputHelper.justClickedRight,released=InputHelper.justReleasedClickLeft;
         if(left || right || released)throw new IllegalStateException("Human input pending");
         target=box;
@@ -37,7 +56,16 @@ public final class NativeUiInput {
     }
     /** Copied-runtime Hitbox.update postfix. Inert during human play and ordinary observation. */
     public static void afterHitbox(Hitbox box) {
-        if(target==null)return;
+        if(target==null) {
+            if(deferredTarget==box) {
+                // Leave these flags in the native post-update state for the rest of the
+                // current game update. ShopScreen.update() consumes card.hb.clicked later
+                // in that same frame, then the next native Hitbox.update clears it normally.
+                box.hovered=true;box.clicked=true;box.clickStarted=false;box.justHovered=false;
+                deferredTarget=null;
+            }
+            return;
+        }
         if(!saved.containsKey(box))saved.put(box,new boolean[]{box.hovered,box.clicked,box.clickStarted,box.justHovered});
         box.hovered=box==target;box.clicked=box==target;box.clickStarted=false;box.justHovered=false;
     }
