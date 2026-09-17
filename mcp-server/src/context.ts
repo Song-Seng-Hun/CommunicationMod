@@ -94,6 +94,23 @@ function mechanicsDecisionSummary(value:unknown):Obj {
  if(incomplete)out.mechanics_incomplete=true;
  return out;
 }
+function powerSummary(value:unknown):Obj {
+ const v=obj(value),out:Obj={};
+ if(typeof v.name==='string'&&v.name)out.name=v.name.slice(0,80);
+ if(typeof v.type==='string'&&v.type)out.type=v.type;
+ if(typeof v.amount==='number'&&Number.isFinite(v.amount)&&v.amount!==-1)out.amount=v.amount;
+ if(typeof v.damage==='number'&&Number.isFinite(v.damage))out.damage=v.damage;
+ if(v.just_applied===true)out.just_applied=true;
+ if(typeof v.description==='string'&&v.description){
+  const text=v.description.slice(0,180);out.description=text;
+  if(text.length<v.description.length)out.description_truncated=true;
+ }
+ if(v.description_complete===false)out.description_complete=false;
+ return out;
+}
+function powersSummary(value:unknown,limit:number):Obj[] {
+ return list(value).slice(0,limit).map(powerSummary).filter(power=>Object.keys(power).length>0);
+}
 function publicAction(value:unknown,index:number):Obj {
  const action=obj(value),out:Obj={id:actionAlias(index)};
  if(typeof action.label==='string'){out.label=action.label.slice(0,160);if(action.label.length>160)out.label_truncated=true;}
@@ -120,6 +137,7 @@ function monsterSummary(value:unknown,index:number):Obj {
  for(const key of ['name','current_hp','max_hp','intent','move_adjusted_damage'])if(Object.hasOwn(v,key)&&scalar(v[key],120))out[key]=v[key];
  if(typeof v.block==='number'&&v.block>0)out.block=v.block;
  if(typeof v.move_hits==='number'&&v.move_hits>1)out.move_hits=v.move_hits;
+ const powers=list(v.powers);if(powers.length){out.powers=powersSummary(powers,5);if(powers.length>5)out.powers_more='monsters/'+index+'/powers';}
  for(const key of ['is_gone','is_dead','half_dead'])if(v[key]===true)out[key]=true;
  return out;
 }
@@ -270,6 +288,10 @@ function ensureToc(out:Obj,ref:string,value:unknown){const toc=list(out.toc) as 
 function trimDecision(out:Obj,roots:Obj,actions:unknown[]):Obj {
  const combat=obj(out.combat),hand=list(combat.hand) as Obj[];
  if(bytes(out)>4400)for(const card of hand)if(card.description!==undefined){delete card.description;delete card.description_truncated;card.details_required=true;}
+ if(bytes(out)>4400){
+  const strip=(powers:unknown)=>{for(const value of list(powers)){const power=obj(value);delete power.description;delete power.description_truncated;}};
+  strip(obj(out.player).powers);for(const monster of list(combat.monsters))strip(obj(monster).powers);
+ }
  if(bytes(out)>4400&&list(combat.monsters).length>4){combat.monsters=list(combat.monsters).slice(0,4);combat.monsters_more='monsters';}
  if(bytes(out)>4400&&Array.isArray(out.offers)&&out.offers.length>6){out.offers=out.offers.slice(0,6);out.offers_more='screen/cards';}
  const reading=obj(out.event_reading);if(bytes(out)>4400&&Array.isArray(reading.options)&&reading.options.length>6){reading.options=reading.options.slice(0,6);reading.options_more='screen/event_reading/options';}
@@ -281,8 +303,9 @@ function trimDecision(out:Obj,roots:Obj,actions:unknown[]):Obj {
 export function decision(state:Obj):Obj {
  const current=scope(state),{screen,combat,roots,unsupported}=current,o=obj(state.observation),c=obj(obj(o.game_state).combat_state),out:Obj=decisionHeader(state,screen);if(unsupported)out.unsupported_information=true;
  if(roots.player){
-  const keys=combat?['current_hp','max_hp','gold','energy','block']:['class','act','floor','current_hp','max_hp','gold'],player=inlineSummary(roots.player,keys),stance=obj(obj(roots.player).stance),stanceName=stance.name??stance.id;
+  const playerSource=obj(roots.player),keys=combat?['current_hp','max_hp','gold','energy','block']:['class','act','floor','current_hp','max_hp','gold'],player=inlineSummary(playerSource,keys),stance=obj(playerSource.stance),stanceName=stance.name??stance.id;
   if(typeof stanceName==='string'&&stanceName)player.stance=stanceName;
+  if(combat){const powers=list(playerSource.powers);if(powers.length){player.powers=powersSummary(powers,6);if(powers.length>6)player.powers_more='player/powers';}}
   Object.assign(player,mechanicsDecisionSummary(combat?obj(c.player).mechanics??obj(obj(o.game_state).mechanics):obj(obj(o.game_state).mechanics)));if(Object.keys(player).length)out.player=player;
  }
  const actions=list(roots.actions),actionMap=aliases(actions);out.actions=actions.slice(0,12).map(publicAction);if(actions.length>12)out.actions_more='actions';
