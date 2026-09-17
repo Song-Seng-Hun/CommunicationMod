@@ -6,8 +6,22 @@ import {obj,list,type Obj} from './view.js';
 
 const hash=(v:string)=>createHash('sha256').update(v).digest('hex');
 const unavailable=()=>{throw new Error('Reference not available in current state.');};
+const cleanProse=(text:string)=>text
+ .replace(/same current session\/state;?\s*/gi,'')
+ .replace(/current session\/state and\s*/gi,'')
+ .replace(/Stale required IDs\/refs/gi,'Stale refs')
+ .replace(/No current IDs\/refs for context/gi,'No current refs for context')
+ .replace(/current IDs\/refs/gi,'current refs');
+function publicCapsule(source:Capsule):Capsule {
+ const capsule=structuredClone(source) as Capsule & {revision?:string};
+ delete capsule.revision;
+ for(const [key,binding] of Object.entries(capsule.bindings))if(['current.session_id','current.state_id'].includes(binding.source))delete capsule.bindings[key];
+ for(const call of capsule.calls){delete call.arguments.session_id;delete call.arguments.state_id;}
+ for(const key of ['when','not_when','requires','expect','stop'] as const)capsule[key]=cleanProse(capsule[key]);
+ return capsule;
+}
 export function exampleFragment(capsule:Capsule):Obj {
- return {ref:'guidance/'+capsule.id,format:'example',data:structuredClone(capsule)};
+ return {ref:'guidance/'+capsule.id,data:publicCapsule(capsule)};
 }
 // Validate the build artifact once. Missing/stale packaging disables guidance only.
 const active=new Map<string,{capability:Capability;revision:string;inline?:Capsule}>();
@@ -18,9 +32,7 @@ try {
  for(const capability of capabilities){
   const stamp=bundle.capabilities?.[capability.id];
   if(!stamp || stamp.digest!==hash(JSON.stringify(capability)))continue;
-  const normal=capability.cases.find(c=>c.case==='normal');
-  const inline=normal && stamp.inline===normal.id && stamp.inline_tokens<=160?normal:undefined;
-  active.set(capability.id,{capability,revision:stamp.digest.slice(0,16),inline});
+  active.set(capability.id,{capability,revision:stamp.digest.slice(0,16)});
  }
 }catch{ /* Existing state/rules remain available even without example artifacts. */ }
 
@@ -36,7 +48,7 @@ for(const [id,{capability:c}] of active){
 }
 export interface GuidanceSelection {summary:Obj;directory:Obj;capsules:Map<string,Capsule>;}
 export function selectGuidance(state:Obj,scope:{screen:string;roots:Obj;unsupported:boolean}):GuidanceSelection|undefined {
- // No invented session-bound help before a valid session exists.
+ // Raw identity gates validity internally; it is never emitted in guidance.
  if(typeof state.session_id!=='string'||!state.session_id||!Number.isSafeInteger(state.state_id)||Number(state.state_id)<0)return;
  const ids=new Set<string>(),add=(values?:Set<string>)=>{for(const value of values??[])ids.add(value);};
  const connection=obj(state.connection),pending=!!connection.pending_request_id;
@@ -50,7 +62,6 @@ export function selectGuidance(state:Obj,scope:{screen:string;roots:Obj;unsuppor
   for(const value of list(scope.roots.actions)){
    const a=obj(value);if(typeof a.id!=='string')continue;
    let matched=actionsIndex.get(a.id);
-   // Most-specific offered subtype: skip/bowl/plan must not inherit take/travel.
    if(!matched)for(let i=a.id.lastIndexOf('.');i>=0;i=a.id.lastIndexOf('.',i-1)){
     matched=actionsIndex.get(a.id.slice(0,i+1));if(matched || i===0)break;
    }
@@ -71,8 +82,6 @@ export function selectGuidance(state:Obj,scope:{screen:string;roots:Obj;unsuppor
   for(const capsule of c.cases){cases[capsule.case]={title:capsule.case};capsules.set('guidance/'+capsule.id,capsule);}
   directory[c.id]=cases;
  }
- // Default decisions need only one current entry point. Revision hashes, directory
- // metadata and inline examples are available on demand and should not repeat every turn.
  const first=selected[0].capability;
  const summary:Obj={ref:'guidance/'+first.id+'/normal'};
  return {summary,directory,capsules};
