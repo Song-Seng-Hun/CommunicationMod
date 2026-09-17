@@ -5,7 +5,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import path from 'node:path';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const repo=fileURLToPath(new URL('../../',import.meta.url));
-export const contextText=revision=>`Downfall examples revision ${revision}. Read only needed current guidance refs via sts_get_context. Recheck dynamic costs, targets and offered actions after state changes. Unknown/applied_waiting: inspect original request_id; never resend. No game state or permission restored.`;
+export const contextText=_revision=>`Downfall examples are available on demand. Read only needed current guidance refs via sts_get_context. Recheck dynamic costs, targets and offered actions after state changes. Unknown/applied_waiting: inspect original request_id; never resend. No game state or permission restored.`;
 export function contextFor(input,env,revision){
  if(env.DOWNFALL_AGENT_CONTEXT!=='1'||input?.hook_event_name!=='SessionStart'||!['startup','resume','compact'].includes(input.source)||!(/^[a-f0-9]{16}$/).test(revision))return '';
  return contextText(revision);
@@ -24,7 +24,7 @@ export async function loadContext(input,env=process.env){
   return contextFor(input,env,revision);
  }catch{return '';}
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
+if(process.argv[1]&&import.meta.url===pathToFileURL(new URL(process.argv[1],`file://${process.cwd()}/`).href).href){
  let input='',oversize=false;
  for await(const chunk of process.stdin){if(!oversize){input+=chunk;if(Buffer.byteLength(input)>8192){oversize=true;input='';}}}
  try{if(!oversize){const text=await loadContext(JSON.parse(input));if(text)process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:'SessionStart',additionalContext:text}}));}}catch{ /* Missing/invalid input is silent. */ }
