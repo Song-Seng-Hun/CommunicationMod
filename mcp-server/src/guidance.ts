@@ -7,7 +7,7 @@ import {obj,list,type Obj} from './view.js';
 const hash=(v:string)=>createHash('sha256').update(v).digest('hex');
 const unavailable=()=>{throw new Error('Reference not available in current state.');};
 export function exampleFragment(capsule:Capsule):Obj {
- return {ref:'guidance/'+capsule.id,format:'example',data:structuredClone(capsule),page_complete:true,next_offset:null};
+ return {ref:'guidance/'+capsule.id,format:'example',data:structuredClone(capsule)};
 }
 // Validate the build artifact once. Missing/stale packaging disables guidance only.
 const active=new Map<string,{capability:Capability;revision:string;inline?:Capsule}>();
@@ -66,19 +66,15 @@ export function selectGuidance(state:Obj,scope:{screen:string;roots:Obj;unsuppor
   .sort((a,b)=>a.capability.priority-b.capability.priority || (a.capability.id<b.capability.id?-1:1));
  if(!selected.length)return;
  const directory:Obj=Object.create(null),capsules=new Map<string,Capsule>();
- const toc=selected.map(({capability:c})=>({ref:'guidance/'+c.id,title:c.title,count:c.cases.length}));
  for(const {capability:c} of selected){
   const cases:Obj=Object.create(null);
   for(const capsule of c.cases){cases[capsule.case]={title:capsule.case};capsules.set('guidance/'+capsule.id,capsule);}
   directory[c.id]=cases;
  }
- const revision=Buffer.from(hash(selected.map(x=>x.capability.id+':'+x.revision).join('|')).slice(0,16),'hex').toString('base64url');
- // One direct normal-case ref avoids a directory roundtrip. Full current cases
- // remain in the root directory; three is a ceiling, not a token-spending target.
+ // Default decisions need only one current entry point. Revision hashes, directory
+ // metadata and inline examples are available on demand and should not repeat every turn.
  const first=selected[0].capability;
- const summary:Obj={revision,toc:[{ref:'guidance/'+first.id+'/normal'}],more:'guidance'};
- const representative=selected[0].inline;
- if(representative)summary.example=structuredClone(representative);
+ const summary:Obj={ref:'guidance/'+first.id+'/normal'};
  return {summary,directory,capsules};
 }
 
