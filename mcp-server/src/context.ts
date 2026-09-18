@@ -57,7 +57,7 @@ function scope(state:Obj):Scope {
   if(mechanicsNeedsRef(mechanics))add('mechanics',mechanics);
   add('collection',obj(mechanics).collection);
   if(combat){
-   const combatMeta:Obj=pick(c,['turn','cards_discarded_this_turn','times_damaged']);if(!handVisible(c,o))combatMeta.hand_complete=false;add('combat',combatMeta);
+   const combatMeta:Obj={};if(Number.isFinite(c.turn))combatMeta.turn=c.turn;if(typeof c.cards_discarded_this_turn==='number'&&c.cards_discarded_this_turn!==0)combatMeta.cards_discarded_this_turn=c.cards_discarded_this_turn;if(typeof c.times_damaged==='number'&&c.times_damaged!==0)combatMeta.times_damaged=c.times_damaged;if(!handVisible(c,o))combatMeta.hand_complete=false;add('combat',combatMeta);
    add('card_in_play',c.card_in_play);add('combat_collection',obj(mechanics).combat_collection);if(handVisible(c,o))add('hand',c.hand);add('monsters',c.monsters);
    add('piles',pick(c,['draw_pile','discard_pile','exhaust_pile','draw_pile_order_visible','draw_pile_order']));
   }
@@ -159,7 +159,7 @@ function controlSummary(value:unknown,actionAliases:Map<string,string>):Obj {
  return out;
 }
 function monsterSummary(value:unknown,index:number):Obj {
- const v=obj(value),out:Obj={ref:'monsters/'+index};
+ const v=obj(value),out:Obj={i:index};
  for(const key of ['name','current_hp','max_hp','intent','move_adjusted_damage'])if(Object.hasOwn(v,key)&&scalar(v[key],120))out[key]=v[key];
  if(typeof v.block==='number'&&v.block>0)out.block=v.block;
  if(typeof v.move_hits==='number'&&v.move_hits>1)out.move_hits=v.move_hits;
@@ -168,11 +168,11 @@ function monsterSummary(value:unknown,index:number):Obj {
  return out;
 }
 function eventOptionSummary(value:unknown,index:number):Obj {
- const v=obj(value),out:Obj={ref:'screen/event_reading/options/'+index};
+ const v=obj(value),out:Obj={i:index};
  if(typeof v.text==='string')out.text=v.text.slice(0,240);if(v.disabled===true)out.disabled=true;return out;
 }
 function offerSummary(value:unknown,index:number,screen:string):Obj {
- const v=obj(value),out:Obj={ref:'screen/cards/'+index};
+ const v=obj(value),out:Obj={i:index};
  for(const key of ['name','type','price'])if(Object.hasOwn(v,key)&&scalar(v[key],160))out[key]=v[key];
  if(screen==='SHOP_SCREEN'){
   if(v.available===false)out.available=false;if(v.affordable===false)out.affordable=false;
@@ -345,7 +345,7 @@ export function decision(state:Obj):Obj {
   const groupedHand=hand.length<=10?groupEquivalentCards(shownHand):shownHand.map((value,index)=>({value,index,copies:1}));
   const perCard=Math.max(145,Math.floor(1800/Math.max(1,groupedHand.length))),evidence=groupedHand.map(group=>combatEvidence(obj(group.value),220));
   const inlineEvidence=hand.length<=10&&groupedHand.every((group,i)=>evidence[i]!==undefined||!['cost_components','target_playability'].some(k=>Object.hasOwn(obj(group.value),k)))&&evidence.reduce((n,v)=>n+(v?bytes(v):0),0)<=480;
-  const combatOut:Obj={hand:groupedHand.map((group,i)=>{const summary=flatCardSummary('hand/'+group.index,group.value,perCard,false);if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);if(group.copies>1)summary.copies=group.copies;return summary;}),monsters:monsters.slice(0,8).map(monsterSummary)};
+  const combatOut:Obj={hand:groupedHand.map((group,i)=>{const summary=flatCardSummary('hand/'+group.index,group.value,perCard,false);delete summary.ref;summary.i=group.index;if(inlineEvidence&&evidence[i])Object.assign(summary,evidence[i]);if(group.copies>1)summary.copies=group.copies;return summary;}),monsters:monsters.slice(0,8).map(monsterSummary)};
   if(!complete)combatOut.hand_complete=false;out.combat=combatOut;Object.assign(combatOut,inlineSummary(roots.combat));if(hand.length>10)combatOut.hand_more='hand';if(monsters.length>8)combatOut.monsters_more='monsters';
  }
  if(roots.screen){
