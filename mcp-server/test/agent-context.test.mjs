@@ -39,7 +39,7 @@ test('multi-card reads summarize comparison facts and stay inline',()=>{
 
 test('default combat summary is flat and decision-critical',()=>{
  const s=withCard({id:'a',uuid:'u',name:'스네코 카드',cost:0,type:'ATTACK',is_playable:true,description:'피해를 줍니다.',upgrades:3});
- const c=decision(s).combat.hand[0];assert.equal(c.ref,'hand/0');assert.equal(c.name,'스네코 카드');assert.equal(c.cost,0);assert.equal(c.type,'ATTACK');
+ const c=decision(s).combat.hand[0];assert.equal(c.i,0);assert.equal(c.ref,undefined);assert.equal(c.name,'스네코 카드');assert.equal(c.cost,0);assert.equal(c.type,'ATTACK');
  assert.equal(c.data,undefined);assert.equal(c.id,undefined);assert.equal(c.uuid,undefined);assert.equal(c.upgrades,undefined);
 });
 
@@ -59,7 +59,7 @@ test('combat summary keeps current buffs debuffs and monster traits inline witho
  const v=decision(s);
  assert.equal(v.player.powers[0].name,'약화');assert.equal(v.player.powers[0].type,'DEBUFF');assert.equal(v.player.powers[0].amount,2);
  assert.match(v.player.powers[0].description,/피해/);assert.equal(v.player.powers[0].id,undefined);
- const monster=v.combat.monsters[0];assert.equal(monster.powers[0].name,'말랑함');assert.equal(monster.powers[0].type,'BUFF');assert.equal(monster.powers[0].amount,3);
+ const monster=v.combat.monsters[0];assert.equal(monster.i,0);assert.equal(monster.ref,undefined);assert.equal(monster.powers[0].name,'말랑함');assert.equal(monster.powers[0].type,'BUFF');assert.equal(monster.powers[0].amount,3);
  assert.match(monster.powers[0].description,/방어도/);assert.equal(monster.powers[0].id,undefined);assert.equal(monster.powers[0].misc,undefined);
  const detail=readContext(s,['monsters/0/powers/0']).fragments[0];assert.equal(detail.data.id,'Malleable');assert.equal(detail.data.misc,3);
 });
