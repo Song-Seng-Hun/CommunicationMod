@@ -90,7 +90,7 @@ test('combat metadata and current card have reachable short references',async()=
 });
 test('current shop prices and card refs avoid traversing an entire screen',async()=>{
  const {decision}=await api(),s=state('SHOP_SCREEN');s.actions=[{id:'run.shop.card.u',label:'카드',parameters:{}}];s.observation.shop_controls=[{id:'buy',price:75,available:true}];s.observation.game_state.screen_state={cards:[{name:'카드',price:75,description:'카드 효과',upgrade_preview:{after:{description:'강화'}}}]};
- const v=decision(s);assert.equal(v.shop_controls,undefined);assert.ok(v.toc.some(x=>x.ref==='shop_controls'));assert.equal(v.offers[0].ref,'screen/cards/0');assert.equal(v.offers[0].name,'카드');assert.equal(v.offers[0].price,75);assert.equal(v.offers[0].upgrades,undefined);
+ const v=decision(s);assert.equal(v.shop_controls,undefined);assert.ok(v.toc.some(x=>x.ref==='shop_controls'));assert.equal(v.offers[0].i,0);assert.equal(v.offers[0].ref,undefined);assert.equal(v.offers[0].name,'카드');assert.equal(v.offers[0].price,75);assert.equal(v.offers[0].upgrades,undefined);
 });
 test('a selected small card is atomic without success boilerplate',async()=>{
  const {readContext}=await api(),s=state();s.observation.game_state.deck[0].tooltips=[{title:'취약',description:'추가 피해'}];
