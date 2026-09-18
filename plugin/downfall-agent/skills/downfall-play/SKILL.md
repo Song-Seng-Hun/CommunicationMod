@@ -35,12 +35,12 @@ Use `sts_act` for one offered action. Send only its short `action_id` and gamepl
 | Needed facts already present in the pinned state | Reuse them. No duplicate lookup. |
 | Same state check | `sts_get_state({})` may return only `unchanged:true`. |
 | Wait for change | `sts_get_state({wait_ms:15000})`; the server compares with the last shown view. After two consecutive unchanged waits, stop and report. |
-| Full summary needed again | `sts_get_state({refresh:true})`. |
+| Full summary needed again | `sts_get_state({refresh:true})`; this also restores a TOC omitted because its structure was unchanged. |
 | State changed or stale pin rejected | Refresh state, then reconfirm dynamic cost, resources, targets, playability and action availability. |
 | Action has no `parameters_ref` | Call it with empty/default `arguments`; this does not mean gameplay evidence is sufficient. |
 | `parameters_ref` present | Read that ref and send only the remaining public gameplay arguments. Fixed constants omitted there are supplied by the server. |
 | Several needed refs | Batch 1–8 refs in `sts_get_context`. Different `offset` values require separate calls. Multiple card refs may return summaries; read one card ref alone for full detail. |
-| Selected card | Use its explicit ref. A single-card read can return full descriptions, keywords and upgrade details. |
+| Selected compact row | Use its `i` with the enclosing root (for example `hand/3`, `monsters/0`, `screen/cards/2`). A single-card read can return full descriptions, keywords and upgrade details. |
 | Format | State/action/context responses automatically use lossless TOON only when it is materially smaller; otherwise they remain JSON. Do not request a format just to optimize size. Use `response_format:"json"` only when literal JSON syntax is specifically needed. |
 
 Routine reads need no repeated plan or narration. Preserve required progress updates, event explanations and risky-action confirmations. Reduced calls never justify guessed facts, automatic destructive approval or uncertain-command replay.
