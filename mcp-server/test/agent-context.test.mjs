@@ -92,6 +92,12 @@ test('character-specific combat resources stay visible without exposing raw inte
  const orb=readContext(s,['player/orbs/0']).fragments[0];assert.equal(orb.data.id,'Lightning');
 });
 
+test('zero combat counters stay implicit but nonzero counters remain visible',()=>{
+ const s=state(),c=s.observation.game_state.combat_state;c.turn=4;c.cards_discarded_this_turn=0;c.times_damaged=0;
+ let v=decision(s);assert.equal(v.combat.turn,4);assert.equal(v.combat.cards_discarded_this_turn,undefined);assert.equal(v.combat.times_damaged,undefined);
+ c.cards_discarded_this_turn=2;c.times_damaged=1;v=decision(s);assert.equal(v.combat.cards_discarded_this_turn,2);assert.equal(v.combat.times_damaged,1);
+});
+
 test('mechanics audit boilerplate stays out of default view while gameplay resources remain',()=>{
  const s=state();s.observation.game_state.combat_state.player.mechanics={scope:'pinned_native_public_character_panels',character_supported:true,panel_bindings_complete:true,information_complete:true,information_issues:[],information_issue_count:0,audited_panels_complete:true,character_specific_complete:true,temporary_hp:0,max_orb_slots:0,reserves:2,essence:0};
  const v=decision(s);assert.equal(v.mechanics,undefined);assert.equal(v.player.reserves,2);assert.equal(v.player.essence,0);assert.equal(v.player.scope,undefined);assert.equal(v.player.character_supported,undefined);assert.ok(v.toc.some(x=>x.ref==='mechanics'));
