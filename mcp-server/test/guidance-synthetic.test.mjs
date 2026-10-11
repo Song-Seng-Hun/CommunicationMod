@@ -7,6 +7,39 @@ import {readContext,conditionalDecision} from '../dist/context.js';
 import {bindCall} from '../scripts/build-guidance.mjs';
 import {fixtureScenario,resolveBindings,validateArguments,assertActionEvidence} from '../evaluation/guidance-scenarios.mjs';
 
+test('match fixture rejects fake positives for stale intro, unavailable position and animation',()=>{
+ const fixture={capability:'event.match',cover:'event.match',action:'run.match.flip.0'};
+ const fresh=()=>fixtureScenario(fixture);
+ const good=fresh();assert.doesNotThrow(()=>assertActionEvidence(good));
+ assert.ok(good.state.observation.match_controls,'missing native match fixture');
+ assert.equal(good.state.observation.match_controls.cards[0].card,undefined);
+ for(const change of [
+  f=>{f.state.observation.game_state.screen_type='MAP';},
+  f=>{f.acknowledgedReading='old-page';},
+  f=>{f.commentary='';},
+  f=>{f.state.observation.match_controls.flip_available=false;},
+  f=>{f.state.observation.match_controls.attempts_remaining=0;},
+  f=>{f.state.observation.match_controls.cards[0].available=false;},
+  f=>{f.state.observation.match_controls.cards[0].face_up=true;},
+  f=>{f.state.observation.match_controls.cards[0].position=1;},
+  f=>{f.state.observation.match_controls.cards[0].action_id='run.match.flip.1';},
+ ]){const f=fresh();change(f);assert.throws(()=>assertActionEvidence(f),/match|intro|event|position/i);}
+});
+
+test('Seal reward defers choices and evil wheel and optional relic preview retain their semantics',()=>{
+ const seal=fixtureScenario({capability:'reward.take',cover:'reward.SEALCARD',action:'run.reward.0'});
+ const reward=seal.state.observation.reward_controls[0];assert.equal(reward.kind,'sealcard');assert.equal(reward.native_reward.choice_details_available_after_claim,true);
+ assert.throws(()=>readContext(seal.state,['screen/cards']),/not available/);assert.doesNotThrow(()=>assertActionEvidence(seal));
+ const wheel=fixtureScenario({capability:'event.choice',cover:'event.wheel.evil',action:'run.wheel.spin'});
+ assert.equal(wheel.state.observation.wheel_controls.spin_available,true);assert.doesNotThrow(()=>assertActionEvidence(wheel));
+ wheel.acknowledgedReading='old-page';assert.throws(()=>assertActionEvidence(wheel),/intro/);
+ const relic=fixtureScenario({capability:'event.choice',cover:'event.relic_preview',action:'run.event.0'});
+ assert.ok(relic.refs.includes('screen/options/0/relic_preview'));
+ assert.equal(readContext(relic.state,['screen/options/0/relic_preview/tooltips/0']).fragments[0].data.description,'Lose 3 HP. Do not discard.');
+ const ordinary=fixtureScenario({capability:'event.choice',cover:'event.choice',action:'run.event.0'});
+ assert.doesNotThrow(()=>assertActionEvidence(ordinary));assert.ok(!ordinary.refs.some(r=>r.includes('relic_preview')));
+});
+
 test('each semantic fixture executes normal/read/stop templates only on a synthetic backend',async()=>{
  let totalActions=0,totalLaunches=0,cases=0;
  for(const fixture of coverageFixtures){

@@ -16,6 +16,7 @@ public final class NativeMechanicsBindingTest {
             {"collector.CollectorCollection","collection","combatCollection"},{"gremlin.characters.GremlinCharacter","currentGremlin","mobState","nob"},
             {"gremlin.patches.GremlinMobState","gremlins","inCombat"},{"gremlin.orbs.GremlinStandby","hp","assetFolder"},
             {"awakenedOne.AwakenedOneMod","UP_NEXT","powersThisCombat"},{"awakenedOne.actions.ConjureAction","conjuresThisCombat"},
+            {"downfall.downfallMod","DeterministicConjure"},
             {"awakenedOne.powers.DemonGlyphPower","POWER_ID"},{"awakenedOne.util.Wiz","POWERS_TO_AWAKEN"},{"awakenedOne.ui.OrbitingSpells","spellCards"},
             {"champ.stances.AbstractChampStance","charged"},{"slimebound.characters.SlimeboundCharacter","puddleForm"},
             {"slimebound.orbs.SpawnedSlime","upgraded","extraFontColor","debuffAmount","slimeBonus","noRender"},

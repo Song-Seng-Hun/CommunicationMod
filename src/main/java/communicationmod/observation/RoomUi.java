@@ -28,12 +28,8 @@ public final class RoomUi {
         if(!ready()){status.addProperty("reason","native_input_pending_or_transition");return actions;}
         if(type.equals("REST"))rest(view,actions);
         else if(type.equals("SHOP_ROOM")) {
-            final ShopRoom room=(ShopRoom)AbstractDungeon.getCurrRoom();final Merchant merchant=room.merchant;
-            // Do not call merchant.update() from the observer/render tail. The merchant's native click
-            // path is frame-sensitive; queue the existing MerchantPatch injection and let the next
-            // normal game update open SHOP_SCREEN. This is also the proven legacy `choose shop` path.
-            if(merchant!=null && !MerchantPatch.visitMerchant)actions.add(action("run.shop.enter",Merchant.NAMES[0],null,"play",()->room.merchant==merchant && !AbstractDungeon.isScreenUp && !MerchantPatch.visitMerchant,
-                ()->MerchantPatch.visitMerchant=true));
+            final ShopRoom room=(ShopRoom)AbstractDungeon.getCurrRoom();
+            merchantEntry(actions,room);
             shopProceed(actions,room);
         } else if(type.equals("SHOP_SCREEN"))shop(view,actions);
         else if(type.equals("BOSS_REWARD"))boss(view,actions);
@@ -45,6 +41,32 @@ public final class RoomUi {
         } else if(type.equals("COMPLETE"))proceed(actions,"run.room.proceed");
         if(actions.isEmpty())status.addProperty("reason","room_controls_pending_or_unsupported");
         return actions;
+    }
+    private static void merchantEntry(List<ProtocolSession.Action> actions,ShopRoom room) {
+        if(AbstractDungeon.isScreenUp || room.phase==AbstractRoom.RoomPhase.COMBAT || MerchantPatch.visitMerchant)return;
+        if(room.getClass().getName().equals("downfall.rooms.HeartShopRoom")) {
+            final Object merchant=NativeUiInput.field(room,"heartMerchant");
+            if(merchant==null || !merchant.getClass().getName().equals("downfall.util.HeartMerchant"))return;
+            final Hitbox hb=(Hitbox)NativeUiInput.field(merchant,"hb");
+            final ShopScreen owner=AbstractDungeon.shopScreen;
+            if(!heartReady(room,merchant,hb,owner))return;
+            String label=((String[])NativeUiInput.field(merchant,"NAMES"))[0];
+            actions.add(action("run.shop.enter",label,null,"play",()->heartReady(room,merchant,hb,owner),
+                ()->NativeUiInput.press(hb,()->NativeUiInput.invoke(merchant,"update"))));
+        } else if(room.getClass()==ShopRoom.class) {
+            final Merchant merchant=room.merchant;
+            // Preserve base Merchant's proven frame-sensitive deferred entry path.
+            if(merchant!=null && merchant.getClass()==Merchant.class && merchant.hb!=null && !merchant.hb.clicked && !merchant.hb.clickStarted)
+                actions.add(action("run.shop.enter",Merchant.NAMES[0],null,"play",
+                    ()->room.merchant==merchant && !AbstractDungeon.isScreenUp && room.phase!=AbstractRoom.RoomPhase.COMBAT && !MerchantPatch.visitMerchant && !merchant.hb.clicked && !merchant.hb.clickStarted,
+                    ()->MerchantPatch.visitMerchant=true));
+        }
+    }
+    private static boolean heartReady(ShopRoom room,Object merchant,Hitbox hb,ShopScreen owner) {
+        return NativeUiInput.field(room,"heartMerchant")==merchant && Boolean.TRUE.equals(NativeUiInput.field(room,"heartMerchantShown"))
+            && NativeUiInput.field(merchant,"hb")==hb && hb!=null && !hb.clicked && !hb.clickStarted
+            && ((Integer)NativeUiInput.field(merchant,"shopScreen"))==1 && AbstractDungeon.shopScreen==owner && owner!=null && owner.getClass()==ShopScreen.class
+            && room.phase!=AbstractRoom.RoomPhase.COMBAT && !AbstractDungeon.isScreenUp && !MerchantPatch.visitMerchant;
     }
     @SuppressWarnings("unchecked") private static List<AbstractCampfireOption> restOptions(RestRoom room) {
         return (List<AbstractCampfireOption>)NativeUiInput.field(room.campfireUI,"buttons");

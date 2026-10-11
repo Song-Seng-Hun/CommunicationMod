@@ -69,13 +69,14 @@ public final class CharacterResources {
             if(spells.size()>256)throw new IllegalStateException("spell budget");
             Map<String,Map<String,Object>> groups=new LinkedHashMap<>();
             Object next=stat("awakenedOne.AwakenedOneMod","UP_NEXT");
+            boolean deterministic=Boolean.TRUE.equals(stat("downfall.downfallMod","DeterministicConjure"));
             boolean spellsComplete=true;
             for(Object value:spells) {
                 AbstractCard card=(AbstractCard)value;if(!visible(card)){spellsComplete=false;continue;}
                 Map<String,Object> row=groups.get(card.cardID);
-                if(row==null){row=new LinkedHashMap<>();row.put("card",view.apply(card));row.put("count",0);row.put("up_next",false);groups.put(card.cardID,row);}
+                if(row==null){row=new LinkedHashMap<>();row.put("card",view.apply(card));row.put("count",0);if(deterministic)row.put("up_next",false);groups.put(card.cardID,row);}
                 row.put("count",number(row.get("count"))+1);
-                if(card.tags.contains(next))row.put("up_next",true);
+                if(deterministic && card.tags.contains(next))row.put("up_next",true);
             }
             out.put("spells",new ArrayList<>(groups.values()));
             out.put("spells_complete",spellsComplete);

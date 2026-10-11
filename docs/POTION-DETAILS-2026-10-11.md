@@ -1,0 +1,25 @@
+# Potion effects and cached public tooltip repair
+
+The default potion inventory previously omitted main effects, and native potion conversion omitted the game's additional public tooltip rules. A playing model could see an unfamiliar potion's name without its current effect or the Reserve/Encode/Soulburn rules displayed by the game.
+
+The existing default inventory and potion directory now share one current-effect summary, retain physical slots/counts/use predicates, and expose exact supplementary tooltip refs. Missing, clipped or incomplete evidence is marked for detail reads. Potion prose can be trimmed under the existing response budget while retaining the exact refs and native incomplete flags.
+
+The generic native converter now reads existing AbstractPotion.tips header/body through a thin PotionTooltips adapter to the unchanged bounded PublicTooltips formatter. This covers held, shop and reward potions without a custom potion whitelist. Reads at most33 cached entries to preserve the existing32-tip overflow signal; null/unresolved/clipped entries remain incomplete. Main description_complete concerns main text only; tooltips_complete has its own scope. It does not initialize data, recompute potency, invoke renderers, scan dictionaries, write native state or inspect future outcomes.
+
+Targeted evidence: existing potion-summary cases reproduced baseline4pass/3fail; after repair7/7 and affected MCP42/42 passed. Native converter-binding regression failed on the isolated baseline and passed after repair; fresh compilation/pinned rendering/cache/read-only binding checks and38 existing pure tooltip assertions passed. This is T2 observation/projection repair; existing tests were extended and no new framework or mutation tool was added.
+
+Independent exact-source review approved the ten-file diff and verified baseline/staged hashes, actual held/reward/shop bindings, completeness and unchanged data. A dense-prose probe measured4302 default-response bytes and at most420 bytes per fragment across eight distinct refs, preserving all six potion refs and native incomplete flags. No actionable blocker was found.
+
+Release complete:
+
+- Required package checks: full MCP224/224, zero failures/skips, launcher lifecycle and isolated installer PASS; target/potion-details-package.log. Package target/plugin-package-1cf8c0a4243e41d388d3d02d1139b113/downfall-agent.
+- Required native prepare finished exit0 with both menu/play subprocess roundtrips, copied-runtime/native bindings and launcher --check. Runtime target/local-test-20261011-135726-4c9e4a0b; built/runtime CommunicationMod.jar SHA256FA730C23353385D79C919E2A882701541E723E852814015107110DDD2F0D08D2. Original Steam JARs unchanged and game unlaunched.
+- All53 prior runtime profile files copied to empty new destinations with original/destination hashes verified; originals and recordings retained.
+- Actual installed version0.1.0+codex.20261011140203.b5ce2d94. All3686 package/installed files byte-match; source revision2026-10-11-potion-details-v18, files116, fingerprint7c1539fa3ba3eb138ce7466fb22331c0f6be21a46877562d1b736ea43ee78697. Actual E:/dev/gamemcp/sts/mcp-server/dist modules match the package.
+- Actual installed scripts/start.mjs synthetic MCP replay confirms current custom effects/additional rules, changed text through current refs, incomplete flags, paginated long descriptions, and preserved counts/use/target/empty-slot semantics; zero game commands. Evidence potion-details-installed-verification.json and potion-details-installed-smoke-green.log.
+
+Original failures retained: first native prepare exited1 at a play-control child greeting assertion; cause remains unknown. Direct-child diagnosis passed with unchanged Java/mod/64MiB/eight-second deadlines, exact hello and empty stderr. One fresh full required prepare passed without changing source/checks/deadlines; failed and retry logs remain separately in target/potion-details-prepare.log and potion-details-prepare-retry.log. The initial installed replay also failed because its synthetic fixture omitted the runtime pointer and used the wrong bridge filename; correcting only setup to the existing fixture convention passed. Its original potion-details-installed-smoke.log is retained, and no production code or acceptance condition was changed.
+
+Authoritative task/evidence record: C:/Users/meleb/OneDrive/문서/ChatGPT/stsmod/POTION-DETAILS-TASKS.md. Actual Gemini app config C:/Users/meleb/.gemini/config/mcp_config.json still routes communicationmod to the repaired dist/index.js; existing Node PID3812 started2026-10-09T10:36:10+09:00 and was left untouched. Reconnect the existing MCP before next play to load the new code. No client settings, game data, commits or push were changed.
+
+No live game was launched. Synthetic installed projection, pinned-bytecode/native bindings, installation and strategy quality are separate evidence types. These checks do not establish real gameplay/model strategy improvement or coverage of every unaudited special renderer.

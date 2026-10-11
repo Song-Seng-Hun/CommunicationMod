@@ -104,5 +104,19 @@ test('archived isolated JSON and TOON reading answers match the frozen truth',as
 });
 
 test('full selective workflow saves tokens including discovery, recovery detail, requests and catalog',async()=>{
- await promisify(execFile)(process.execPath,['scripts/measure-context-format.mjs'],{windowsHide:true,timeout:30000});
+ const {stdout}=await promisify(execFile)(process.execPath,['scripts/measure-context-format.mjs'],{windowsHide:true,timeout:30000});
+ const report=JSON.parse(stdout);
+ assert.equal(report.selective_browse_including_catalog.context_reads,5,'discovery, three pages and selected detail all counted');
+ assert.equal(report.selective_browse_including_catalog.requests,6,'initial state and every context call counted');
+ assert.equal(report.definitions.before,report.definitions.after,'same current catalog for both formatting modes');
+ assert.equal(report.comparison,'JSON-only formatting vs current automatic compact; identical public requests and facts');
+ assert.equal(report.rows.length,6,'aggregate includes all five fact workflows and the existing selective browse');
+ assert.equal(report.rows.at(-1).scenario,'browse_60_cards_selectively');
+ for(const row of [...report.rows,report.selective_browse_including_catalog]){
+  assert.ok(row.request_tokens>0,'all requests contribute tokens to both totals');
+  assert.ok(row.text_plus_requests.before>row.request_tokens);
+  assert.ok(row.text_plus_requests.after>row.request_tokens);
+  assert.ok(row.text_plus_requests.after<=row.text_plus_requests.before,'no workflow may grow text tokens');
+  assert.ok(row.serialized_results_plus_requests.after<=row.serialized_results_plus_requests.before,'no workflow may grow wire tokens');
+ }
 });

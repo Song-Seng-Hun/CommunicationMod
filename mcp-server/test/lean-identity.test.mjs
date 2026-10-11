@@ -33,7 +33,12 @@ test('event reading identity stays server-side while current page facts remain v
 test('control trees expose short action aliases instead of native action IDs',()=>{
  const s=base('COMBAT_REWARD',[{id:'run.reward.0',label:'골드',parameters:{}},{id:'run.reward.1',label:'유물',parameters:{}}]);
  s.observation.reward_controls=[{id:'run.reward.0',label:'골드',supported:true,pending:false,ignored:false,claimable:true,mutually_exclusive_with:'run.reward.1'},{id:'internal-no-action',label:'대기 중',supported:false,pending:true,ignored:false,claimable:false}];
- const page=readContext(s,['reward_controls']).fragments[0],text=JSON.stringify(page);assert.ok(text.includes('a0'));assert.ok(text.includes('a1'));assert.ok(!text.includes('run.reward.'));assert.ok(!text.includes('internal-no-action'));
+ const page=readContext(s,['reward_controls']).fragments[0];assert.deepEqual(page.toc.map(x=>x.ref),['reward_controls/0','reward_controls/1']);
+ const leaves=readContext(s,page.toc.map(x=>x.ref)),first=leaves.fragments[0].data,second=leaves.fragments[1].data;
+ assert.equal(first.action,'a0');assert.equal(first.mutually_exclusive_with,'a1');assert.equal(first.claimable,true);assert.equal(first.pending,false);
+ assert.equal(second.action,undefined);assert.equal(second.claimable,false);assert.equal(second.supported,false);assert.equal(second.pending,true);
+ const text=JSON.stringify([decision(s),page,leaves]);assert.ok(!text.includes('run.reward.'));assert.ok(!text.includes('internal-no-action'));
+ for(const ref of ['reward_controls/0/id','reward_controls/1/id'])assert.throws(()=>readContext(s,[ref]),/not available/);
 });
 
 test('normal converter metadata does not masquerade as unsupported information',()=>{

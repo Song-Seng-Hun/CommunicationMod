@@ -875,22 +875,27 @@ export const capabilities: Capability[] = [
         "hand",
         "deck",
         "screen",
-        "card_in_play"
+        "card_in_play",
+        "monsters"
       ]
     },
     "priority": 1,
     "covers": [
-      "cards.inspect"
+      "cards.inspect",
+      "cards.native_preview",
+      "cards.unknown_gallery",
+      "cards.split_gallery",
+      "cards.collectible_preview"
     ],
     "cases": [
       {
         "id": "cards.inspect/normal",
-        "revision": "1",
+        "revision": "2",
         "capability": "cards.inspect",
         "case": "normal",
         "when": "A current observed ref identifies a relevant public card.",
         "not_when": "Stale required IDs/refs or outside read/launch permission.",
-        "requires": "Read permission; use current toc/child ref; check description, keyword and upgrade_preview completeness.",
+        "requires": "Read permission; use current toc/child ref; check description, keyword, upgrade_preview and previews/collectible_preview completeness. Gallery candidates are not rolled outcomes; base_catalog is not the upgraded variant. Follow child toc/pages, never infer omitted details.",
         "bindings": {
           "session": {
             "type": "string",
@@ -1245,6 +1250,32 @@ export const capabilities: Capability[] = [
       "reward.POTION",
       "reward.EMERALD_KEY",
       "reward.SAPPHIRE_KEY",
+      "reward.COLLECTOR_ESSENCE",
+      "reward.COLLECTOR_COLLECTIBLECARDREWARD",
+      "reward.RARE_CARD",
+      "reward.SEALCARD",
+      "reward.DAZINGPULSE",
+      "reward.DECABEAM",
+      "reward.DONUBEAM",
+      "reward.EXPLODE",
+      "reward.SPIKE",
+      "reward.BOSSCARD",
+      "reward.BOSS_RELIC_CHOICE",
+      "reward.JAXCARD",
+      "reward.REMOVECARD",
+      "reward.THIRDSEALCARDREWARD",
+      "reward.TRANSFORMCARD",
+      "reward.UPGRADECARD",
+      "reward.GEM",
+      "reward.GEMALLRARITIES",
+      "reward.GEM_RELIC_RNG",
+      "reward.HERMIT_BOUNTY",
+      "reward.COLORFULCARD",
+      "reward.COLORFUL_POWERS",
+      "reward.COLORFUL_RARE",
+      "reward.COLORFUL_UNCOMMON_UPGRADED",
+      "reward.DICE_ROLL",
+      "reward.UPGRADEDUNKNOWNCARD",
       "card_mode.reward",
       "card_mode.draft",
       "card_mode.discovery",
@@ -1254,12 +1285,12 @@ export const capabilities: Capability[] = [
     "cases": [
       {
         "id": "reward.take/normal",
-        "revision": "1",
+        "revision": "4",
         "capability": "reward.take",
         "case": "normal",
         "when": "Selected action is a claimable reward row or offered card; not proceed, skip or bowl.",
         "not_when": "Unready, pending, stale IDs, unoffered action or incomplete relevant evidence.",
-        "requires": "Explicit task permission, ready, no pending outcome, current offered action and complete relevant evidence. Read reward type/effect, mutual exclusion and card rules/upgrade_preview. GOLD/STOLEN_GOLD credit gold; CARD opens selection; RELIC grants effect; POTION needs space; EMERALD_KEY/SAPPHIRE_KEY may exclude a linked reward.",
+        "requires": "Explicit task permission, ready, no pending outcome, current offered action and complete relevant evidence. Read effect, mutual exclusion and relevant card/upgrade details. GOLD/STOLEN_GOLD/HERMIT_BOUNTY credit gold; CARD opens selection; RELIC grants effect; POTION needs space; keys may exclude rewards. Collector ESSENCE grants amount; collectible purchase spends essence: verify cost/balance/claimable and card; unavailable upgrade is unknown. Native card rewards including SEALCARD reveal candidates only after claim opens CARD_REWARD. Remove/transform/upgrade and boss-relic rewards open GRID: read selection_operation/count; authorize the effect, then inspect fresh targets for a separate decision. Never infer hidden candidates or random results.",
         "bindings": {
           "session": {
             "type": "string",
@@ -1296,12 +1327,12 @@ export const capabilities: Capability[] = [
       },
       {
         "id": "reward.take/incomplete",
-        "revision": "1",
+        "revision": "3",
         "capability": "reward.take",
         "case": "incomplete",
         "when": "Unclear card_selection_controls.kind or extra rules: read header, controls, card and upgrade refs before selecting.",
         "not_when": "No current IDs/refs for context: refresh state first. Never act or launch from this incomplete case.",
-        "requires": "Read permission; current session/state and 1-8 refs observed in current toc/child toc. Incomplete evidence permits reads only. Read reward type/effect, mutual exclusion and card rules/upgrade_preview. GOLD/STOLEN_GOLD credit gold; CARD opens selection; RELIC grants effect; POTION needs space; EMERALD_KEY/SAPPHIRE_KEY may exclude a linked reward.",
+        "requires": "Read permission; current session/state and 1-8 refs observed in current toc/child toc. Incomplete evidence permits reads only. Read reward type/effect, mutual exclusion and card rules/upgrade_preview. GOLD/STOLEN_GOLD/HERMIT_BOUNTY credit gold; CARD opens selection; RELIC grants effect; POTION needs space; keys may exclude rewards. Native card rewards including SEALCARD reveal candidates only after claim opens CARD_REWARD. GRID rewards require selection_operation/count and authorization for the effect; read fresh targets separately after claim. Hidden candidates alone are not missing public evidence.",
         "bindings": {
           "session": {
             "type": "string",
@@ -4148,22 +4179,27 @@ export const capabilities: Capability[] = [
     "title": "Choose a discussed event option",
     "gate": {
       "actions": [
-        "run.event."
+        "run.event.",
+        "run.wheel.spin"
       ]
     },
     "priority": 1,
     "covers": [
-      "event.choice"
+      "event.choice",
+      "event.wheel",
+      "event.wheel.base",
+      "event.wheel.evil",
+      "event.relic_preview"
     ],
     "cases": [
       {
         "id": "event.choice/normal",
-        "revision": "1",
+        "revision": "4",
         "capability": "event.choice",
         "case": "normal",
-        "when": "Current page has been discussed and current offered choice matches the intended option.",
+        "when": "Current page discussed; offered choice matches intent, or Spin continues its acknowledged wheel intro.",
         "not_when": "Unready, pending, stale IDs, unoffered action or incomplete relevant evidence.",
-        "requires": "Explicit task permission, ready, no pending outcome, current offered action and complete relevant evidence. Read complete current body, option text/disabled state and relevant costs/consequences; required acknowledgement must already be satisfied.",
+        "requires": "Explicit task permission, ready, no pending outcome, current offered action and complete relevant evidence. Read body, option availability and costs/consequences; acknowledgement satisfied. Read offered relic_preview/tooltips if present and relevant; it is optional. Base/rest/evil wheel: current intro discussed/acknowledged, wheel_controls.spin_available true. Spin is separate from intro; never predict its random outcome.",
         "bindings": {
           "session": {
             "type": "string",
@@ -4200,12 +4236,12 @@ export const capabilities: Capability[] = [
       },
       {
         "id": "event.choice/incomplete",
-        "revision": "1",
+        "revision": "3",
         "capability": "event.choice",
         "case": "incomplete",
         "when": "Option/body or consequences incomplete: read current event refs; do not choose from an old option index.",
         "not_when": "No current IDs/refs for context: refresh state first. Never act or launch from this incomplete case.",
-        "requires": "Read permission; current session/state and 1-8 refs observed in current toc/child toc. Incomplete evidence permits reads only. Read complete current body, option text/disabled state and relevant costs/consequences; required acknowledgement must already be satisfied.",
+        "requires": "Read permission; current session/state and 1-8 refs observed in current toc/child toc. Incomplete evidence permits reads only. Read current body, option text/disabled state and costs/consequences; acknowledgement must be satisfied. Read offered relic_preview/tooltips if present and relevant; its absence alone is not incomplete evidence. Base/rest/evil wheel requires the acknowledged current intro and spin_available.",
         "bindings": {
           "session": {
             "type": "string",
@@ -4251,6 +4287,44 @@ export const capabilities: Capability[] = [
         "calls": [],
         "expect": "Report the observed blocker; obtain current evidence or missing user intent before reconsidering.",
         "stop": "Unknown/missing receipt: never retransmit, even with a new request ID. No action calls. Preserve saves and other controllers."
+      }
+    ]
+  },
+  {
+    "id": "event.match",
+    "title": "Flip one current match position",
+    "gate": {"roots": ["match_controls"]},
+    "priority": 1,
+    "covers": ["event.match", "event.match.base"],
+    "cases": [
+      {
+        "id": "event.match/normal", "revision": "3", "capability": "event.match", "case": "normal",
+        "when": "Current EVENT match board offers an available face-down position after the intro.",
+        "not_when": "Unready, pending, stale board, unacknowledged intro, animation or unavailable position.",
+        "requires": "Explicit task permission, ready, no pending outcome, current offered action and complete relevant evidence. Require the discussed and acknowledged current intro/rules page; base Match's first intro alone is insufficient. Read match_controls.flip_available, attempts_remaining and available current positions. Face-down identity is intentionally unknown; use only the offered alias for that position.",
+        "bindings": {"action": {"type": "string", "source": "current.offered_action.id"}},
+        "calls": [{"tool": "sts_act", "arguments": {"action_id": {"$bind": "action"}, "arguments": {}}}],
+        "expect": "One native click only. Inspect receipt. Reuse the returned fresh state; use current sts_get_context refs for omitted match details. Use sts_get_state only if state is absent, stale or transitioning. Check visible faces, attempts and available positions before a separate decision.",
+        "stop": "Unknown/missing receipt: never replay. No auto sequence or automatic second flip; stop on pending/animation/stale state and rediscover current refs."
+      },
+      {
+        "id": "event.match/incomplete", "revision": "2", "capability": "event.match", "case": "incomplete",
+        "when": "Current intro, attempts or available positions need reading; concealed identity alone is not missing evidence.",
+        "not_when": "No current match root: refresh state. Never act from this incomplete case.",
+        "requires": "Read permission and current observed refs only. Read match_controls and current intro/rules page; base Match's first intro alone is insufficient. Acknowledgement is separate. Face-down identity is intentionally unknown; never request a hidden card snapshot.",
+        "bindings": {"refs": {"type": "array", "source": "current.observed_refs"}},
+        "calls": [{"tool": "sts_get_context", "arguments": {"refs": {"$bind": "refs"}}}],
+        "expect": "Read relevant pages and current available positions; reconsider one flip only after the current intro is acknowledged and controls permit it.",
+        "stop": "Unknown/missing receipt: never replay. No auto sequence; unavailable evidence permits no guessed action."
+      },
+      {
+        "id": "event.match/exception", "revision": "1", "capability": "event.match", "case": "exception",
+        "when": "Board changed, attempts exhausted, intro not acknowledged or flip unavailable during animation.",
+        "not_when": "Never reuse an old position action or infer a concealed identity.",
+        "requires": "Read permission for diagnosis only; no action authorization is inferred.",
+        "bindings": {}, "calls": [],
+        "expect": "Report the observed blocker; reread state before any separately authorized decision.",
+        "stop": "Unknown/missing receipt: never replay. No auto sequence or automatic second flip."
       }
     ]
   },
@@ -4480,6 +4554,27 @@ export const capabilities: Capability[] = [
         "expect": "Report the observed blocker; obtain current evidence or missing user intent before reconsidering.",
         "stop": "Unknown/missing receipt: never retransmit, even with a new request ID. No action calls. Preserve saves and other controllers."
       }
+    ]
+  },
+  {
+    "id": "map.return", "title": "Close a dismissable map", "gate": {"actions":["run.map.return"]}, "priority": 1, "covers": ["map.return"],
+    "cases": [
+      {"id":"map.return/normal","revision":"1","capability":"map.return","case":"normal",
+       "when":"User intends to return from the currently dismissable map.","not_when":"Travel intended, action absent, unready or pending outcome.",
+       "requires":"Explicit task permission, ready, no pending outcome, current offered action and complete relevant evidence. Return closes the map; it does not select a node or move the character.",
+       "bindings":{"action":{"type":"string","source":"current.offered_action.id"}},
+       "calls":[{"tool":"sts_act","arguments":{"action_id":{"$bind":"action"},"arguments":{}}}],
+       "expect":"Inspect receipt and resulting screen.","stop":"Unknown/missing receipt: never retransmit, even with a new request ID."},
+      {"id":"map.return/incomplete","revision":"1","capability":"map.return","case":"incomplete",
+       "when":"Unclear whether the offered action closes the map or travels.","not_when":"No current refs; obtain state first.",
+       "requires":"Read permission and current observed action refs; no action before its effect is clear.",
+       "bindings":{"refs":{"type":"array","source":"current.observed_refs"}},
+       "calls":[{"tool":"sts_get_context","arguments":{"refs":{"$bind":"refs"}}}],
+       "expect":"Read current offered label and parameters.","stop":"Unknown/missing receipt: never retransmit. Unresolved intent: ask, do not act."},
+      {"id":"map.return/exception","revision":"1","capability":"map.return","case":"exception",
+       "when":"Map changed, return unavailable or permission absent.","not_when":"Never substitute a node action.",
+       "requires":"Read permission for diagnosis only; no inferred action permission.","bindings":{},"calls":[],
+       "expect":"Report blocker; obtain current evidence or user intent.","stop":"Unknown/missing receipt: never retransmit. No action calls."}
     ]
   },
   {

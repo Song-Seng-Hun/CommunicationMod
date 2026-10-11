@@ -14,7 +14,8 @@ export class Connection {
   const runtime=await realpath(String(ready.runtime));const relative=path.relative(root,runtime);
   if(relative.startsWith('..')||path.isAbsolute(relative)||!relative)throw new Error('Runtime outside project target.');
   const recordings=path.join(runtime,'recordings');
-  const dirs=await Promise.all((await readdir(recordings,{withFileTypes:true})).filter(d=>d.isDirectory()).map(async d=>({path:path.join(recordings,d.name),time:(await stat(path.join(recordings,d.name))).mtimeMs})));
+  const entries=await readdir(recordings,{withFileTypes:true}).catch((error:NodeJS.ErrnoException)=>{if(error.code==='ENOENT')return [];throw error;});
+  const dirs=await Promise.all(entries.filter(d=>d.isDirectory()).map(async d=>({path:path.join(recordings,d.name),time:(await stat(path.join(recordings,d.name))).mtimeMs})));
   dirs.sort((a,b)=>b.time-a.time);if(!dirs[0])throw new Error('Start the test game with -McpControl first.');
   const endpoint=obj(JSON.parse(await readFile(path.join(dirs[0].path,'mcp-bridge.json'),'utf8')));
   if(endpoint.protocol!==1 || !Number.isInteger(endpoint.port) || Number(endpoint.port)<1 || Number(endpoint.port)>65535 || typeof endpoint.token!=='string' || !/^[A-Za-z0-9_-]{43}$/.test(endpoint.token))throw new Error('Invalid MCP bridge descriptor.');

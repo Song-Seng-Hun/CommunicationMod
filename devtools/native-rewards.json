@@ -1,0 +1,32 @@
+{
+  "jar_sha256": "148c422dd26e869fbdc9a63f9ab072373c3d791d3e3fcbe8d87b55ae75a29226",
+  "scope": "Concrete RewardItem descendants in the pinned EvilWithin jar; class files only, no game initialization",
+  "rewards": [
+    {"class":"automaton.util.DazingPulseReward","type":"DAZINGPULSE","kind":"card","cover":"reward.DAZINGPULSE"},
+    {"class":"automaton.util.DecaBeamReward","type":"DECABEAM","kind":"card","cover":"reward.DECABEAM"},
+    {"class":"automaton.util.DonuBeamReward","type":"DONUBEAM","kind":"card","cover":"reward.DONUBEAM"},
+    {"class":"automaton.util.ExplodeReward","type":"EXPLODE","kind":"card","cover":"reward.EXPLODE"},
+    {"class":"automaton.util.SpikeReward","type":"SPIKE","kind":"card","cover":"reward.SPIKE"},
+    {"class":"collector.util.CollectibleCardReward","type":"COLLECTOR_COLLECTIBLECARDREWARD","kind":"collectible","cover":"reward.COLLECTOR_COLLECTIBLECARDREWARD"},
+    {"class":"collector.util.EssenceReward","type":"COLLECTOR_ESSENCE","kind":"essence","cover":"reward.COLLECTOR_ESSENCE"},
+    {"class":"downfall.util.BossCardReward","type":"BOSSCARD","kind":"card","cover":"reward.BOSSCARD"},
+    {"class":"downfall.util.BossRelicReward","type":"CARD","kind":"boss_relic","cover":"reward.BOSS_RELIC_CHOICE"},
+    {"class":"downfall.util.JaxReward","type":"JAXCARD","kind":"card","cover":"reward.JAXCARD"},
+    {"class":"downfall.util.RareCardReward","type":"CARD","kind":"card","cover":"reward.RARE_CARD"},
+    {"class":"downfall.util.RemoveCardReward","type":"REMOVECARD","kind":"remove","cover":"reward.REMOVECARD"},
+    {"class":"downfall.util.ThirdSealReward","type":"THIRDSEALCARDREWARD","kind":"card","cover":"reward.THIRDSEALCARDREWARD"},
+    {"class":"downfall.util.TransformCardReward","type":"TRANSFORMCARD","kind":"transform","cover":"reward.TRANSFORMCARD"},
+    {"class":"downfall.util.UpgradeCardReward","type":"UPGRADECARD","kind":"upgrade","cover":"reward.UPGRADECARD"},
+    {"class":"guardian.rewards.GemReward","type":"GEM","kind":"card","cover":"reward.GEM"},
+    {"class":"guardian.rewards.GemRewardAllRarities","type":"GEMALLRARITIES","kind":"card","cover":"reward.GEMALLRARITIES"},
+    {"class":"guardian.rewards.GemRewardButRelicRng","type":"GEM","kind":"card","cover":"reward.GEM_RELIC_RNG"},
+    {"class":"hermit.rewards.BountyGold","type":"HERMIT_BOUNTY","kind":"gold","cover":"reward.HERMIT_BOUNTY"},
+    {"class":"sneckomod.util.ColorfulCardReward","type":"COLORFULCARD","kind":"card","cover":"reward.COLORFULCARD"},
+    {"class":"sneckomod.util.ColorfulPowersReward","type":"COLORFULCARD","kind":"card","cover":"reward.COLORFUL_POWERS"},
+    {"class":"sneckomod.util.ColorfulRareReward","type":"COLORFULCARD","kind":"card","cover":"reward.COLORFUL_RARE"},
+    {"class":"sneckomod.util.ColorfulUncommonUpgradedReward","type":"COLORFULCARD","kind":"card","cover":"reward.COLORFUL_UNCOMMON_UPGRADED"},
+    {"class":"sneckomod.util.DiceRollPotionReward","type":"COLORFULCARD","kind":"card","cover":"reward.DICE_ROLL"},
+    {"class":"sneckomod.util.UpgradedUnknownReward","type":"UPGRADEDUNKNOWNCARD","kind":"card","cover":"reward.UPGRADEDUNKNOWNCARD"},
+    {"class":"theHexaghost.util.SealSealReward","type":"SEALCARD","kind":"card","cover":"reward.SEALCARD"}
+  ]
+}

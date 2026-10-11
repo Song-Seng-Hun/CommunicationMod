@@ -50,11 +50,23 @@ function assertCoverage(caps,fixtures){
  for(const fixture of fixtures){
   const cap=byId.get(fixture.capability);assert.ok(cap,fixture.capability);
   assert.ok(cap.covers.includes(fixture.cover),fixture.cover);
-  if(fixture.action)assert.ok(gateMatches(cap.gate,fixture.action),fixture.cover+' gate');
+  // Match help is scoped to the current EVENT root, never an OR with a lingering action.
+  if(fixture.capability==='event.match')assert.deepEqual(cap.gate,{roots:['match_controls']});
+  else if(fixture.action)assert.ok(gateMatches(cap.gate,fixture.action),fixture.cover+' gate');
  }
 }
 
 test('catalog loads as declarative capabilities',async()=>{assert.ok((await api()).length>=25);});
+test('base minigames have explicit semantic coverage without duplicate capabilities or calls',async()=>{
+ const caps=await api();
+ for(const [id,cover] of [['event.choice','event.wheel.base'],['event.match','event.match.base']]){
+  const cap=caps.find(c=>c.id===id);assert.ok(cap.covers.includes(cover),'missing '+cover);
+  assert.ok(coverageFixtures.some(f=>f.capability===id&&f.cover===cover),'missing fixture '+cover);
+  const normal=cap.cases.find(c=>c.case==='normal');assert.equal(normal.calls.filter(c=>c.tool==='sts_act').length,1);
+ }
+ assert.match(caps.find(c=>c.id==='event.match').cases.find(c=>c.case==='normal').requires,/rules page/i);
+ assert.match(caps.find(c=>c.id==='event.choice').cases.find(c=>c.case==='normal').requires,/Base\/rest\/evil wheel/i);
+});
 test('every capability has exactly three independent bounded capsules with typed used bindings',async()=>{
  const caps=await api(),ids=new Set();
  for(const cap of caps){
@@ -67,7 +79,7 @@ test('every capability has exactly three independent bounded capsules with typed
    else {assert.ok(['screens','roots','actions'].includes(k));assert.ok(Array.isArray(v)&&v.length>0);assert.ok(v.every(x=>typeof x==='string'&&x.length>0));}
   }
   for(const c of cap.cases){
-   assert.equal(c.id,cap.id+'/'+c.case);assert.equal(c.revision,'1');assert.equal(c.capability,cap.id);
+   assert.equal(c.id,cap.id+'/'+c.case);assert.equal(c.revision,['event.choice/normal','reward.take/normal'].includes(c.id)?'4':['reward.take/incomplete','event.choice/incomplete','event.match/normal'].includes(c.id)?'3':['cards.inspect/normal','event.match/incomplete'].includes(c.id)?'2':'1');assert.equal(c.capability,cap.id);
    for(const key of ['when','not_when','requires','expect','stop'])assert.ok(typeof c[key]==='string'&&c[key].trim(),c.id+': '+key);
    assert.ok(JSON.stringify(wrapper(c)).length<=2400,c.id+' wrapper exceeds 2400');
    assert.ok(Array.isArray(c.calls));assert.ok(c.bindings&&typeof c.bindings==='object');
@@ -223,4 +235,25 @@ test('special call shapes preserve actual event and map parameter contracts',asy
  for(const [key,type] of [['map_id','string'],['revision','number'],['nodes','array']])assert.equal(plan.bindings[planArgs[key].$bind].type,type);
  const generic=normal('action.parameters'),args=generic.calls.find(x=>x.tool==='sts_act').arguments.arguments;
  assert.deepEqual(args,bind('parameters'));assert.equal(generic.bindings.parameters.type,'object');
+});
+
+test('match capsules require a current acknowledged intro and one flip without a redundant state call',async()=>{
+ const cap=(await api()).find(c=>c.id==='event.match');assert.ok(cap,'missing match capability');
+ assert.deepEqual(cap.gate,{roots:['match_controls']});
+ const normal=cap.cases.find(c=>c.case==='normal');
+ assert.match(normal.requires,/acknowledged current intro/i);assert.match(normal.requires,/available.*position/i);
+ assert.match(normal.requires,/face-down identity.*intentionally unknown/i);
+ assert.deepEqual(normal.calls.map(c=>c.tool),['sts_act']);
+ assert.match(normal.expect,/Reuse.*returned.*state/i);
+ assert.match(normal.expect,/sts_get_context.*omitted.*details/i);
+ assert.match(normal.expect,/sts_get_state only if.*absent.*stale.*transition/i);
+ assert.deepEqual(normal.calls[0].arguments.arguments,{});
+ assert.match(normal.stop,/no auto sequence/i);assert.match(normal.stop,/never replay/i);
+ for(const kind of ['incomplete','exception'])assert.ok(cap.cases.find(c=>c.case===kind).calls.every(c=>c.tool!=='sts_act'));
+ const reward=(await api()).find(c=>c.id==='reward.take'),event=(await api()).find(c=>c.id==='event.choice');
+ for(const kind of ['normal','incomplete']){
+  assert.match(reward.cases.find(c=>c.case===kind).requires,/SEALCARD.*after.*claim/i);
+  assert.match(event.cases.find(c=>c.case===kind).requires,/relic_preview.*if.*relevant/i);
+ }
+ assert.ok(event.covers.includes('event.wheel.evil'));assert.ok(event.covers.includes('event.relic_preview'));
 });

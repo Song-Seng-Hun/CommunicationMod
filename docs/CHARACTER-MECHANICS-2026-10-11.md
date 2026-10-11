@@ -1,0 +1,18 @@
+# Current character mechanics in MCP decisions
+
+The ten-character audit found current native data reachable through context but silently omitted from compact MCP decisions. This repair changes the existing shared projection used by current decisions, action-returned decisions and compact card fragments.
+
+- Hermit cards retain observed `dead_on_position_active`, including false; the projection does not recompute positions or call native Dead On methods.
+- Guardian cards retain bounded `socket_capacity`, `sockets` and `gem_type`; Snecko cards retain bounded observed `unknown_origin`. Larger facts require details at the physical card ref.
+- Combat player `orbs` advertise exact `player/orbs/N` refs and currently observed values, including summoned slimes and Stasis cards. Unknown/unrendered rows do not fabricate identities or numbers. Oversized lists retain `orbs_more: player/orbs`.
+- `mechanics_refs` advertises captured public panel children: ghostflames, champ stance, encode sequence, function preview, compile panel, gremlins and spells. Existing scalar resources and native completeness signals remain meaningful. Empty or absent panels do not imply hypothetical outcomes.
+
+Default decisions keep the 4400-byte budget; fragments retain the 2400-byte ceiling and shared 3600-byte allocation. Optional descriptions and larger nested facts can move to advertised exact refs. A present card effect omitted by compaction always requires details. Under final size pressure, inline power arrays can shorten to prefixes with `powers_more` directories and total counts; remaining pressure can shorten hand names with `name_truncated` and `details_required`. Retained rows preserve current refs and incomplete flags, and all omitted public rows/full names remain reachable. Current hand cost and Dead On survive compaction. Tool guidance directs clients to read these advertised details before tactical decisions.
+
+The implementation retains six tools and existing input schemas. It changes no native observation or dispatch code, calls no native renderer or initializer, reads no private RNG/future outcomes and mutates no observed snapshots. Public catalog order is not presented as future draw order. Native completeness signals cover their existing captured scope; they are not a guarantee that every possible mod interaction is known.
+
+Regression extensions reproduce the missing card facts, orb rows and mechanics-panel discovery on v18. The unchanged dense fixture also exposed a pre-existing decision overflow; the repair uses explicit directory fallback instead of increasing limits. Independent review additionally reproduced unsignalled effects on ten socketed cards and a Dead On budget overflow with long Korean names, four three-card bosses and no removable powers; exact regression fixtures cover both corrections. Existing context regressions cover pagination, shared fragment allocation and exact physical refs.
+
+Release uses the existing package gate (full MCP tests, launcher lifecycle checks and isolated installer checks), guarded source promotion and the real installed `scripts/start.mjs` entrypoint against a synthetic authenticated backend with zero game commands. It reuses the verified unlaunched native runtime and compares native/profile bytes. Detailed failures, results and installed hashes are recorded in `CHARACTER-MECHANICS-REPAIR-TASKS.md` and `character-mechanics-*-verification.json` under `C:/Users/meleb/OneDrive/문서/ChatGPT/stsmod`.
+
+Live gameplay and actual Gemini strategy remain unverified. The already-running Gemini CommunicationMod process needs a reconnect before it loads the new server files.

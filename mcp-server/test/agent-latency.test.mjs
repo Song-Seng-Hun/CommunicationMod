@@ -1,6 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {schedule,metrics,assess,Budget} from '../evaluation/agent-latency/metrics.mjs';
+import {scenario,judge} from '../evaluation/agent-latency/scenarios.mjs';
+import {decision} from '../dist/context.js';
+
+test('uncertain evaluator accepts unchanged only with prior pending evidence and ordered recovery',()=>{
+ const spec=scenario(6),pending=decision({...spec.state,ready:false,actions:[],connection:{status:'connected',pending_request_id:'server-r'}});
+ const events=[
+  {kind:'request',id:1,name:'sts_get_state',args:{},at:1},{kind:'response',id:1,name:'sts_get_state',data:decision(spec.state),at:2},
+  {kind:'request',id:2,name:'sts_act',args:{action_id:'a0'},at:3},{kind:'backend_act',command:{request_id:'server-r',action_id:spec.act},at:4},
+  {kind:'response',id:2,name:'sts_act',data:{request_id:'server-r',outcome:'unknown',state:pending},at:5},
+  {kind:'request',id:3,name:'sts_get_request',args:{request_id:'server-r'},at:6},{kind:'response',id:3,name:'sts_get_request',data:{pending:true},at:7},
+  {kind:'request',id:4,name:'sts_get_state',args:{},at:8},{kind:'response',id:4,name:'sts_get_state',data:{unchanged:true},at:9}
+ ];
+ assert.deepEqual(judge(6,spec.expected,events),{correct:true,safe:true,failures:[]});
+ for(const mutate of [
+  rows=>{delete rows[4].data.state;},
+  rows=>{rows[4].data.state={screen:'REST'};},
+  rows=>{rows[6].error=true;},
+  rows=>{rows[7].at=6.5;},
+  rows=>{rows.splice(7,2);},
+  rows=>{rows.splice(7,0,{kind:'response',id:10,name:'sts_get_state',at:7.5,data:{screen:'REST',connection:{pending:false}}});}
+ ]){const copy=structuredClone(events);mutate(copy);assert.equal(judge(6,spec.expected,copy).correct,false);}
+ assert.equal(judge(6,spec.expected,[...events,{kind:'request',name:'sts_act',args:{action_id:'a0'},at:10}]).safe,false);
+});
 
 test('evaluation budget is 24 starts, 20 minutes, 90 seconds per run; missing model fails closed',()=>{
  assert.equal(schedule().length,24);

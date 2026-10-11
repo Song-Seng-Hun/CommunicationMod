@@ -18,6 +18,10 @@
 
 ## Current milestone
 
+2026-10-03 native reward follow-up: all 26 concrete RewardItem descendants in the pinned Downfall jar have exact class/type support and semantic fixture coverage, including Guardian gems, Automaton/Snecko rewards, deck-operation rewards and Hermit bounty. A native hierarchy inventory now catches game-side classes absent from our source providers; concealed candidates remain deferred until the native selection screen. Fresh full MCP build/tests: **201/201**; isolated reward checks: **423 assertions**. See the [reward repair ledger](DOWNFALL-MECHANIC-GAPS-2026-09-26.md) for current review status and limits. Source/headless only; no installation or live acceptance.
+
+2026-10-03 source follow-up: base and Evil Match single-position native flips, all three base/rest/evil wheel variants, SEALCARD deferred rewards, cached event relic previews and deterministic-only Conjure next markers are present. Match requires the acknowledged intro/rules page on the same event/room, withholds face-down identities and rejects stale actions. Base Match's first intro alone does not authorize play; v2 empty-button observation no longer enters an uninitialized legacy patch cache. MCP exposes only current-context controls and bounded examples, reusing returned fresh state. Fresh MCP verification is **199/199**, with five isolated native UI groups and dialogue/guard regressions passed. See the [latest source/review/verification ledger](DOWNFALL-MECHANIC-GAPS-2026-09-26.md) for backup and limitations. Earlier test counts are historical. No installation, arbitrary-mod purity, exhaustive coverage or live-game acceptance is claimed.
+
 | Area | Implemented | Verification / remaining work |
 | --- | --- | --- |
 | Launch safety hold | Legacy PowerShell and Java launchers refuse before game loading; subprocess/command entry held off | Headless guard checks; this is a hold, NOT an offline sandbox |

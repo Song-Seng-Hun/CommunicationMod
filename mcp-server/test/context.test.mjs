@@ -15,12 +15,68 @@ test('only current roots are discoverable or readable, no full/extension escape'
 test('fragments are shallow, batchable, bounded and exact long-text pages are recoverable',async()=>{
  const {readContext}=await api(),s=state();const long='긴 설명 🔥 '.repeat(2000);s.observation.game_state.screen_state.body_text=long;
  const root=readContext(s,['screen','deck']);assert.equal(root.fragments.length,2);assert.equal(root.session_id,undefined);assert.equal(root.state_id,undefined);
- assert.ok(root.fragments[0].toc.some(x=>x.ref==='screen/body_text'));assert.equal(root.fragments[0].data.body_text,undefined);
+ assert.ok(root.fragments[0].toc.some(x=>x.ref==='screen/body_text'));assert.equal(root.fragments[0].data,undefined,'An all-directory page omits the empty data wrapper');
  const card=readContext(s,['deck/0']).fragments[0];assert.equal(card.data.displayed_cost_complete,false);assert.equal(card.data.description,'피해를 6 줍니다.');
  let recovered='',offset=0;do{const chunk=readContext(s,['screen/body_text'],offset).fragments[0];recovered+=chunk.text;offset=chunk.next_offset??null;assert.ok(JSON.stringify(chunk).length<2600);}while(offset!==null);
  assert.equal(recovered,long);assert.ok(JSON.stringify(readContext(s,Array(8).fill('screen/body_text'))).length<20000);
  for(const r of ['screen/__proto__','screen/constructor','deck/-1','deck/999','screen/body_text/length'])assert.throws(()=>readContext(s,[r]),/not available/);
  assert.throws(()=>readContext(s,['deck'],-1),/Invalid/);assert.throws(()=>readContext(s,Array(9).fill('deck')),/Invalid/);
+});
+test('public root transforms cannot manufacture absent current-state roots',async()=>{
+ const {readContext}=await api(),s=state();delete s.observation.game_state.screen_state;s.ready=false;
+ for(const root of ['actions','screen','map_plan','history','dialogue'])for(const ref of [root,root+'/0'])assert.throws(()=>readContext(s,[ref]),/not available/,ref);
+});
+test('encoded action paths cannot bypass aliases or server-pinned parameter hiding',async()=>{
+ const {readContext}=await api(),s=state();s.actions[0].parameters={type:'object',properties:{reading_id:{const:'hidden-reading'},commentary:{type:'string'}},required:['reading_id','commentary']};
+ for(const ref of ['actions/0/id','actions/%30/id','%61ctions/0/id','actions/%30/parameters/properties/reading_id','actions/0/%70arameters/properties/reading_id','actions/0/parameters/properties/%72eading_id'])assert.throws(()=>readContext(s,[ref]),/not available/,ref);
+ assert.equal(readContext(s,['actions/0']).fragments[0].data.id,'a0');assert.equal(readContext(s,['actions/0/parameters/properties/commentary']).fragments[0].data.type,'string');
+});
+for(const kind of ['text','scalar array'])test(`${kind} batch pages include continuation metadata within their byte budget`,async()=>{
+ const {readContext}=await api(),s=state(),refs=Array.from({length:8},(_,i)=>'screen/field'+i),budget=450,bytes=v=>Buffer.byteLength(JSON.stringify(v),'utf8');
+ const emptyArrayPage={ref:refs[0],total:3,items:['','']},each=Math.floor((budget-bytes(emptyArrayPage))/2);
+ const value=kind==='text'?'x'.repeat(500):['x'.repeat(each),'x'.repeat(each),'tail'];
+ s.observation.game_state.screen_state=Object.fromEntries(refs.map(ref=>[ref.split('/')[1],value]));
+ let offset=0;const recovered=refs.map(()=>kind==='text'?'':[]);
+ do{
+  const result=readContext(s,refs,offset,2);assert.ok(bytes(result)<=3700);
+  for(const [i,page] of result.fragments.entries()){
+   assert.ok(bytes(page)<=budget,`${kind}: ${bytes(page)} bytes including next_offset`);
+   if(kind==='text')recovered[i]+=page.text;else recovered[i].push(...page.items);
+   assert.ok(page.next_offset===undefined||page.next_offset>offset,'Continuation must advance');
+  }
+  offset=result.fragments[0].next_offset;
+ }while(offset!==undefined);
+ for(const actual of recovered)assert.deepEqual(actual,value);
+});
+test('a scalar array row too large for its batch budget is discoverable instead of stalling',async()=>{
+ const {readContext}=await api(),s=state(),refs=Array.from({length:8},(_,i)=>'screen/field'+i),value='🔥'.repeat(120);
+ s.observation.game_state.screen_state=Object.fromEntries(refs.map(ref=>[ref.split('/')[1],[value]]));
+ const pages=readContext(s,refs).fragments;
+ for(const [i,page] of pages.entries()){
+  assert.ok(Buffer.byteLength(JSON.stringify(page),'utf8')<=450);assert.equal(page.next_offset,undefined);
+  assert.equal(page.toc?.[0].ref,refs[i]+'/0');assert.equal(readContext(s,[page.toc[0].ref]).fragments[0].text,value);
+ }
+});
+test('long advertised text refs never return a stalled surrogate page; single-ref recovery is exact',async()=>{
+ const {readContext}=await api(),s=state(),refs=Array.from({length:8},(_,i)=>'screen/'+'x'.repeat(404)+i),value='🔥'.repeat(200);
+ s.observation.game_state.screen_state=Object.fromEntries(refs.map(ref=>[ref.slice(7),value]));
+ const advertised=[];let offset=0;
+ do{const page=readContext(s,['screen'],offset).fragments[0];advertised.push(...page.toc.map(x=>x.ref));offset=page.next_offset;}while(offset!==undefined);
+ assert.deepEqual(advertised,refs);
+ assert.throws(()=>readContext(s,refs),/Read this ref alone/i);
+ for(const ref of refs){
+  let text='',cursor=0;
+  do{const page=readContext(s,[ref],cursor).fragments[0];assert.ok(Buffer.byteLength(JSON.stringify(page),'utf8')<=2400);text+=page.text;assert.ok(page.next_offset===undefined||page.next_offset>cursor);cursor=page.next_offset;}while(cursor!==undefined);
+  assert.equal(text,value);
+ }
+});
+test('long refs cannot exceed a batch allocation through scalar or directory wrappers',async()=>{
+ const {readContext}=await api(),s=state(),refs=Array.from({length:8},(_,i)=>'screen/'+'x'.repeat(480)+i);
+ for(const value of [null,false,0,[],{flag:false}]){
+  s.observation.game_state.screen_state=Object.fromEntries(refs.map(ref=>[ref.slice(7),value]));
+  assert.throws(()=>readContext(s,refs),/Read this ref alone/i);
+  for(const ref of refs){const page=readContext(s,[ref]).fragments[0];assert.ok(Buffer.byteLength(JSON.stringify(page),'utf8')<=2400);assert.deepEqual(Array.isArray(value)?page.items:value&&typeof value==='object'?{...page.data}:page.value,value);}
+ }
 });
 test('conditional reads keep hidden identity in the hash without exposing it',async()=>{
  const {conditionalDecision}=await api(),s=state(),first=conditionalDecision(s);
@@ -84,13 +140,15 @@ test('escaped text and huge fields cannot exceed budgets or stall continuations'
  const page=readContext(s,['screen']).fragments[0];assert.ok(page.next_offset===undefined || page.next_offset>0);assert.equal(page.information_complete,false);
  assert.equal(page.data.normal,'still reachable');assert.ok((page.toc??[]).every(x=>x.ref.length<=512));
 });
-test('combat metadata and current card have reachable short references',async()=>{
+test('combat metadata is inline without a redundant TOC and current card has a reachable ref',async()=>{
  const {decision,readContext}=await api(),s=state('NONE');s.observation.game_state.combat_state={turn:4,times_damaged:2,cards_discarded_this_turn:1,card_in_play:{id:'a',description:'현재 카드'}};
- assert.ok(decision(s).toc.some(x=>x.ref==='combat'));assert.equal(readContext(s,['combat']).fragments[0].data.turn,4);assert.equal(readContext(s,['card_in_play']).fragments[0].data.id,'a');
+ const v=decision(s);for(const [key,value] of Object.entries({turn:4,times_damaged:2,cards_discarded_this_turn:1}))assert.equal(v.combat[key],value);
+ assert.ok(!v.toc.some(x=>x.ref==='combat'));assert.equal(readContext(s,['combat']).fragments[0].data.turn,4);
+ const cardRef=v.toc.find(x=>x.ref==='card_in_play').ref;assert.equal(readContext(s,[cardRef]).fragments[0].data.id,'a');
 });
 test('current shop prices and card refs avoid traversing an entire screen',async()=>{
  const {decision}=await api(),s=state('SHOP_SCREEN');s.actions=[{id:'run.shop.card.u',label:'카드',parameters:{}}];s.observation.shop_controls=[{id:'buy',price:75,available:true}];s.observation.game_state.screen_state={cards:[{name:'카드',price:75,description:'카드 효과',upgrade_preview:{after:{description:'강화'}}}]};
- const v=decision(s);assert.equal(v.shop_controls,undefined);assert.ok(v.toc.some(x=>x.ref==='shop_controls'));assert.equal(v.offers[0].i,0);assert.equal(v.offers[0].ref,undefined);assert.equal(v.offers[0].name,'카드');assert.equal(v.offers[0].price,75);assert.equal(v.offers[0].upgrades,undefined);
+ const v=decision(s);assert.equal(v.shop_controls,undefined);assert.ok(v.toc.some(x=>x.ref==='shop_controls'));assert.equal(v.offers[0].ref,'screen/cards/0');assert.equal(v.offers[0].name,'카드');assert.equal(v.offers[0].price,75);assert.equal(v.offers[0].upgrades,undefined);
 });
 test('a selected small card is atomic without success boilerplate',async()=>{
  const {readContext}=await api(),s=state();s.observation.game_state.deck[0].tooltips=[{title:'취약',description:'추가 피해'}];
@@ -107,3 +165,11 @@ test('missing or conflicting completeness never exposes an ordinary hand',async(
  s.observation.game_state.combat_state.hand_complete=true;s.observation.combat_decision={mode:'selection',hand_complete:false};
  assert.deepEqual(decision(s).combat.hand,[]);assert.equal(decision(s).combat.hand_complete,false);
 });
+
+test('character card batch fallback preserves current Dead On and incomplete facts within allocations',async()=>{
+ const {decision,readContext}=await api(),s=state('NONE'),c=s.observation.game_state.combat_state;c.hand_complete=true;c.hand=Array.from({length:8},(_,i)=>({name:'Card '+i,cost:1,dead_on_position_active:i%2===0,description:'긴 현재 설명 '.repeat(300),description_complete:false,sockets:Array(80).fill('RED'),sockets_unavailable_reason:'partial_socket_capture',unknown_origin:null}));
+ const before=JSON.stringify(s),refs=c.hand.map((_,i)=>'hand/'+i),batch=readContext(s,refs);assert.ok(Buffer.byteLength(JSON.stringify(batch))<=3700);
+ for(const [i,page] of batch.fragments.entries()){assert.ok(Buffer.byteLength(JSON.stringify(page))<=450);assert.equal(page.data.dead_on_position_active,i%2===0);assert.equal(page.data.description_complete,false);assert.equal(page.details_required,true);assert.equal(page.data.unknown_origin,null);assert.equal(page.data.sockets_unavailable_reason,'partial_socket_capture');}
+ const v=decision(s);assert.equal(v.combat.hand.length,8);assert.ok(v.combat.hand.every(x=>x.details_required===true));assert.equal(JSON.stringify(s),before);
+});
+

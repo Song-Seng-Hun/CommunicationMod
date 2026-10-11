@@ -50,6 +50,7 @@ public final class UpgradePreviewGameTest {
         CtClass multiCard=p.makeClass("fixture.MultiCard",p.get("com.megacrit.cardcrawl.cards.AbstractCard"));multiCard.addInterface(multi);multiCard.addConstructor(CtNewConstructor.defaultConstructor(multiCard));bytes.put(multiCard.getName(),multiCard.toBytecode());
         CtClass branchInterface=p.makeInterface("com.evacipated.cardcrawl.mod.stslib.cards.interfaces.BranchingUpgradesCard");bytes.put(branchInterface.getName(),branchInterface.toBytecode());
         CtClass branchCard=p.makeClass("fixture.BranchCard",p.get("com.megacrit.cardcrawl.cards.AbstractCard"));branchCard.addInterface(branchInterface);branchCard.addConstructor(CtNewConstructor.defaultConstructor(branchCard));bytes.put(branchCard.getName(),branchCard.toBytecode());
+        CtClass noUpgrade=p.makeClass("fixture.NoUpgrade",p.get("com.megacrit.cardcrawl.cards.AbstractCard"));noUpgrade.addMethod(CtNewMethod.make("public boolean canUpgrade(){return false;}",noUpgrade));noUpgrade.addConstructor(CtNewConstructor.defaultConstructor(noUpgrade));bytes.put(noUpgrade.getName(),noUpgrade.toBytecode());
         fixture(p,bytes,"fixture.Vertex",new String[]{"public int index;","public boolean strict;","public com.megacrit.cardcrawl.cards.AbstractCard card;","public java.util.ArrayList parents=new java.util.ArrayList();","public java.util.ArrayList exclusions=new java.util.ArrayList();"},new String[0]);
         fixture(p,bytes,"fixture.Graph",new String[]{"public java.util.ArrayList vertices=new java.util.ArrayList();"},new String[0]);
         fixture(p,bytes,"com.evacipated.cardcrawl.mod.stslib.ui.MultiUpgradeTree",new String[]{"public static com.megacrit.cardcrawl.cards.AbstractCard mainCard;","public static java.util.ArrayList cardList=new java.util.ArrayList();","public static java.util.ArrayList takenList=new java.util.ArrayList();","public static java.util.ArrayList lockedList=new java.util.ArrayList();","public static Object cardGraph;"},new String[0]);
@@ -100,6 +101,34 @@ public final class UpgradePreviewGameTest {
             check(((Map<?,?>)pview.get("after")).get("base_damage").equals(expected),"installed upgrade body: "+name);
             check(Boolean.FALSE.equals(pview.get("can_upgrade_after")),"ordinary one-time cap: "+name);
         }
+        Method rewardSnapshot,gallery;
+        try { rewardSnapshot=observation.getMethod("snapshotWithUpgrade",cardType);gallery=observation.getMethod("offerGallery",Map.class,List.class); }
+        catch(NoSuchMethodException missing){throw new AssertionError("Missing current reward and upgraded gallery preview integration",missing);}
+        int copies=cardType.getField("copyCalls").getInt(searing);
+        Map<String,Object> late=(Map<String,Object>)rewardSnapshot.invoke(null,searing);
+        check(((Map<?,?>)((Map<?,?>)late.get("upgrade_preview")).get("after")).get("base_damage").equals(34),"late custom reward gets real next upgrade");
+        check(cardType.getField("copyCalls").getInt(searing)==copies,"late reward reuses current context cache");
+        begin.invoke(null);late=(Map<String,Object>)rewardSnapshot.invoke(null,searing);
+        check(((Map<?,?>)late.get("upgrade_preview")).get("status").equals("unavailable"),"no reward preview with unfinished context");
+        Object galleryCard=loader.loadClass("com.megacrit.cardcrawl.cards.red.Strike_Red").newInstance();
+        cardType.getField("cardID").set(galleryCard,"Strike_R");
+        Map<String,Object> row=(Map<String,Object>)observation.getMethod("snapshot",cardType).invoke(null,galleryCard),directory=new LinkedHashMap<>();
+        directory.put("cards",new ArrayList<>(Arrays.asList(row)));directory.put("cards_complete",true);directory.put("variant","base_catalog");
+        gallery.invoke(null,directory,Arrays.asList(galleryCard));finish.invoke(null,state);
+        Map<?,?> upgraded=(Map<?,?>)((List<?>)directory.get("cards")).get(0);
+        check(directory.get("variant").equals("upgraded")&&Boolean.TRUE.equals(directory.get("cards_complete")),"gallery finalizes upgraded variants before publication");
+        check(upgraded.get("base_damage").equals(15)&&upgraded.get("upgrades").equals(1),"gallery executes installed Strike upgrade on copy");
+        check(cardType.getField("timesUpgraded").getInt(galleryCard)==0,"gallery never upgrades library prototype");
+        check(!upgraded.containsKey("upgrade_preview"),"effective gallery row is not a nested comparison wrapper");
+        int galleryCopies=cardType.getField("copyCalls").getInt(galleryCard);
+        begin.invoke(null);Map<String,Object> again=new LinkedHashMap<>();again.put("cards",new ArrayList<>(Arrays.asList(observation.getMethod("snapshot",cardType).invoke(null,galleryCard))));again.put("cards_complete",true);gallery.invoke(null,again,Arrays.asList(galleryCard));finish.invoke(null,state);
+        check(cardType.getField("copyCalls").getInt(galleryCard)==galleryCopies,"gallery cached across identical captured state");
+        begin.invoke(null);Map<String,Object> branchGallery=new LinkedHashMap<>();Object branchSource=loader.loadClass("fixture.BranchCard").newInstance();branchGallery.put("cards",new ArrayList<>(Arrays.asList(observation.getMethod("snapshot",cardType).invoke(null,branchSource))));branchGallery.put("cards_complete",true);gallery.invoke(null,branchGallery,Arrays.asList(branchSource));finish.invoke(null,state);
+        Map<?,?> blocked=(Map<?,?>)((List<?>)branchGallery.get("cards")).get(0);
+        check(Boolean.FALSE.equals(branchGallery.get("cards_complete"))&&blocked.get("status").equals("unavailable")&&!blocked.containsKey("base_damage"),"unresolved branch never masquerades as upgraded base values");
+        begin.invoke(null);Map<String,Object> cappedGallery=new LinkedHashMap<>();Object cappedSource=loader.loadClass("fixture.NoUpgrade").newInstance();cappedGallery.put("cards",new ArrayList<>(Arrays.asList(observation.getMethod("snapshot",cardType).invoke(null,cappedSource))));cappedGallery.put("cards_complete",true);gallery.invoke(null,cappedGallery,Arrays.asList(cappedSource));finish.invoke(null,state);
+        Map<?,?> capped=(Map<?,?>)((List<?>)cappedGallery.get("cards")).get(0);
+        check(Boolean.FALSE.equals(cappedGallery.get("cards_complete"))&&"unavailable".equals(capped.get("status"))&&!capped.containsKey("base_damage"),"canUpgrade false is not proof native unconditional gallery upgrade is a no-op");
         Class<?> gridType=loader.loadClass("com.megacrit.cardcrawl.screens.select.GridCardSelectScreen");Object grid=gridType.newInstance();
         gridType.getField("confirmScreenUp").setBoolean(grid,true);gridType.getField("hoveredCard").set(grid,searing);
         Object nativeAfter=cardType.getMethod("makeStatEquivalentCopy").invoke(searing);cardType.getMethod("upgrade").invoke(nativeAfter);

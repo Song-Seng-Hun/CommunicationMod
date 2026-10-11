@@ -35,6 +35,8 @@ import com.megacrit.cardcrawl.ui.panels.EnergyPanel;
 import communicationmod.observation.DialogueObservation;
 import communicationmod.observation.CardObservation;
 import communicationmod.observation.CardUpgradeObservation;
+import communicationmod.observation.CollectorPreviewObservation;
+import communicationmod.observation.EventPreviewObservation;
 import communicationmod.observation.PublicDescription;
 
 import java.lang.reflect.Field;
@@ -222,6 +224,7 @@ public class GameStateConverter {
                 json_button.put("label", ChoiceScreenUtils.getOptionName(button.msg));
                 AbstractCard preview=CardUpgradeObservation.eventCard(button);
                 if(preview!=null)json_button.put("card_preview",convertDecisionCardToJson(preview));
+                EventPreviewObservation.addRelicTo(json_button,button);
                 if (!button.isDisabled) {
                     json_button.put("choice_index", choice_index);
                     choice_index += 1;
@@ -750,6 +753,8 @@ public class GameStateConverter {
         jsonMonster.put("is_gone", monster.isDeadOrEscaped());
         jsonMonster.put("block", monster.currentBlock);
         jsonMonster.put("powers", convertCreaturePowersToJson(monster));
+        CollectorPreviewObservation.addTo(jsonMonster,monster,CardUpgradeObservation::snapshot);
+        communicationmod.observation.BossObservation.addTo(jsonMonster,monster,GameStateConverter::convertCardToJson,GameStateConverter::convertRelicToJson);
         return jsonMonster;
     }
 
@@ -827,6 +832,10 @@ public class GameStateConverter {
     private static ArrayList<Object> convertCreaturePowersToJson(AbstractCreature creature) {
         ArrayList<Object> powers = new ArrayList<>();
         for(AbstractPower power : creature.powers) {
+            // Match the public monster tooltip boundary without requiring StSLib.
+            if (hasInvisiblePowerInterface(power.getClass())) {
+                continue;
+            }
             HashMap<String, Object> json_power = new HashMap<>();
             json_power.put("id", power.ID);
             json_power.put("name", power.name);
@@ -879,6 +888,21 @@ public class GameStateConverter {
         return powers;
     }
 
+    private static boolean hasInvisiblePowerInterface(Class<?> type) {
+        if (type == null) {
+            return false;
+        }
+        if (type.getName().equals("com.evacipated.cardcrawl.mod.stslib.powers.interfaces.InvisiblePower")) {
+            return true;
+        }
+        for (Class<?> parent : type.getInterfaces()) {
+            if (hasInvisiblePowerInterface(parent)) {
+                return true;
+            }
+        }
+        return hasInvisiblePowerInterface(type.getSuperclass());
+    }
+
     /**
      * Creates a GSON-compatible representation of the given relic
      * The relic object contains:
@@ -913,6 +937,7 @@ public class GameStateConverter {
         jsonPotion.put("id", potion.ID);
         jsonPotion.put("name", potion.name);
         jsonPotion.putAll(PublicDescription.format(potion.description, key -> null));
+        communicationmod.observation.PotionTooltips.addTo(jsonPotion,potion);
         boolean canUse = potion.canUse();
         boolean canDiscard = potion.canDiscard();
         if (potion instanceof PotionSlot) {

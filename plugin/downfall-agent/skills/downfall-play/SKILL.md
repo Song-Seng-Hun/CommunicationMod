@@ -26,7 +26,7 @@ This plugin controls a prepared local test copy, not the original Steam executab
 
 ## Efficient play
 
-`sts_get_state` pins the exact state shown to this MCP client. Session/state identity, delta hashes, native action IDs, and fixed action constants stay inside the server. `sts_get_context` and `sts_act` automatically use that pin. A stale pin is rejected and requires a fresh `sts_get_state`.
+`sts_get_state` pins the exact state shown to this MCP client. Session/state identity, native action IDs, and fixed action constants stay inside the server by default. `sts_get_context` and `sts_act` automatically use that pin. A stale pin is rejected and requires a fresh `sts_get_state`.
 
 Use `sts_act` for one offered action. Send only its short `action_id` and gameplay `arguments` that remain in the public parameter schema. The server restores pinned constants such as current map identity/revision or event-reading identity, creates request IDs, and owns action timeouts internally. Its returned next state replaces a redundant `sts_get_state` when sufficient. Read full localized card/keyword descriptions and current resources only when needed. Fetch deck/map/piles/history only when relevant. `event_reading.body_ref` points to the current event body; follow `next_offset` only when it is present.
 
@@ -35,15 +35,19 @@ Use `sts_act` for one offered action. Send only its short `action_id` and gamepl
 | Needed facts already present in the pinned state | Reuse them. No duplicate lookup. |
 | Same state check | `sts_get_state({})` may return only `unchanged:true`. |
 | Wait for change | `sts_get_state({wait_ms:15000})`; the server compares with the last shown view. After two consecutive unchanged waits, stop and report. |
-| Full summary needed again | `sts_get_state({refresh:true})`; this also restores a TOC omitted because its structure was unchanged. |
+| Full summary needed again | `sts_get_state({refresh:true})`. |
 | State changed or stale pin rejected | Refresh state, then reconfirm dynamic cost, resources, targets, playability and action availability. |
 | Action has no `parameters_ref` | Call it with empty/default `arguments`; this does not mean gameplay evidence is sufficient. |
 | `parameters_ref` present | Read that ref and send only the remaining public gameplay arguments. Fixed constants omitted there are supplied by the server. |
 | Several needed refs | Batch 1–8 refs in `sts_get_context`. Different `offset` values require separate calls. Multiple card refs may return summaries; read one card ref alone for full detail. |
-| Selected compact row | Use its `i` with the enclosing root (for example `hand/3`, `monsters/0`, `screen/cards/2`). A single-card read can return full descriptions, keywords and upgrade details. |
+| Selected card | Use its explicit ref. A single-card read can return full descriptions, keywords and upgrade details. |
 | Format | State/action/context responses automatically use lossless TOON only when it is materially smaller; otherwise they remain JSON. Do not request a format just to optimize size. Use `response_format:"json"` only when literal JSON syntax is specifically needed. |
 
 Routine reads need no repeated plan or narration. Preserve required progress updates, event explanations and risky-action confirmations. Reduced calls never justify guessed facts, automatic destructive approval or uncertain-command replay.
+
+Optional explicit context reuse: use `reuse:true` only while retaining the complete earlier response. For state/action calls, send its `view_id` as `known_view`; apply any delta to that exact full baseline, never to another delta. For context calls, send retained ref/content-ID pairs in `known`. `unchanged:true` requires that retained baseline; it is not missing information. After context loss omit `known_view`/`known` (or use `refresh:true` for state) to recover full content. Reuse metadata does not authorize actions or bypass the pinned-state checks.
+
+Character bosses may advertise `monsters/N/public_combat`. Follow that ref for publicly visible hand, energy, stance, relic, orb and mechanic-panel details. Hidden card slots contain no identities; absent or incomplete fields are not zero values. Never infer future enemy plays, draw order or private AI state from these observations.
 
 Never play from an unready or incomplete hand. Preserve hidden draw order unless the public observation says it is visible. Unsupported screens and incomplete information require stopping/diagnosis, not guessed clicks or console mutations.
 

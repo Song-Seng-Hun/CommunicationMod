@@ -778,6 +778,11 @@ public class ChoiceScreenUtils {
         ArrayList<String> choiceList = new ArrayList<>();
         ArrayList<LargeDialogOptionButton> activeButtons = getActiveEventButtons();
 
+        // V2 minigames use current-object wheel/match_controls, not legacy patch caches.
+        // Copied profiles do not install GremlinMatchGamePatch's constructor hook.
+        // Keep ordinary dialog choices and the non-v2 legacy path unchanged.
+        if (activeButtons.isEmpty() && Boolean.getBoolean("communicationmod.play_control")) return choiceList;
+
         if (activeButtons.size() > 0) {
             for(LargeDialogOptionButton button : activeButtons) {
                 choiceList.add(getOptionName(button.msg).toLowerCase());

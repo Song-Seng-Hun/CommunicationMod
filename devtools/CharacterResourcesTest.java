@@ -36,6 +36,7 @@ public final class CharacterResourcesTest {
         fixture("awakenedOne.util.Wiz",null,"public static int POWERS_TO_AWAKEN=4;","public static boolean conjure;","public static boolean awakened;",
             "public static boolean isInCombat(){return communicationmod.observation.CombatObservation.combat;}","public static boolean hasConjure(){return conjure;}","public static boolean isAwakened(){return awakened;}");
         fixture("awakenedOne.actions.ConjureAction",null,"public static int conjuresThisCombat;");
+        fixture("downfall.downfallMod",null,"public static boolean DeterministicConjure=true;");
         fixture("awakenedOne.powers.DemonGlyphPower",null,"public static String POWER_ID=\"glyph\";");
         fixture("awakenedOne.AwakenedOneMod",null,"public static int powersThisCombat=8;","public static Object UP_NEXT=new Object();");
         fixture("awakenedOne.AwakenedOneChar","com.megacrit.cardcrawl.characters.AbstractPlayer");
@@ -102,6 +103,16 @@ public final class CharacterResourcesTest {
         Map<?,?> spells=capture(other);Map<?,?> slot=(Map<?,?>)((List<?>)spells.get("spells")).get(0);
         check(slot.get("count").equals(2)&&Boolean.TRUE.equals(slot.get("up_next")),"mixed-character spells group count and displayed next marker");
         check(Boolean.TRUE.equals(spells.get("spells_complete")),"visible spell groups complete");
+        set(loader.loadClass("downfall.downfallMod"),"DeterministicConjure",false);
+        Map<?,?> randomSpells=capture(other);
+        Map<?,?> randomSlot=(Map<?,?>)((List<?>)randomSpells.get("spells")).get(0);
+        check(!randomSlot.containsKey("up_next"),"random conjure must not expose hidden or misleading next marker");
+        check(randomSlot.get("count").equals(2) && Boolean.TRUE.equals(randomSpells.get("spells_complete")),"random conjure keeps public spell contents complete");
+        list(duplicate,"tags").clear();
+        check(randomSpells.equals(capture(other)),"hidden next tag changes cannot change random conjure projection");
+        set(loader.loadClass("downfall.downfallMod"),"DeterministicConjure",true);
+        check(Boolean.FALSE.equals(((Map<?,?>)((List<?>)capture(other).get("spells")).get(0)).get("up_next")),"deterministic unmarked group keeps explicit false");
+        list(duplicate,"tags").add(get(loader.loadClass("awakenedOne.AwakenedOneMod"),"UP_NEXT"));
         set(duplicate,"isFlipped",true);
         check(Boolean.FALSE.equals(capture(other).get("spells_complete")),"masked spell omission explicitly incomplete");
         check(spells.get("awakening_progress").equals(3),"awakening pips capped exactly like renderer");

@@ -15,27 +15,72 @@ public final class CardUpgradeObservation {
     private static UpgradePreview<AbstractCard> previews=new UpgradePreview<>(LIMIT);
     private static Object owner;
     private static final List<Candidate> candidates=new ArrayList<>();
+    private static final List<Map<String,Object>> galleries=new ArrayList<>();
+    private static String decisionContext;
+    private static boolean collecting;
     private static final class Candidate {
         final AbstractCard card;final Map<String,Object> json;
         Candidate(AbstractCard card,Map<String,Object> json){this.card=card;this.json=json;}
     }
     private CardUpgradeObservation() { }
 
-    public static void begin() { candidates.clear(); }
+    public static void begin() { candidates.clear();galleries.clear();decisionContext=null;collecting=true; }
     public static void offer(Map<String,Object> json,AbstractCard card) {
-        if(candidates.size()<LIMIT)candidates.add(new Candidate(card,json));
+        if(!collecting)json.put("upgrade_preview",UpgradePreview.unavailable("nested_or_uncaptured_upgrade_context"));
+        else if(candidates.size()<LIMIT)candidates.add(new Candidate(card,json));
         else json.put("upgrade_preview",UpgradePreview.unavailable("decision_preview_budget_exceeded"));
     }
+    /** Gallery rows share the existing bounded next-upgrade queue, not a renderer or RNG path. */
+    @SuppressWarnings("unchecked")
+    public static void offerGallery(Map<String,Object> gallery,List<AbstractCard> sources) {
+        if(!collecting){gallery.put("cards_complete",false);gallery.put("unavailable_reason","upgraded_gallery_context_not_captured");return;}
+        List<Map<String,Object>> rows=(List<Map<String,Object>>)gallery.get("cards");
+        if(rows.size()!=sources.size())throw new IllegalArgumentException("Gallery source/row mismatch");
+        for(int i=0;i<rows.size();i++) {
+            AbstractCard source=sources.get(i);
+            if(source.upgraded||source.timesUpgraded!=0)rows.get(i).put("upgrade_preview",UpgradePreview.unavailable("gallery_catalog_not_base"));
+            else offer(rows.get(i),source);
+        }
+        galleries.add(gallery);
+    }
+    /** Custom reward UI is captured immediately after the converter finishes this current decision. */
+    public static Map<String,Object> snapshotWithUpgrade(AbstractCard card) {
+        Map<String,Object> result=snapshot(card);
+        result.put("upgrade_preview",decisionContext==null||owner!=AbstractDungeon.player
+            ?UpgradePreview.unavailable("decision_context_not_captured"):previews.describe(card,decisionContext,ADAPTER));
+        return result;
+    }
     public static void finish(Map<String,Object> state) {
+        collecting=false;
         if(owner!=AbstractDungeon.player){owner=AbstractDungeon.player;previews=new UpgradePreview<>(LIMIT);}
         // Include all existing public decision input, including deck, relic counters and
         // event state. Animation/history and the unrelated drawn map are not card inputs.
         Map<String,Object> context=new LinkedHashMap<>(state);
         context.remove("narrative");context.remove("map");context.remove("map_plan");
         String key=new Gson().toJson(context);
-        for(Candidate candidate:candidates)
-            candidate.json.put("upgrade_preview",previews.describe(candidate.card,key,ADAPTER));
-        candidates.clear();
+        try {
+            for(Candidate candidate:candidates)
+                candidate.json.put("upgrade_preview",previews.describe(candidate.card,key,ADAPTER));
+            for(Map<String,Object> gallery:galleries)finishGallery(gallery);
+            decisionContext=key;
+        } finally {candidates.clear();galleries.clear();}
+    }
+    @SuppressWarnings("unchecked")
+    private static void finishGallery(Map<String,Object> gallery) {
+        boolean complete=Boolean.TRUE.equals(gallery.get("cards_complete"));
+        for(Map<String,Object> row:(List<Map<String,Object>>)gallery.get("cards")) {
+            Map<String,Object> preview=(Map<String,Object>)row.remove("upgrade_preview");
+            if(preview!=null&&"available".equals(preview.get("status"))){row.clear();row.putAll((Map<String,Object>)preview.get("after"));}
+            else {
+                Object id=row.get("id"),name=row.get("name");row.clear();row.put("id",id);row.put("name",name);
+                // Native Unknown rendering calls upgrade() unconditionally. A false
+                // canUpgrade() is not evidence that this native call would be a no-op.
+                row.put("status","unavailable");row.put("reason",preview==null?"preview_missing"
+                    :"not_upgradable".equals(preview.get("status"))?"native_gallery_upgrade_not_verified":preview.get("reason"));complete=false;
+            }
+        }
+        gallery.put("variant","upgraded");gallery.put("cards_complete",complete);
+        if(complete)gallery.remove("unavailable_reason");else gallery.put("unavailable_reason","one_or_more_upgraded_variants_unavailable");
     }
 
     public static AbstractCard eventCard(LargeDialogOptionButton button) {
@@ -104,7 +149,7 @@ public final class CardUpgradeObservation {
         return hasInterface(type.getSuperclass(),simpleName);
     }
 
-    static Map<String,Object> snapshot(AbstractCard card) {
+    public static Map<String,Object> snapshot(AbstractCard card) {
         Map<String,Object> result=new LinkedHashMap<>();
         if(!ADAPTER.visible(card)){result.put("status","card_not_visible");return result;}
         result.put("id",card.cardID);result.put("name",card.name);result.put("upgrades",card.timesUpgraded);

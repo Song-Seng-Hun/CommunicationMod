@@ -14,6 +14,7 @@ public final class LocalObserverBuildTest {
         Path out=Paths.get(args[1]);
         ClassPool pool=new ClassPool(true);
         pool.insertClassPath(out.resolve("desktop-1.0-modded.jar").toString());
+        pool.insertClassPath(out.resolve("package/EvilWithin-modded.jar").toString());
         CtClass launcher=pool.get("com.evacipated.cardcrawl.modthespire.PackageJar$PrepackagedLauncher");
         List<String> calls=calls(launcher.getDeclaredMethod("main"));
         expect(count(calls,"bustEnums")==1 && count(calls,"callInitializers")==1 && count(calls,"main")==1,"original bootstrap retained once");
@@ -27,6 +28,10 @@ public final class LocalObserverBuildTest {
         calls=calls(pool.get("com.megacrit.cardcrawl.shop.Merchant").getDeclaredMethod("update"));
         expect(count(calls,"consume")==1 && find(calls,"MerchantPatch.consume")>find(calls,"Hitbox.update"),"merchant entry hook installed after hitbox refresh");
         expect(find(calls,"java.lang.Boolean.getBoolean")>=0,"merchant entry hook explicitly gated to local play control");
+        calls=calls(pool.get("downfall.util.HeartMerchant").getDeclaredMethod("update"));
+        expect(count(calls,"NativeUiInput.afterHitbox")==1,"Heart merchant scope bound in copied EvilWithin jar exactly once");
+        expect(find(calls,"NativeUiInput.afterHitbox")>find(calls,"Hitbox.update") && find(calls,"NativeUiInput.afterHitbox")<find(calls,"ShopScreen.open"),"Heart input bound after refresh and before native shop open");
+        expect(count(calls,"MerchantPatch.consume")==0 && find(calls,"java.lang.Boolean.getBoolean")>=0,"Heart scope gated without consuming base legacy entry");
         expect(find(calls(pool.get("com.megacrit.cardcrawl.screens.select.GridCardSelectScreen").getDeclaredMethod("updateCardPositionsAndHoverLogic")),"GridSelectionUi.hover")>=0,"scoped grid selection hook installed");
         List<String> energyCalls=calls(pool.get("com.megacrit.cardcrawl.cards.AbstractCard").getDeclaredMethod("renderEnergy"));
         expect(find(energyCalls,"CardCostObservation.rendered")>find(energyCalls,"RenderEnergySwitch.Insert"),"final post-modifier rendered cost observed");

@@ -48,6 +48,7 @@ public final class CardObservation {
         // Read only a value actually emitted by the native renderer in this completed frame.
         CardCostObservation.addTo(observation,card);
         observation.putAll(CharacterResources.cardDetails(card));
+        CardPreviewObservation.addTo(observation,card,CardUpgradeObservation::snapshot);
         target.putAll(observation);
     }
 

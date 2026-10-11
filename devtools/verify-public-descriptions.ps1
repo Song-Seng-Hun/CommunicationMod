@@ -93,6 +93,34 @@ foreach ($member in @('CustomCard.getCustomTooltips:', 'CustomCard.getCustomTool
     Require $fakeKeywords ([regex]::Escape($member)) "installed hover renderer must use $member"
 }
 $converter = Disassemble "$compileOut;$cp" 'communicationmod.GameStateConverter'
+$potionBinding = [regex]::Match($converter, '(?s)private static java\.util\.HashMap<java\.lang\.String, java\.lang\.Object> convertPotionToJson\(.*?(?=\n  (?:private|public|protected) |\z)').Value
+Require $potionBinding 'PotionTooltips.addTo:' 'generic potion converter omits cached supplementary public rules'
+$potionTips = Disassemble "$compileOut;$cp" 'communicationmod.observation.PotionTooltips'
+foreach ($member in @('potions/AbstractPotion.tips:', 'helpers/PowerTip.header:', 'helpers/PowerTip.body:', 'PublicTooltips.collect:', 'bipush        33')) {
+    Require $potionTips ([regex]::Escape($member)) "cached potion tooltip observer must use $member"
+}
+if ($potionTips -match '(?:putfield|putstatic)|(?:Method .*\.(?:initializeData|updateDescription|render|use|getPotency|makeCopy):)') {
+    throw 'ASSERT: cached potion tooltip observer contains writes, renderer calls or recomputation'
+}
+$potionHover = Disassemble $cp 'com.megacrit.cardcrawl.ui.panels.TopPanel'
+$potionPopup = Disassemble $cp 'com.megacrit.cardcrawl.ui.panels.PotionPopUp'
+foreach ($renderer in @($potionHover,$potionPopup)) {
+    Require $renderer 'potions/AbstractPotion.tips:' 'installed potion hover must consume cached tips'
+    Require $renderer 'TipHelper.queuePowerTips:' 'installed potion hover must render the cached list'
+}
+# Match the installed monster tooltip boundary before exporting any power fields.
+$monster = Disassemble $cp 'com.megacrit.cardcrawl.monsters.AbstractMonster'
+Require $monster 'instanceof\s+.*powers/interfaces/InvisiblePower' 'installed monster tooltip must exclude InvisiblePower'
+$powerBinding = [regex]::Match($converter, '(?s)private static java\.util\.ArrayList<java\.lang\.Object> convertCreaturePowersToJson\(.*?(?=\n  (?:private|public|protected) |\z)').Value
+Require $powerBinding '(?s)Method hasInvisiblePowerInterface:.*?ifeq\s+\d+\s+\d+: goto\s+\d+.*?class java/util/HashMap' 'public powers must skip InvisiblePower before exporting fields'
+$visibilityBinding = [regex]::Match($converter, '(?s)private static boolean hasInvisiblePowerInterface\(.*?(?=\n  (?:private|public|protected) |\z)').Value
+foreach ($member in @('String com.evacipated.cardcrawl.mod.stslib.powers.interfaces.InvisiblePower',
+    'java/lang/Class.getInterfaces:', 'java/lang/Class.getSuperclass:', 'java/lang/String.equals:')) {
+    Require $visibilityBinding ([regex]::Escape($member)) "public power visibility must use $member"
+}
+foreach ($member in @('powers/AbstractPower.type:', 'powers/AbstractPower.amount:', 'powers/AbstractPower.description:')) {
+    Require $powerBinding ([regex]::Escape($member)) "normal public power binding must preserve $member"
+}
 Require $converter 'CardObservation.addTo:' 'card converter binding missing'
 Require $converter 'AbstractStance.ID:' 'public stance ID missing'
 Require $converter 'AbstractStance.name:' 'public stance name missing'

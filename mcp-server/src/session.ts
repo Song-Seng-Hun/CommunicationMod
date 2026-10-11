@@ -15,7 +15,12 @@ export class GameSession {
   if(message.type==='state'){
    this.online=true;this.latest=message;this.receivedAt=Date.now()-Number(message.bridge_state_age_ms ?? 0);
    const p=this.pending;
-   if(p?.receipt && message.session_id===p.request.session_id && Number(message.state_id)>p.request.state_id
+   // Connection admits states only after bridge authentication. A valid new session
+   // cannot complete the old request: retire its lock, preserving receipts/no-replay.
+   if(p && typeof message.session_id==='string' && message.session_id.length>0
+     && Number.isSafeInteger(message.state_id) && Number(message.state_id)>=0 && message.session_id!==p.request.session_id)
+    this.finish(p,p.receipt?'applied_waiting':'unknown');
+   else if(p?.receipt && message.session_id===p.request.session_id && Number(message.state_id)>p.request.state_id
      && message.ready===true && this.sequence>(p.receiptSequence ?? this.sequence))this.finish(p,'applied');
   }
   if(['result','error','bridge_error'].includes(String(message.type)) && typeof message.request_id==='string'){

@@ -13,6 +13,7 @@ function getTokenizer(){
  return tokenizer??=Promise.all([import('js-tiktoken/lite'),import('js-tiktoken/ranks/o200k_base')])
   .then(([{Tiktoken},ranks])=>new Tiktoken(ranks.default));
 }
+export async function tokenCount(text:string):Promise<number>{return (await getTokenizer()).encode(text,[],[]).length;}
 function record(value:unknown):value is Record<string,unknown>{return value!==null&&typeof value==='object'&&!Array.isArray(value);}
 function hasTable(value:unknown,depth=0):boolean{
  if(depth>32||value===null||typeof value!=='object')return false;

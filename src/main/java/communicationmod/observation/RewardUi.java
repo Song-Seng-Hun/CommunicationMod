@@ -12,7 +12,7 @@ import communicationmod.GameStateConverter;
 import communicationmod.protocol.ProtocolSession;
 import java.util.*;
 
-/** Standard reward UI only, within the copied opt-in play profile. */
+/** Standard and explicitly audited native rewards, within the copied opt-in play profile. */
 public final class RewardUi {
     private final List<ProtocolSession.Action> offered=new ArrayList<>();
     private static AbstractCard selecting;
@@ -34,19 +34,28 @@ public final class RewardUi {
         List<RewardItem> items=AbstractDungeon.combatRewardScreen.rewards;
         for(int i=0;i<items.size();i++) {
             final int index=i;RewardItem item=items.get(i);
-            boolean supported=RewardPolicy.claimable(item.type.name(),item.getClass()==RewardItem.class,false,false,true);
+            boolean custom=CollectorRewardUi.supports(item);
+            boolean supported=custom || RewardPolicy.claimable(item.type.name(),item.getClass()==RewardItem.class,false,false,true);
+            final JsonObject detail=custom?CollectorRewardUi.details(item):null;
             String id="run.reward."+i,label=GameStateConverter.removeTextFormatting(item.text);
             JsonObject row=new JsonObject();row.addProperty("id",id);row.addProperty("label",label);
             row.addProperty("kind",item.type.name().toLowerCase(Locale.ROOT));
             row.addProperty("supported",supported);row.addProperty("pending",item.isDone);row.addProperty("ignored",item.ignoreReward);rows.add(row);
             row.addProperty("claimable",claimable(item));
+            if(custom) {
+                row.add("native_reward",detail);
+                if(detail.has("cost") && detail.get("essence").getAsInt()<detail.get("cost").getAsInt())row.addProperty("unavailable_reason","insufficient_essence");
+            }
             if(item.type==RewardItem.RewardType.POTION && !potionSlot())row.addProperty("unavailable_reason","potion_slots_full_or_sozu");
             if(item.relicLink!=null){int linked=items.indexOf(item.relicLink);if(linked>=0)row.addProperty("mutually_exclusive_with","run.reward."+linked);}
             if(claimable(item))add(id,"claim: "+label,()->{
                 check(AbstractDungeon.CurrentScreen.COMBAT_REWARD,owner,AbstractDungeon.combatRewardScreen);
                 List<RewardItem> fresh=AbstractDungeon.combatRewardScreen.rewards;
                 if(index>=fresh.size() || fresh.get(index)!=item || !claimable(item))throw new IllegalArgumentException("Reward changed");
-                ChoiceScreenUtils.makeCombatRewardChoice(index);
+                if(custom) {
+                    if(!detail.equals(CollectorRewardUi.details(item)))throw new IllegalArgumentException("Reward contents or cost changed");
+                    CollectorRewardUi.click(item);
+                } else ChoiceScreenUtils.makeCombatRewardChoice(index);
             });
         }
         // The installed handler owns elite, boss, event and unclaimed-reward transitions.
@@ -63,7 +72,7 @@ public final class RewardUi {
         }
         if(offered.isEmpty())status.addProperty("reason","unsupported_or_pending_reward");
     }
-    private static boolean claimable(RewardItem item){return RewardPolicy.claimable(item.type.name(),item.getClass()==RewardItem.class,item.isDone,item.ignoreReward,potionSlot());}
+    private static boolean claimable(RewardItem item){return CollectorRewardUi.supports(item)?CollectorRewardUi.claimable(item):RewardPolicy.claimable(item.type.name(),item.getClass()==RewardItem.class,item.isDone,item.ignoreReward,potionSlot());}
     private static boolean potionSlot(){
         if(AbstractDungeon.player.hasRelic("Sozu"))return false;
         for(com.megacrit.cardcrawl.potions.AbstractPotion potion:AbstractDungeon.player.potions)

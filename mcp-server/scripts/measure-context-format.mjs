@@ -18,38 +18,46 @@ const tokenizer=new Tiktoken(ranks),textTokens=text=>tokenizer.encode(text,[],[]
 const restore=text=>text.startsWith('TOON:')?decode(text.slice(text.indexOf('\n')+1),{strict:true}):JSON.parse(text);
 const client=new Client({name:'context-format-audit',version:'1'});let catalog;
 try{await client.connect(new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('../dist/index.js',import.meta.url))],stderr:'pipe'}));catalog=(await client.listTools()).tools;}finally{await client.close();}
-// Only catalog change in this feature is this optional field; prose stays unchanged.
-const prior=structuredClone(catalog);delete prior.find(t=>t.name==='sts_get_context').inputSchema.properties.response_format;
-const definitions={before:jsonTokens(prior),after:jsonTokens(catalog)};
+// Isolate formatting on the current public contract, not a removed opt-in API.
+assert.equal(catalog.find(t=>t.name==='sts_get_context').inputSchema.properties.response_format.default,'compact');
+const definitions={before:jsonTokens(catalog),after:jsonTokens(catalog)};
 const rows=[];
-async function measure(workflow,useCompact=step=>step.request.name==='sts_get_context'){
- let rawBefore=0,rawAfter=0,wireBefore=0,wireAfter=0,converted=0,reads=0;
+async function measure(workflow){
+ let rawBefore=0,rawAfter=0,wireBefore=0,wireAfter=0,converted=0,reads=0,requestTokens=0;
  for(const step of workflow.after){
-  const isRead=step.request.name==='sts_get_context',compact=isRead&&useCompact(step);if(isRead)reads++;
+  const isRead=step.request.name==='sts_get_context',compact=['sts_get_state','sts_act','sts_get_context'].includes(step.request.name);if(isRead)reads++;
   const before=await formatContext(step.response),after=compact?await formatContext(step.response,'compact'):before;
-  const nextRequest=compact?{...step.request,arguments:{...step.request.arguments,response_format:'compact'}}:step.request;
+  const requestCost=jsonTokens(step.request);requestTokens+=requestCost;
   assert.equal(JSON.stringify(restore(after.content[0].text)),JSON.stringify(step.response));
   if(after.content[0].text.startsWith('TOON:'))converted++;
-  rawBefore+=jsonTokens(step.request)+textTokens(before.content[0].text);
-  rawAfter+=jsonTokens(nextRequest)+textTokens(after.content[0].text);
-  wireBefore+=jsonTokens(step.request)+jsonTokens(before);
-  wireAfter+=jsonTokens(nextRequest)+jsonTokens(after);
+  rawBefore+=requestCost+textTokens(before.content[0].text);
+  rawAfter+=requestCost+textTokens(after.content[0].text);
+  wireBefore+=requestCost+jsonTokens(before);
+  wireAfter+=requestCost+jsonTokens(after);
  }
- return {scenario:workflow.name,context_reads:reads,toon_replies:converted,text_plus_requests:{before:rawBefore,after:rawAfter},serialized_results_plus_requests:{before:wireBefore,after:wireAfter}};
+ return {scenario:workflow.name,requests:workflow.after.length,request_tokens:requestTokens,context_reads:reads,toon_replies:converted,text_plus_requests:{before:rawBefore,after:rawAfter},serialized_results_plus_requests:{before:wireBefore,after:wireAfter}};
 }
 for(const workflow of workflows())rows.push(await measure(workflow));
 // Complete selective workflow: discovery -> directory pages -> selected card.
-const browsing=performanceState(60),ids={session_id:browsing.session_id,state_id:browsing.state_id};
-const browsingSteps=[{request:{name:'sts_get_state',arguments:{}},response:conditionalDecision(browsing)}];
+const browsing=performanceState(60),{view_id,...shown}=conditionalDecision(browsing);
+const browsingSteps=[{request:{name:'sts_get_state',arguments:{}},response:shown}];
 const appendRead=(refs,extra={})=>{
- const args={...ids,refs,...extra},response=readContext(browsing,refs,extra.offset??0,extra.limit??20);
+ const args={refs,...extra},response=readContext(browsing,refs,extra.offset??0,extra.limit??20);
  browsingSteps.push({request:{name:'sts_get_context',arguments:args},response});return response;
 };
 assert.ok(browsingSteps[0].response.toc.some(row=>row.ref==='collection'));
 assert.ok(appendRead(['collection']).fragments[0].toc.some(row=>row.ref==='collection/cards'));
-let offset=0,lastRef;do{const page=appendRead(['collection/cards'],{offset,limit:20}).fragments[0];lastRef=page.toc.at(-1).ref;offset=page.next_offset;}while(offset!==null);
-assert.equal(appendRead([lastRef]).fragments[0].data.id,'card-59');
-const selective=await measure({name:'browse_60_cards_selectively',after:browsingSteps},step=>step.request.arguments.refs?.[0]==='collection/cards');
+let offset=0,lastRef;do{const page=appendRead(['collection/cards'],{offset,limit:20}).fragments[0];lastRef=page.toc.at(-1).ref;const next=page.next_offset??null;if(next!==null)assert.ok(Number.isInteger(next)&&next>offset,'directory cursor must advance');offset=next;}while(offset!==null);
+assert.equal(lastRef,'collection/cards/59');
+const selected=appendRead([lastRef]).fragments[0].data;
+assert.equal(selected.name,browsing.observation.game_state.mechanics.collection.cards[59].name);
+assert.equal(selected.description,browsing.observation.game_state.mechanics.collection.cards[59].description);
+assert.equal(selected.displayed_cost_complete,false);assert.equal(selected.id,'card-59');
+// Include this already-measured workflow in the aggregate, without counting its catalog twice.
+const browse=await measure({name:'browse_60_cards_selectively',after:browsingSteps});rows.push(browse);
+const selective=structuredClone(browse);
+for(const row of rows)for(const key of ['text_plus_requests','serialized_results_plus_requests'])
+ assert.ok(row[key].after<=row[key].before,`Workflow must not grow: ${row.scenario} ${key}`);
 for(const key of ['text_plus_requests','serialized_results_plus_requests']){
  selective[key].before+=definitions.before;selective[key].after+=definitions.after;
  assert.ok(selective[key].after<selective[key].before,`Selective full workflow must save: ${key}`);
@@ -58,13 +66,14 @@ const sum=key=>({before:definitions.before+rows.reduce((n,r)=>n+r[key].before,0)
 const plain=await formatContext(directory),textOnlyJson={content:plain.content};
 const samples=[];for(let i=0;i<40;i++){start=performance.now();await formatContext(directory,'compact');samples.push(performance.now()-start);}samples.sort((a,b)=>a-b);
 const report={measurement:'Local o200k_base; deterministic synthetic data; NOT billed tokens or actual host injection',
+ comparison:'JSON-only formatting vs current automatic compact; identical public requests and facts',
  definitions,rows,totals:{text_plus_requests_and_catalog:sum('text_plus_requests'),serialized_results_plus_requests_and_catalog:sum('serialized_results_plus_requests')},
  selective_browse_including_catalog:selective,
  directory_20_rows:{json_text:textTokens(plain.content[0].text),compact_text:textTokens(first.content[0].text),
-  legacy_dual_result:jsonTokens(plain),json_text_only_result:jsonTokens(textOnlyJson),compact_result:jsonTokens(first),
+  json_text_only_result:jsonTokens(textOnlyJson),compact_result:jsonTokens(first),
   text_reduction_percent:Number(((1-textTokens(first.content[0].text)/textTokens(plain.content[0].text))*100).toFixed(1))},
  latency_ms:{first_candidate_in_process:Number(coldMs.toFixed(2)),warm_median:Number(samples[20].toFixed(2)),warm_p95:Number(samples[38].toFixed(2))},
- limits:'Catalog counted once. Compact request overhead counted every read. JSON fallback can make short text-only workflows cost more; structured duplication savings depend on host. No model reasoning, context replay, billing or real gameplay measured.',
+ limits:'Current catalog counted once per comparison. Every request and reply counted, including polls, discovery, pages and selected detail. JSON-only is a formatting counterfactual, not an alternate public state API. No duplicated structuredContent or opt-in compact argument. No model reasoning, context replay, billing or real gameplay measured.',
  required_fact_roundtrips:'passed',gameplay_actions:0};
 assert.ok(report.directory_20_rows.compact_text<report.directory_20_rows.json_text);
 assert.ok(report.totals.serialized_results_plus_requests_and_catalog.after<report.totals.serialized_results_plus_requests_and_catalog.before);

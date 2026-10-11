@@ -13,6 +13,11 @@ test('three-row array page reads only three entries and retains absolute cursor'
  assert.deepEqual(page.toc.map(row=>row.ref),['collection/cards/9990','collection/cards/9991','collection/cards/9992']);
  current.readContext(s,['collection/cards'],10000,3);assert.equal(cards.reads,3,'Exhausted page reads no entries');
 });
+test('scalar array pages also read each requested source entry only once',()=>{
+ const s=performanceState(6),cards=countedArray([null,false,0,'tail',1,2]);s.observation.game_state.mechanics.collection.cards=cards.array;
+ const page=current.readContext(s,['collection/cards'],1,3).fragments[0];
+ assert.equal(cards.reads,3);assert.deepEqual(page.items,[false,0,'tail']);assert.equal(page.total,6);assert.equal(page.next_offset,4);
+});
 
 test('map-only polling does not inspect unrelated narrative, combat or controls',()=>{
  for(const screen of ['MAP','EVENT','NONE']){

@@ -31,7 +31,7 @@ public final class BuildLocalObserver {
         report.setProperty("source",source.toString());
         for(int i=0;i<JARS.length;i++) {
             Path destination=output.resolve(JARS[i]);
-            if(i==0)copyJar(source.resolve(JARS[i]),destination,replacements);
+            if(i==0 || JARS[i].equals("package/EvilWithin-modded.jar"))copyJar(source.resolve(JARS[i]),destination,replacements);
             else Files.copy(source.resolve(JARS[i]),destination);
             if(!hash(source.resolve(JARS[i])).equals(HASHES[i]))throw new IOException("Source changed during copy");
             report.setProperty("input."+JARS[i],HASHES[i]);report.setProperty("output."+JARS[i],hash(destination));
@@ -81,19 +81,10 @@ public final class BuildLocalObserver {
         take(pool,changed,"com.megacrit.cardcrawl.helpers.Hitbox").getDeclaredMethod("update",new CtClass[0])
             .insertAfter("{communicationmod.observation.NativeUiInput.afterHitbox(this);}");
 
-        // The copied local runtime does not run arbitrary @SpirePatch annotations from
-        // CommunicationMod.jar. Mirror MerchantPatch's first-Hitbox locator here so
-        // run.shop.enter is consumed on the game's normal Merchant.update frame.
-        final int[] merchantHitboxes={0};
-        take(pool,changed,"com.megacrit.cardcrawl.shop.Merchant").getDeclaredMethod("update").instrument(new javassist.expr.ExprEditor(){
-            public void edit(javassist.expr.MethodCall call)throws CannotCompileException {
-                if(call.getClassName().equals("com.megacrit.cardcrawl.helpers.Hitbox") && call.getMethodName().equals("update")) {
-                    if(merchantHitboxes[0]++==0)
-                        call.replace("{$proceed($$);if(java.lang.Boolean.getBoolean(\"communicationmod.play_control\")){communicationmod.patches.MerchantPatch.consume(this);}}");
-                }
-            }
-        });
-        if(merchantHitboxes[0]<1)throw new CannotCompileException("Expected merchant hitbox update");
+        // The copied runtime does not apply CommunicationMod's @SpirePatch annotations.
+        // Both native merchants refresh their own hitbox before handling a mouse press.
+        MerchantPatch.Raw(take(pool,changed,"com.megacrit.cardcrawl.shop.Merchant").getDeclaredMethod("update"),true);
+        MerchantPatch.Raw(take(pool,changed,"downfall.util.HeartMerchant").getDeclaredMethod("update"),false);
 
         take(pool,changed,"com.megacrit.cardcrawl.screens.select.GridCardSelectScreen").getDeclaredMethod("updateCardPositionsAndHoverLogic")
             .insertAfter("{communicationmod.observation.GridSelectionUi.hover(this);}");

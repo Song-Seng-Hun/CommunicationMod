@@ -18,6 +18,8 @@ public final class RunUi {
     private final GridSelectionUi gridSelection=new GridSelectionUi();
     private final RoomUi rooms=new RoomUi();
     private final PotionUi potions=new PotionUi();
+    private final RestWheelUi wheel=new RestWheelUi();
+    private final EvilMatchUi match=new EvilMatchUi();
     private List<ProtocolSession.Action> offered=Collections.emptyList();
     private boolean inMenu,reported;
 
@@ -69,6 +71,8 @@ public final class RunUi {
             } else if(type.equals("COMBAT_REWARD") || type.equals("CARD_REWARD")) {
                 rewards.capture(view,status);offered.addAll(rewards.actions());
             } else if(type.equals("EVENT")) {
+                offered.addAll(wheel.capture(view,status));
+                offered.addAll(match.capture(view,status));
                 offered.addAll(DialogueObservation.eventReadingActions());
                 if(DialogueObservation.allowsEventCommand("choose")) {
                     List<com.megacrit.cardcrawl.ui.buttons.LargeDialogOptionButton> buttons=ChoiceScreenUtils.getActiveEventButtons();
@@ -77,7 +81,12 @@ public final class RunUi {
                         offered.add(simple("run.event."+i,GameStateConverter.removeTextFormatting(buttons.get(i).msg),()->{
                             if(!DialogueObservation.allowsEventCommand("choose") || index>=ChoiceScreenUtils.getActiveEventButtons().size()
                                 || ChoiceScreenUtils.getActiveEventButtons().get(index)!=button)throw new IllegalArgumentException("Event changed");
+                            com.megacrit.cardcrawl.events.AbstractEvent event=AbstractDungeon.getCurrRoom().event;
+                            boolean wheelIntro=RestWheelUi.isIntro(event,index);
+                            boolean matchIntro=EvilMatchUi.isIntro(event,index);
                             ChoiceScreenUtils.makeEventChoice(index);
+                            if(wheelIntro)wheel.acceptedIntro(event);
+                            if(matchIntro)match.acceptedIntro(event);
                         }));
                     }
                 }
@@ -157,6 +166,9 @@ public final class RunUi {
 
     private void tutorial(JsonObject view,JsonObject status) {
         com.megacrit.cardcrawl.ui.FtueTip tip=AbstractDungeon.ftue;
+        if(DownfallTutorialUi.supports(tip)) {
+            offered.addAll(DownfallTutorialUi.capture(view,status));return;
+        }
         if(tip!=null && tip.getClass()==com.megacrit.cardcrawl.ui.MultiPageFtue.class) {
             pagedTutorial(tip,view,status,false);return;
         }

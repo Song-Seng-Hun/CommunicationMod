@@ -3,6 +3,7 @@ $root = Split-Path -Parent $PSScriptRoot
 Push-Location (Join-Path $root 'mcp-server')
 try { & npm.cmd test; if($LASTEXITCODE -ne 0){throw 'MCP tests failed'} } finally {Pop-Location}
 & "$PSScriptRoot\PluginLifecycleTest.ps1"
+& "$PSScriptRoot\PluginInstallerTest.ps1"
 $parent = Join-Path $root ('target\plugin-package-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $parent | Out-Null
 Copy-Item -LiteralPath "$root\plugin\downfall-agent" -Destination $parent -Recurse

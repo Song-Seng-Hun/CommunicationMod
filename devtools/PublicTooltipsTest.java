@@ -88,6 +88,17 @@ public final class PublicTooltipsTest {
             Collections.emptyMap())), "Prevent damage.");
         equal(firstDescription(read(true, Arrays.asList("block"), key -> tip("방어", "피해를 막습니다."),
             Collections.emptyMap())), "피해를 막습니다.");
+        // Potion hover cache contains the main effect followed by supplementary rules.
+        List<Map<String,String>> potionCache=Arrays.asList(tip("Reserve Potion","Gain #b2 #yReserve."),
+            tip("Reserve","An alternate type of Energy that is stored across turns."));
+        result=read(true,Collections.emptyList(),key->{throw new AssertionError("cached potion tips must not query a dictionary");},
+            Collections.singletonMap("potion_cache",()->potionCache));
+        tips=(List<?>)result.get("tooltips");equal(tips.size(),2);
+        equal(((Map<?,?>)tips.get(0)).get("description"),"Gain 2 Reserve.");
+        equal(((Map<?,?>)tips.get(1)).get("description"),"An alternate type of Energy that is stored across turns.");
+        equal(((Map<?,?>)tips.get(1)).get("source"),"potion_cache");
+        equal(result.get("tooltips_complete"),true);
+        equal(potionCache.get(0).get("description"),"Gain #b2 #yReserve.");
         System.out.println("PASS: " + checks + " public-tooltip assertions (JDK-only)");
     }
     private static Map<?, ?> read(boolean visible, List<String> keys,

@@ -1,6 +1,8 @@
 // Curated synthetic observations, not a game simulator or an agent policy.
 import assert from 'node:assert/strict';
+import {nativeRewards} from './guidance-fixtures.mjs';
 import {conditionalDecision,readContext} from '../dist/context.js';
+import {publicParameterSchema} from '../dist/action-projection.js';
 export function fixtureScenario(fixture){
  const id=fixture.capability,action=fixture.action??(id==='action.parameters'?'run.map.plan':'run.room.proceed');
  let screen=id.startsWith('shop.')?'SHOP_SCREEN':id.startsWith('rest.')?'REST':
@@ -59,7 +61,35 @@ export function fixtureScenario(fixture){
  }
  if(screen==='MAIN_MENU'){o.menu={screen,choices:[{id:action,available:true}]};refs=['menu'];}
  if(id==='tutorial.confirm'){o.tutorial={text:'확인 전 읽기',available:true};refs=['tutorial'];}
+ if(fixture.cover.startsWith('cards.')&&fixture.cover!=='cards.inspect'){
+  const previewCard={...card,id:'public-preview'};
+  if(fixture.cover==='cards.collectible_preview'){
+   g.combat_state.monsters[0].collectible_preview={source:'pinned_public_collectible_catalog',card:previewCard};refs=['monsters/0/collectible_preview/card'];
+  }else{
+   card.previews={source:fixture.cover==='cards.unknown_gallery'?'public_unknown_gallery_catalog':fixture.cover==='cards.split_gallery'?'native_choice_previews':'native_card_preview',count:1,cards_complete:true,cards:[previewCard]};
+   if(fixture.cover==='cards.unknown_gallery'){card.previews.variant='upgraded';previewCard.upgrades=1;}
+   refs=['hand/0/previews'];
+  }
+ }
+ if(fixture.cover==='reward.COLLECTOR_COLLECTIBLECARDREWARD')o.reward_controls[0]={id:action,kind:'collector_collectiblecardreward',supported:true,claimable:true,native_reward:{cost:3,currency:'essence',essence:4,card:{...card,exhausts:true}}};
+ if(fixture.cover==='reward.COLLECTOR_ESSENCE')o.reward_controls[0]={id:action,kind:'collector_essence',supported:true,claimable:true,native_reward:{amount:2}};
+ const nativeReward=nativeRewards.find(r=>r.cover===fixture.cover);
+ if(nativeReward){
+  g.screen_type='COMBAT_REWARD';delete g.screen_state.cards;
+  const detail=nativeReward.kind==='collectible'?o.reward_controls[0].native_reward:nativeReward.kind==='essence'?{amount:2}:nativeReward.kind==='gold'?{amount:7}:nativeReward.kind==='card'?{choice_details_available_after_claim:true}:{selection_operation:nativeReward.kind,selection_count:1,choice_details_available_after_claim:true};
+  o.reward_controls[0]={id:action,kind:nativeReward.type.toLowerCase(),supported:true,claimable:true,native_reward:detail};refs=['reward_controls/0','reward_navigation'];
+ }
+ if(['event.wheel','event.wheel.base','event.wheel.evil'].includes(fixture.cover)){o.wheel_controls={spin_available:true};refs.push('wheel_controls');}
+ if(['event.match','event.match.base'].includes(fixture.cover)){
+  o.match_controls={flip_available:true,attempts_remaining:4,cards:[{position:0,face_up:false,available:true,action_id:action},{position:1,face_up:true,available:false,card}]};
+  refs.push('match_controls');
+ }
+ if(fixture.cover==='event.relic_preview'){
+  g.screen_state.options=[{text:'Take the egg',disabled:false,relic_preview:{id:'egg',name:'Stasis Egg',tooltips:[{title:'Stasis Egg',description:'Lose 3 HP. Do not discard.',description_complete:true}],tooltips_complete:true}}];
+  refs.push('screen/options/0/relic_preview');
+ }
  return {state,refs,permission:true,discardPermission:id==='potion.discard',evidenceComplete:true,
+  acknowledgedReading:screen==='EVENT'&&id!=='event.ack'?'observed-reading':undefined,
   commentary:'본문: HP 3 소모. 취소 불가. 떠난다.',nodes:['0,1','1,2'],request_id:'observed-request'};
 }
 export function validateArguments(schema,args){
@@ -94,6 +124,22 @@ export function assertActionEvidence(f){
   const e=f.state.observation.game_state.screen_state.event_reading;
   assert.ok(e.body_complete&&e.options_complete,'incomplete event');assert.ok(f.commentary,'event not presented');
  }
+ if(a.id==='run.wheel.spin'||a.id.startsWith('run.match.flip.')){
+  const g=f.state.observation.game_state;
+  assert.equal(g.screen_type,'EVENT','event unavailable');assert.ok(f.commentary,'intro not discussed');
+  assert.ok(f.acknowledgedReading&&f.acknowledgedReading===g.screen_state.event_reading?.reading_id,'intro not acknowledged for current page');
+ }
+ if(a.id==='run.wheel.spin')assert.equal(f.state.observation.wheel_controls?.spin_available,true,'wheel unavailable');
+ if(a.id.startsWith('run.match.flip.')){
+  const controls=f.state.observation.match_controls;
+  assert.equal(controls?.flip_available,true,'match unavailable');assert.ok(Number.isInteger(controls.attempts_remaining)&&controls.attempts_remaining>0,'match attempts exhausted');
+  const position=Number(a.id.slice('run.match.flip.'.length));
+  const row=controls.cards.find(c=>c.position===position);
+  assert.ok(Number.isInteger(position)&&row?.available===true&&row.face_up===false&&row.action_id===a.id,'match position unavailable');
+ }
+ const reward=f.state.observation.reward_controls?.[0];
+ if(a.id.startsWith('run.reward.')&&reward?.native_reward)assert.equal(reward.claimable,true,'reward not claimable');
+ if(reward?.kind==='collector_collectiblecardreward')assert.ok(reward.claimable&&reward.native_reward.essence>=reward.native_reward.cost,'essence unavailable');
  if(a.id==='run.grid.confirm' && f.state.observation.game_state.screen_state.for_upgrade){
   const choice=f.state.observation.selection_controls.upgrade_choice;
   if(choice){assert.equal(choice.choice_required,false,'branch choice unfinished');assert.ok(choice.selected_after,'branch choice preview missing');}
@@ -106,12 +152,13 @@ export function resolveBindings(capsule,f){
  const previousFragment=paged?readContext(f.state,['deck'],0,1).fragments[0]:undefined;
  // Agent-derived inputs are explicit selections, validated against observed contracts.
  const args=action.id==='run.map.plan'?{map_id:action.parameters.properties.map_id.const,revision:action.parameters.properties.revision.const,nodes:f.nodes}:
-  action.id==='acknowledge_event_reading'?{reading_id:view.event_reading.reading_id,commentary:f.commentary}:{};
+  action.id==='acknowledge_event_reading'?{reading_id:f.state.observation.game_state.screen_state.event_reading.reading_id,commentary:f.commentary}:{};
  const inputs={
-  'previous.view_id':view.view_id,'current.session_id':view.session_id,'current.state_id':view.state_id,
-  'current.observed_refs':paged?[previousFragment.ref]:f.refs,'last.fragment.next_offset':previousFragment?.next_offset,'current.offered_action.id':action.id,'last.request_id':f.request_id,
-  'agent.arguments_validated_against_current.offered_action.parameters_and_complete_relevant_evidence':()=>{assertActionEvidence(f);validateArguments(action.parameters,args);return args;},
-  'current.event_reading.reading_id':()=>view.event_reading.reading_id,
+  // Transport bindings are stripped before calls; public actions bind their displayed alias.
+  'previous.view_id':view.view_id,'current.session_id':f.state.session_id,'current.state_id':f.state.state_id,
+  'current.observed_refs':paged?[previousFragment.ref]:f.refs,'last.fragment.next_offset':previousFragment?.next_offset,'current.offered_action.id':view.actions[0]?.id,'last.request_id':f.request_id,
+  'agent.arguments_validated_against_current.offered_action.parameters_and_complete_relevant_evidence':()=>{assertActionEvidence(f);validateArguments(action.parameters,args);const keys=publicParameterSchema(action.parameters).properties??{};return Object.fromEntries(Object.entries(args).filter(([key])=>Object.hasOwn(keys,key)));},
+  'current.event_reading.reading_id':()=>f.state.observation.game_state.screen_state.event_reading.reading_id,
   'agent.commentary_already_presented_to_user_for_current.event_reading.reading_id':()=>{assertActionEvidence(f);return f.commentary;},
   'current.offered_action.parameters.properties.map_id.const':()=>action.parameters.properties.map_id.const,
   'current.offered_action.parameters.properties.revision.const':()=>action.parameters.properties.revision.const,
