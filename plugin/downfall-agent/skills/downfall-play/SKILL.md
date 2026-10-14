@@ -53,6 +53,8 @@ Never play from an unready or incomplete hand. Preserve hidden draw order unless
 
 Present the current event body, situation and choices before `acknowledge_event_reading`, then send meaningful commentary. The server binds the acknowledgement to the pinned event page. Discuss result pages too; do not acknowledge silently or fabricate missing text.
 
+Tutorial pages: read and present the current title/body/footer before confirming each page. Use the tutorial's text refs and `next_offset` when needed; unavailable illustrations stay unknown. Read the selected character's `character.description_ref` before explaining its introduction. Current speech appears in `dialogue`; `history.latest_ref` and the history root retain already-rendered past speech after bubbles disappear. Read relevant history when an explanation was missed; never describe an old entry as currently spoken.
+
 `unknown` / `applied_waiting` does not mean failure: use the returned `request_id` with `sts_get_request`; never replay an uncertain action. Normal successful actions do not expose request IDs. A new game session may require reconnecting the MCP server after resolving an old pending outcome; never restart the game to obtain different results.
 
 ## User's current verification run

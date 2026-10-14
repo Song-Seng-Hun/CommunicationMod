@@ -23,6 +23,7 @@ const rules:Record<string,string>={
  event:'Read and present current event body, situation and choices before acknowledgement. Send meaningful commentary; the server pins the current reading identity. Discuss result pages too. Do not silently acknowledge incomplete text.',
  map:'Map planning draws route, never moves character. Send only observed node IDs; the server pins map identity and revision. Native edges only, not predicted travel powers.',
  reward:'Read reward_navigation before leaving: unclaimed rewards may be abandoned. Never auto-discard potion for space; discarding: separate destructive choice.',
+ tutorial:'Read and present the current tutorial body/footer before confirming this page. Follow body_ref and next_offset for long text. Unavailable illustrations stay unknown; do not silently advance.',
  potion:'Potion inventory is a current snapshot. Read the chosen potion details_required ref and tooltips_more for additional rules before using it. can_use=false is not usage history. Input acceptance alone does not prove consumption: check fresh slot IDs. full describes space only, not reward eligibility (e.g. Sozu).'
 };
 interface Scope {screen:string;combat:boolean;roots:Obj;unsupported:boolean;}
@@ -65,7 +66,7 @@ function scope(state:Obj):Scope {
    add('piles',pick(c,['draw_pile','discard_pile','exhaust_pile','draw_pile_order_visible','draw_pile_order']));
   }
   if(screen==='MAP'){add('map',g.map);add('map_plan',g.map_plan);}
-  const narrative=obj(g.narrative),current=list(narrative.entries).filter(e=>obj(e).currently_displayed!==false);add('dialogue',current);if(current.length||screen==='EVENT')add('history',narrative);
+  const narrative=obj(g.narrative),current=list(narrative.entries).filter(e=>obj(e).currently_displayed!==false);add('dialogue',current);if(list(narrative.entries).length||screen==='EVENT')add('history',narrative);
  }
  add('menu',o.menu);
  const gated:Record<string,boolean>={tutorial:true,match_controls:screen==='EVENT',wheel_controls:screen==='EVENT'||hasAction('run.wheel.spin'),potion_controls:Object.keys(g).length>0,rest_controls:screen==='REST'||hasAction('run.rest.'),shop_controls:screen==='SHOP_SCREEN'||hasAction('run.shop.'),
@@ -77,7 +78,7 @@ function scope(state:Obj):Scope {
    const row=obj(value);return pick(row,['position','row','column','face_up','available','action_id',...(row.face_up===true?['card']:[])]);
   })};
  }
- const relevantRules:Obj={act:rules.act};if(combat)relevantRules.cost=rules.cost;if(['GRID','CARD_REWARD','SHOP_SCREEN','REST','EVENT'].includes(screen))relevantRules.upgrade=rules.upgrade;if(screen==='EVENT')relevantRules.event=rules.event;if(screen==='MAP')relevantRules.map=rules.map;if(roots.reward_navigation||roots.potion_controls)relevantRules.reward=rules.reward;if(Array.isArray(g.potions))relevantRules.potion=rules.potion;if(Object.keys(roots).length)add('rules',relevantRules);
+ const relevantRules:Obj={act:rules.act};if(combat)relevantRules.cost=rules.cost;if(['GRID','CARD_REWARD','SHOP_SCREEN','REST','EVENT'].includes(screen))relevantRules.upgrade=rules.upgrade;if(screen==='EVENT')relevantRules.event=rules.event;if(roots.tutorial)relevantRules.tutorial=rules.tutorial;if(screen==='MAP')relevantRules.map=rules.map;if(roots.reward_navigation||roots.potion_controls)relevantRules.reward=rules.reward;if(Array.isArray(g.potions))relevantRules.potion=rules.potion;if(Object.keys(roots).length)add('rules',relevantRules);
  return {screen,combat,roots,unsupported:Object.keys(g).some(k=>!nativeKeys.has(k))||Object.keys(o).some(k=>!knownObservationKeys.has(k))};
 }
 function connectionSummary(state:Obj):Obj|undefined {
@@ -87,6 +88,11 @@ function connectionSummary(state:Obj):Obj|undefined {
 const scalar=(v:unknown,max=160)=>v===null||typeof v==='boolean'||typeof v==='number'&&Number.isFinite(v)||typeof v==='string'&&v.length<=max;
 function inlineSummary(value:unknown,keys?:string[]):Obj {
  const v=obj(value),source=keys?pick(v,keys):v,out:Obj={};for(const [key,item] of Object.entries(source))if(!provenance.has(key)&&scalar(item,200))out[key]=item;return out;
+}
+function textSummary(ref:string,value:unknown,fields:string[],metadata:string[]=[]):Obj {
+ const source=obj(value),out:Obj={ref,...inlineSummary(source,metadata)};
+ for(const key of fields)if(typeof source[key]==='string'){out[key+'_ref']=child(ref,key);if(scalar(source[key],200))out[key]=source[key];}
+ return out;
 }
 function mechanicsDecisionSummary(value:unknown):Obj {
  const v=obj(value),out:Obj={};let incomplete=false;
@@ -410,6 +416,8 @@ function trimDecision(out:Obj,roots:Obj,actions:unknown[]):Obj {
  const bossCards=list(combat.monsters).flatMap(value=>{const boss=obj(obj(value).public_combat),preview=obj(boss.roulette_preview);return [...list(boss.hand),...(preview.card?[preview.card]:[])];}) as Obj[];
  const potions=obj(obj(out.player).potion_inventory);
  const player=obj(out.player);
+ for(const value of [...list(out.dialogue),out.tutorial,out.character]){const reading=obj(value);for(const key of ['visible_text','text','footer','body','title','description'])if(bytes(out)>4400&&reading[key+'_ref'])delete reading[key];}
+
  if(bytes(out)>4400&&Array.isArray(player.orbs)){delete player.orbs;player.orbs_more='player/orbs';}
  if(bytes(out)>4400)for(const value of [...list(potions.slots)].reverse()){if(bytes(out)<=4400)break;const potion=obj(value);if(potion.description!==undefined){delete potion.description;potion.details_required=true;}}
  if(bytes(out)>4400&&Array.isArray(potions.slots)){delete potions.slots;potions.slots_more='player/potions';}
@@ -459,6 +467,10 @@ export function decision(state:Obj):Obj {
   if(combat&&Array.isArray(playerSource.orbs)){player.orbs=playerSource.orbs.slice(0,6).map(orbSummary);if(playerSource.orbs.length>6)player.orbs_more='player/orbs';}
   Object.assign(player,mechanicsDecisionSummary(combat?obj(c.player).mechanics??obj(obj(o.game_state).mechanics):obj(obj(o.game_state).mechanics)));if(Object.keys(player).length)out.player=player;
  }
+ if(roots.tutorial)out.tutorial=textSummary('tutorial',roots.tutorial,['title','body','footer'],['page','pages','confirm','illustrations_available']);
+ const dialogue=list(roots.dialogue);if(dialogue.length){out.dialogue=dialogue.slice(0,2).map((value,index)=>textSummary('dialogue/'+index,publicDialogueEntry(value,true),['text','visible_text'],['speaker_type','speaker_name','text_language','text_truncated']));if(dialogue.length>2)out.dialogue_more='dialogue';}
+ const history=obj(roots.history),entries=list(history.entries);if(entries.length){out.history={ref:'history',count:entries.length,latest_ref:'history/entries/'+(entries.length-1)};if(Number(history.dropped_entries)>0)obj(out.history).dropped_entries=history.dropped_entries;}
+ const character=obj(roots.menu).character;if(screen==='CHAR_SELECT'&&present(character))out.character=textSummary('menu/character',character,['description'],['name','hp','gold']);
  const actions=list(roots.actions),actionMap=aliases(actions);out.actions=actions.slice(0,12).map(publicAction);if(actions.length>12)out.actions_more='actions';
  if(combat){
   const complete=handVisible(c,o),hand=complete?list(roots.hand):[],monsters=list(roots.monsters),shownHand=hand.slice(0,10);

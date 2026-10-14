@@ -173,3 +173,28 @@ test('character card batch fallback preserves current Dead On and incomplete fac
  const v=decision(s);assert.equal(v.combat.hand.length,8);assert.ok(v.combat.hand.every(x=>x.details_required===true));assert.equal(JSON.stringify(s),before);
 });
 
+
+const textState=()=>({session_id:'text-fixture',state_id:1,ready:true,actions:[],observation:{menu:{screen:'NONE'},game_state:{screen_type:'NONE',combat_state:{hand_complete:true,hand:[],monsters:[]}}}});
+// Intent: tutorials were only a bare toc root; full page text and limitations must be discoverable before Next.
+test('tutorial page reading is explicit and exact long text remains recoverable',async()=>{
+ const {decision,readContext}=await api(),s=textState();s.observation.menu.screen='TUTORIAL';s.actions=[{id:'run.tutorial.confirm',label:'다음',parameters:{}}];
+ s.observation.tutorial={title:'캐릭터 안내',body:'불꽃은 순서대로 점화됩니다.',footer:'그림도 참고하세요.',page:1,pages:2,confirm:'다음',illustrations_available:false};
+ let v=decision(s);assert.equal(v.tutorial.body,s.observation.tutorial.body);assert.equal(v.tutorial.body_ref,'tutorial/body');assert.equal(v.tutorial.page,1);assert.equal(v.tutorial.pages,2);assert.equal(v.tutorial.illustrations_available,false);assert.match(readContext(s,['rules/tutorial']).fragments[0].text,/read|Read/);
+ const long='아주 긴 튜토리얼 🔥 '.repeat(400);s.observation.tutorial.body=long;v=decision(s);assert.equal(v.tutorial.body,undefined);assert.equal(v.tutorial.body_ref,'tutorial/body');
+ let recovered='',offset=0;do{const p=readContext(s,[v.tutorial.body_ref],offset).fragments[0];recovered+=p.text;offset=p.next_offset;}while(offset!==undefined);assert.equal(recovered,long);assert.ok(Buffer.byteLength(JSON.stringify(v))<4400);
+ delete s.observation.tutorial;s.ready=false;s.observation.menu.reason='tutorial_transition';v=decision(s);assert.equal(v.tutorial,undefined);assert.equal(v.actions.length,0);
+});
+// Intent: retained rendered speech must stay addressable after its bubble vanishes, without presenting it as current.
+test('speech is surfaced and retained history remains readable after disappearance',async()=>{
+ const {decision,readContext}=await api(),s=textState(),entry={id:1,text:'소환수는 차례대로 공격한다.',visible_text:'소환수는 차례대로 공격한다.',currently_displayed:true,speaker_type:'enemy',speaker_name:'안내자',text_language:'KOR',text_truncated:false};
+ s.observation.game_state.narrative={entries:[entry],dropped_entries:0};let v=decision(s);assert.equal(v.dialogue[0].text,entry.text);assert.equal(v.dialogue[0].text_ref,'dialogue/0/text');assert.equal(v.dialogue[0].speaker_name,'안내자');
+ entry.currently_displayed=false;entry.visible_text='';v=decision(s);assert.equal(v.dialogue,undefined);assert.ok(v.toc.some(x=>x.ref==='history'));assert.equal(v.history.latest_ref,'history/entries/0');assert.equal(readContext(s,['history/entries/0/text']).fragments[0].text,entry.text);assert.equal(readContext(s,['history/entries/0']).fragments[0].data.currently_displayed,false);assert.throws(()=>readContext(s,['dialogue']),/not available/);
+ s.observation.game_state.narrative.entries=[];v=decision(s);assert.equal(v.history,undefined);assert.ok(!v.toc.some(x=>x.ref==='history'));assert.throws(()=>readContext(s,['history']),/not available/);
+});
+// Intent: newly collected selected-character introduction must be reachable from the decision, not hidden by menu toc suppression.
+test('selected character introduction is surfaced with a recoverable detail ref',async()=>{
+ const {decision,readContext}=await api(),s=textState();delete s.observation.game_state;s.observation.menu={screen:'CHAR_SELECT',character:{name:'가디언',description:'몸을 접어 방어 모드로 전환합니다.',hp:'70/70',gold:99}};
+ let v=decision(s);assert.equal(v.character.description,s.observation.menu.character.description);assert.equal(v.character.description_ref,'menu/character/description');assert.equal(v.character.hp,'70/70');assert.equal(v.character.gold,99);
+ const long='선택된 캐릭터의 긴 소개입니다. '.repeat(200);s.observation.menu.character.description=long;v=decision(s);assert.equal(v.character.description,undefined);let recovered='',offset=0;do{const p=readContext(s,[v.character.description_ref],offset).fragments[0];recovered+=p.text;offset=p.next_offset;}while(offset!==undefined);assert.equal(recovered,long);
+ delete s.observation.menu.character;assert.equal(decision(s).character,undefined);
+});

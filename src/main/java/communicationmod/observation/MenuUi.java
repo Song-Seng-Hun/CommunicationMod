@@ -60,6 +60,7 @@ public final class MenuUi {
                         String id="menu.character."+(option.locked?"locked_"+i:option.c.chosenClass.name());
                         JsonObject row=row(id,option.locked?"???":option.name,!option.locked && !option.selected);
                         row.addProperty("locked",option.locked);row.addProperty("selected",option.selected);rows.add(row);
+                        JsonObject character=selectedCharacter(option);if(character!=null)menu.add("character",character);
                         if(!option.locked && !option.selected)add(id,option.name,screen,option,()->{
                             if(option.locked || option.selected)throw new IllegalStateException("Character availability changed");
                             option.hb.clicked=true;
@@ -90,6 +91,17 @@ public final class MenuUi {
             if(!reported){reported=true;System.err.println("[COMM-MENU] Menu unavailable (repeats suppressed)");failure.printStackTrace(System.err);}
             return blocked(root,"menu_capture_failed");
         }
+    }
+
+    /** Cached public fields used by native renderInfo; never invokes render or a loadout constructor. */
+    private static JsonObject selectedCharacter(CharacterOption option) {
+        if(!option.selected || option.locked
+            || number(option,CharacterOption.class,"infoX") < -600f*com.megacrit.cardcrawl.core.Settings.scale)return null;
+        JsonObject info=new JsonObject();info.addProperty("name",option.name);
+        info.addProperty("description",communicationmod.GameStateConverter.removeTextFormatting((String)field(option,CharacterOption.class,"flavorText")));
+        info.addProperty("hp",(String)field(option,CharacterOption.class,"hp"));
+        info.addProperty("gold",((Number)field(option,CharacterOption.class,"gold")).intValue());
+        return info;
     }
 
     public List<ProtocolSession.Action> actions(){return new ArrayList<>(offered);}
