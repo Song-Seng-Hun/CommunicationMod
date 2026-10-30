@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
+    <img src="assets/banner-light.svg" width="640" alt="Pixel-art banner: a card battle on a game screen talks to Claude over a cable. The game sends STATE, Claude answers PLAY 1 0 and an attack card flies at the enemy; after the next STATE Claude answers PLAY 2 and a skill card shields the hero; then Claude sends END, the enemy attacks, a new turn refills the hand, and every message appears in a log beside the screen.">
+  </picture>
+</p>
+
 # CommunicationMod
 Slay the Spire mod that provides a protocol for allowing another process to control the game
 
