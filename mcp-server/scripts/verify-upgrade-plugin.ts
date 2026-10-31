@@ -5,6 +5,7 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
+import type {Wire} from '../evaluation/wire.ts';
 
 if(!process.argv[2])throw new Error('Pass the exact installed plugin cache directory.');
 const cache=path.resolve(process.argv[2]);
@@ -27,14 +28,14 @@ const large={session_id:'verify',state_id:12,observation:{game_state:{mechanics:
 assert.equal(section(large,'mechanics',100,30).data.collection.next_offset,130);
 const tail=section(large,'collection',130,30);assert.equal(tail.items.length,5);assert.equal(tail.items[4].id,'card-134');assert.equal(tail.next_offset,null);
 assert.equal(focus(large).player.mechanics.information_complete,false);
-const small=conditionalDecision(large);assert.ok(small.toc.some(x=>x.ref==='collection'));
+const small=conditionalDecision(large);assert.ok(small.toc.some((x:Wire)=>x.ref==='collection'));
 assert.equal(conditionalDecision(large,small.view_id).unchanged,true);
 assert.equal(readContext(large,['collection/cards/134']).fragments[0].data.id,'card-134');
 assert.throws(()=>readContext(large,['full']),/not available/);
 const client=new Client({name:'card-upgrade-install-verifier',version:'1'});
 try {
  await client.connect(new StdioClientTransport({command:process.execPath,args:[path.join(cache,'scripts','start.mjs')],stderr:'inherit'}));
- const {tools}=await client.listTools();assert.equal(tools.length,6);
+ const {tools}:{tools:Wire[]}=await client.listTools();assert.equal(tools.length,6);
  assert.match(tools.find(t=>t.name==='sts_get_state').description,/known_view/);
  assert.ok(tools.find(t=>t.name==='sts_get_context').inputSchema.properties.refs);
  assert.equal(tools.find(t=>t.name==='sts_get_context').inputSchema.properties.section,undefined);
@@ -42,5 +43,5 @@ try {
  assert.match(tools.find(t=>t.name==='sts_get_context').description,/No full dump/);
  const status=await client.callTool({name:'sts_game_status',arguments:{}},undefined,{timeout:20000});
  assert.ok(!status.isError,JSON.stringify(status.content));
- console.log(JSON.stringify({phase:'installed_context_economy_verified',matching_server_bundle:true,scoped_fragments:true,conditional_reads:true,legacy_projection_regressions:true,collection_pagination:true,completeness_flags_preserved:true,game_phase:status.structuredContent.data.phase,gameplay_actions:0}));
+ console.log(JSON.stringify({phase:'installed_context_economy_verified',matching_server_bundle:true,scoped_fragments:true,conditional_reads:true,legacy_projection_regressions:true,collection_pagination:true,completeness_flags_preserved:true,game_phase:(status.structuredContent as Wire).data.phase,gameplay_actions:0}));
 } finally {await client.close();}

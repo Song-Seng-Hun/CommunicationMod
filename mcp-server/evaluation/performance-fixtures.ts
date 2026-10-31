@@ -9,7 +9,7 @@ export function performanceState(count=10000,screen='MAP'){
    menu:{screen},tutorial:{text:'도움말'},reward_navigation:{unclaimed_rewards:2}}};
 }
 
-export function countedArray(values){
+export function countedArray<T>(values:T[]){
  let reads=0;
  const array=new Proxy(values,{get(target,key,receiver){if(typeof key==='string'&&/^(0|[1-9]\d*)$/.test(key))reads++;return Reflect.get(target,key,receiver);}});
  return {array,get reads(){return reads;}};

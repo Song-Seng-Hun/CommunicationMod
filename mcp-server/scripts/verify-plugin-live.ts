@@ -4,10 +4,11 @@ import {performance} from 'node:perf_hooks';import {setTimeout as delay} from 'n
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {execFile} from 'node:child_process';import {promisify} from 'node:util';
+import type {Wire} from '../evaluation/wire.ts';
 if(!process.argv[2])throw new Error('Pass the exact installed plugin cache directory.');
 const client=new Client({name:'downfall-plugin-launch-verifier',version:'1'});
 await client.connect(new StdioClientTransport({command:process.execPath,args:[path.resolve(process.argv[2],'scripts','start.mjs')],stderr:'inherit'}));
-async function call(name,args={}){const result=await client.callTool({name,arguments:args},undefined,{timeout:90000});if(result.isError)throw new Error(JSON.stringify(result.content));return result.structuredContent.data;}
+async function call(name:string,args:Record<string,unknown>={}){const result=await client.callTool({name,arguments:args},undefined,{timeout:90000});if(result.isError)throw new Error(JSON.stringify(result.content));return (result.structuredContent as Wire).data;}
 try {
  const tools=(await client.listTools()).tools.map(t=>t.name);assert.equal(tools.length,6);
  const before=await call('sts_game_status');console.log(JSON.stringify({step:'before',...before}));
