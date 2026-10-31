@@ -3,24 +3,26 @@ import assert from 'node:assert/strict';
 import {nativeRewards} from './guidance-fixtures.ts';
 import {conditionalDecision,readContext} from '../dist/context.js';
 import {publicParameterSchema} from '../dist/action-projection.js';
-export function fixtureScenario(fixture){
+import type {Capsule} from '../dist/guidance-catalog.js';
+import type {Wire} from './wire.ts';
+export function fixtureScenario(fixture:Wire){
  const id=fixture.capability,action=fixture.action??(id==='action.parameters'?'run.map.plan':'run.room.proceed');
  let screen=id.startsWith('shop.')?'SHOP_SCREEN':id.startsWith('rest.')?'REST':
   id.startsWith('selection.grid')||id==='selection.upgrade'?'GRID':id.startsWith('selection.hand')?'HAND_SELECT':
   id.startsWith('reward.')?'CARD_REWARD':id.startsWith('boss.')?'BOSS_REWARD':id==='chest.open'?'CHEST':
   id.startsWith('map.')||id==='action.parameters'?'MAP':id.startsWith('event.')||id==='narrative.history'?'EVENT':
   id.startsWith('menu.')?'MAIN_MENU':'NONE';
- const card={id:'observed-card',uuid:'observed-uuid',description:'피해 12. HP 3 감소.',description_complete:true,
+ const card:Wire={id:'observed-card',uuid:'observed-uuid',description:'피해 12. HP 3 감소.',description_complete:true,
   displayed_cost_text:fixture.cover==='resource.X'?'X':'1',displayed_cost_complete:true,cost_components_complete:true,
   cost_components:{energy:1,reserves:0,pyre:0},has_target:!action.endsWith('.-1'),is_playable:true,
   ...(!action.endsWith('.-1')?{target_playability:[{monster_index:0,available:true,name:'Visible foe'}]}:{}),
   tooltips:[{title:'소멸',description:'재사용 불가'}],upgrade_preview:{status:'available',after:{description:'피해 15. HP 3 감소.'}},
   upgrade_selection_preview:{after:{description:'피해 15. HP 3 감소.'}}};
  const resource=fixture.cover.startsWith('resource.')?fixture.cover.slice(9):'energy';
- const g={screen_type:screen,current_hp:20,max_hp:50,gold:75,deck:[card,{...card,id:'second-card'}],
+ const g:Wire={screen_type:screen,current_hp:20,max_hp:50,gold:75,deck:[card,{...card,id:'second-card'}],
   mechanics:{information_complete:true,[resource]:{value:resource==='X'?'X':2,complete:true},collection:{count:1,cards_complete:true,order_visible:false,cards:[card]}},
   screen_state:{cards:[card]}};
- const o={game_state:g},parameters={};
+ const o:Wire={game_state:g},parameters={};
  const state={type:'state',session_id:'fixture-session',state_id:17,ready:true,actions:[{id:action,parameters}],observation:o};
  let refs=['deck/0'];
  if(screen==='NONE'||screen==='HAND_SELECT'){
@@ -92,11 +94,11 @@ export function fixtureScenario(fixture){
   acknowledgedReading:screen==='EVENT'&&id!=='event.ack'?'observed-reading':undefined,
   commentary:'본문: HP 3 소모. 취소 불가. 떠난다.',nodes:['0,1','1,2'],request_id:'observed-request'};
 }
-export function validateArguments(schema,args){
+export function validateArguments(schema:Wire,args:Wire){
  if(!Object.keys(schema).length){assert.deepEqual(args,{});return;}
  for(const required of schema.required??[])assert.ok(Object.hasOwn(args,required),'missing offered argument '+required);
  if(schema.additionalProperties===false)assert.ok(Object.keys(args).every(k=>Object.hasOwn(schema.properties,k)),'unknown offered argument');
- for(const [key,spec] of Object.entries(schema.properties??{})){
+ for(const [key,spec] of Object.entries<Wire>(schema.properties??{})){
   const v=args[key];if(v===undefined)continue;
   if(Object.hasOwn(spec,'const'))assert.deepEqual(v,spec.const,'stale argument '+key);
   if(spec.type==='integer')assert.ok(Number.isInteger(v));else assert.equal(Array.isArray(v)?'array':typeof v,spec.type);
@@ -106,7 +108,7 @@ export function validateArguments(schema,args){
   if(spec.items?.type)for(const item of v)assert.equal(typeof item,spec.items.type,'item type');
  }
 }
-export function assertActionEvidence(f){
+export function assertActionEvidence(f:Wire){
  assert.ok(f.permission,'permission missing');assert.equal(f.state.ready,true,'unready');
  assert.ok(!f.pending,'pending outcome');assert.ok(f.evidenceComplete,'incomplete evidence');
  const a=f.state.actions[0];assert.ok(a,'unoffered action');
@@ -117,7 +119,7 @@ export function assertActionEvidence(f){
   assert.equal(card.cost_components_complete,true,'incomplete cost components');
   assert.equal(card.is_playable,true,'unplayable card');
   const target=Number(a.id.slice(a.id.lastIndexOf('.')+1));
-  if(card.has_target===true)assert.ok(card.target_playability?.some(t=>t.monster_index===target&&t.available===true),'unplayable target');
+  if(card.has_target===true)assert.ok(card.target_playability?.some((t:Wire)=>t.monster_index===target&&t.available===true),'unplayable target');
   else {assert.equal(card.has_target,false,'unknown target requirement');assert.equal(target,-1,'invalid untargeted index');}
  }
  if(a.id==='acknowledge_event_reading'){
@@ -134,7 +136,7 @@ export function assertActionEvidence(f){
   const controls=f.state.observation.match_controls;
   assert.equal(controls?.flip_available,true,'match unavailable');assert.ok(Number.isInteger(controls.attempts_remaining)&&controls.attempts_remaining>0,'match attempts exhausted');
   const position=Number(a.id.slice('run.match.flip.'.length));
-  const row=controls.cards.find(c=>c.position===position);
+  const row=controls.cards.find((c:Wire)=>c.position===position);
   assert.ok(Number.isInteger(position)&&row?.available===true&&row.face_up===false&&row.action_id===a.id,'match position unavailable');
  }
  const reward=f.state.observation.reward_controls?.[0];
@@ -146,14 +148,14 @@ export function assertActionEvidence(f){
   else assert.ok(f.state.observation.game_state.screen_state.upgrade_selection_preview?.after,'ordinary preview missing');
  }
 }
-export function resolveBindings(capsule,f){
- const view=conditionalDecision(f.state),action=f.state.actions[0];
+export function resolveBindings(capsule:Capsule,f:Wire){
+ const view:Wire=conditionalDecision(f.state),action=f.state.actions[0];
  const paged=Object.values(capsule.bindings).some(b=>b.source==='last.fragment.next_offset');
- const previousFragment=paged?readContext(f.state,['deck'],0,1).fragments[0]:undefined;
+ const previousFragment=paged?(readContext(f.state,['deck'],0,1) as Wire).fragments[0]:undefined;
  // Agent-derived inputs are explicit selections, validated against observed contracts.
  const args=action.id==='run.map.plan'?{map_id:action.parameters.properties.map_id.const,revision:action.parameters.properties.revision.const,nodes:f.nodes}:
   action.id==='acknowledge_event_reading'?{reading_id:f.state.observation.game_state.screen_state.event_reading.reading_id,commentary:f.commentary}:{};
- const inputs={
+ const inputs:Record<string,unknown>={
   // Transport bindings are stripped before calls; public actions bind their displayed alias.
   'previous.view_id':view.view_id,'current.session_id':f.state.session_id,'current.state_id':f.state.state_id,
   'current.observed_refs':paged?[previousFragment.ref]:f.refs,'last.fragment.next_offset':previousFragment?.next_offset,'current.offered_action.id':view.actions[0]?.id,'last.request_id':f.request_id,
@@ -163,14 +165,14 @@ export function resolveBindings(capsule,f){
   'current.offered_action.parameters.properties.map_id.const':()=>action.parameters.properties.map_id.const,
   'current.offered_action.parameters.properties.revision.const':()=>action.parameters.properties.revision.const,
   'agent.selected_node_ids_from_current.observed_map_validated_against_drawn_edges_and_offered_route_schema':()=>{
-   const map=readContext(f.state,['map']).fragments[0];assert.ok(map.toc);
+   const map=(readContext(f.state,['map']) as Wire).fragments[0];assert.ok(map.toc);
    const g=f.state.observation.game_state;
    validateArguments(action.parameters,args);
-   const nodes=new Map(g.map.map(n=>[`${n.x},${n.y}`,n]));
+   const nodes=new Map<string,Wire>(g.map.map((n:Wire)=>[`${n.x},${n.y}`,n]));
    assert.equal(new Set(f.nodes).size,f.nodes.length,'duplicate node');
    for(let i=0;i<f.nodes.length;i++){
     const id=f.nodes[i];assert.ok(typeof id==='string'&&id.length<=32&&nodes.has(id),'unknown node');
-    if(i>0)assert.ok(nodes.get(f.nodes[i-1]).children.some(n=>`${n.x},${n.y}`===id),'not a native edge');
+    if(i>0)assert.ok(nodes.get(f.nodes[i-1]).children.some((n:Wire)=>`${n.x},${n.y}`===id),'not a native edge');
    }
    return f.nodes;
   }

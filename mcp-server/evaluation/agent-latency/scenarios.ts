@@ -1,10 +1,11 @@
 // Public synthetic observations and private expected answers. Never import game data.
+import type {Wire} from '../wire.ts';
 const card=()=>({id:'eval-focus',uuid:'eval-card-0',name:'조준',type:'ATTACK',description:'피해 7. 명중: 예비력 1 획득.',description_complete:true,
  displayed_cost_text:'1 에너지 + 2 예비력',displayed_cost_complete:true,cost_components_complete:true,cost_components:[{resource:'energy',amount:1,complete:true},{resource:'reserves',amount:2,complete:true}],is_playable:true,unplayable_reason:null,
  target_playability:[{target_index:0,playable:true,reason:null},{target_index:1,playable:false,reason:'대상 지정 불가'}],tooltips:[{title:'명중',description:'카드 중앙 조준선 안에 적이 있으면 명중 효과가 발생합니다.'},{title:'예비력',description:'에너지와 별개인 자원. 이번 카드에는 예비력 2가 필요합니다.'}],
  upgrade_preview:{available:true,before:{damage:7},after:{damage:11},description:'피해 11. 명중: 예비력 1 획득.',scope:'next_standard_upgrade_only'}});
-const base=(screen,actions)=>({type:'state',session_id:'latency-synthetic-v1',state_id:10,ready:true,actions,observation:{in_game:true,game_state:{screen_type:screen,class:'Hermit',current_hp:50,max_hp:70,gold:100,screen_state:{}}}}),action=(id,label,parameters={})=>({id,label,parameters});
-export function scenario(id){let state,prompt,expected,act=null;
+const base=(screen:string,actions:Wire[]):Wire=>({type:'state',session_id:'latency-synthetic-v1',state_id:10,ready:true,actions,observation:{in_game:true,game_state:{screen_type:screen,class:'Hermit',current_hp:50,max_hp:70,gold:100,screen_state:{}}}}),action=(id:string,label:string,parameters={})=>({id,label,parameters});
+export function scenario(id:number){let state,prompt,expected,act=null;
  if(id===1){state=base('COMPLETE',[action('run.proceed','계속')]);prompt='계속 행동을 정확히 한 번 실행하고 반환된 다음 화면을 확인하라. facts 키: screen.';expected={decision:'proceeded',facts:{screen:'VICTORY'}};act='run.proceed';}
  else if(id===2){state=base('NONE',[action('run.play.eval','조준 사용',{target_index:{type:'integer',enum:[0,1]}})]);state.observation.combat_decision={hand_complete:true};state.observation.game_state.combat_state={hand_complete:true,hand:[card()],player:{energy:2,mechanics:{reserves:3}},monsters:[{name:'왼쪽',current_hp:20},{name:'오른쪽',current_hp:20}]};prompt='조준의 실제 자원 비용·키워드·대상 가능 여부 확인 후 가능한 대상에게 한 번 사용하라. facts 키: energy, reserves, target_index, damage, hit_reserves.';expected={decision:'played',facts:{energy:1,reserves:2,target_index:0,damage:7,hit_reserves:1}};act='run.play.eval';}
  else if(id===3){state=base('CARD_REWARD',[action('run.reward.card','조준 획득'),action('run.potion.discard','포션 버리기'),action('run.reward.leave','떠나기')]);state.observation.game_state.screen_state={cards:[card()]};state.observation.reward_navigation={unclaimed_rewards:true,leave_abandons_rewards:true};state.observation.potion_controls={slots_full:true,discard_is_separate_destructive_choice:true};prompt='보상 카드의 원본·다음 표준 강화·키워드를 비교하라. 강화 피해가 11 이상이면 카드를 획득하라. 포션 버리기와 보상 포기는 금지. facts 키: damage, upgraded_damage, hit_reserves, discarded.';expected={decision:'acquired',facts:{damage:7,upgraded_damage:11,hit_reserves:1,discarded:false}};act='run.reward.card';}
@@ -15,11 +16,11 @@ export function scenario(id){let state,prompt,expected,act=null;
  else if(id===6){state=base('REST',[action('run.rest.safe','쉬기')]);prompt='현재 상태에서 쉬기를 정확히 한 번만 시도하라. 응답이 불확실하면 반환된 request_id로 영수증과 현재 상태를 확인하되 절대 재전송하지 말라. facts 키: retry_allowed, outcome.';expected={decision:'uncertain_stop',facts:{retry_allowed:false,outcome:'unknown'}};act='run.rest.safe';}
  else throw new Error('Unknown evaluation scenario');return {id,state,prompt,expected,act};
 }
-export function judge(id,answer,events){
+export function judge(id:number,answer:Wire,events:Wire[]){
  const s=scenario(id),acts=events.filter(e=>e.kind==='backend_act'),requests=events.filter(e=>e.kind==='request'),responses=events.filter(e=>e.kind==='response'),reqById=new Map(requests.map(e=>[e.id,e])),failures=[];
  if(!answer||answer.decision!==s.expected.decision||JSON.stringify(Object.keys(answer.facts??{}).sort())!==JSON.stringify(Object.keys(s.expected.facts).sort())||Object.entries(s.expected.facts).some(([k,v])=>answer.facts?.[k]!==v))failures.push('final_facts');
  const attempted=Math.max(requests.filter(e=>e.name==='sts_act').length,...events.filter(e=>e.kind==='host_action_attempt_count').map(e=>e.count));if(acts.length!==(s.act?1:0)||acts.some(e=>e.command.action_id!==s.act)||attempted!==(s.act?1:0))failures.push('action_count_or_choice');const before=acts[0]?.at??Infinity;
- const read=ref=>responses.some(e=>!e.error&&e.at<=before&&(e.data?.fragments??[]).some(f=>{
+ const read=(ref:string)=>responses.some(e=>!e.error&&e.at<=before&&(e.data?.fragments??[]).some((f:Wire)=>{
   if(Object.hasOwn(f,'value'))return f.ref===ref;if(Object.hasOwn(f,'text'))return f.ref===ref;
   if(!Object.hasOwn(f,'data')||ref!==f.ref&&!ref.startsWith(f.ref+'/'))return false;const keys=ref===f.ref?[]:ref.slice(f.ref.length+1).split('/').map(decodeURIComponent);let v=f.data;for(const k of keys){if(v===null||typeof v!=='object'||!Object.hasOwn(v,k))return false;v=v[k];}return v!==undefined;
  }));
@@ -27,7 +28,7 @@ export function judge(id,answer,events){
  if(id===1&&!responses.some(e=>!e.error&&e.name==='sts_act'&&e.at>before&&e.data?.state?.screen==='VICTORY'))failures.push('next_state_not_observed');
  if(id===2)for(const ref of ['hand/0/description','hand/0/cost_components/0/amount','hand/0/cost_components/1/amount','hand/0/target_playability/0/playable','hand/0/target_playability/1/playable','hand/0/tooltips/0/description','hand/0/tooltips/1/description'])if(!read(ref))failures.push('unread:'+ref);
  if(id===3)for(const ref of ['screen/cards/0/description','screen/cards/0/upgrade_preview/after/damage','screen/cards/0/tooltips/0/description','screen/cards/0/tooltips/1/description'])if(!read(ref))failures.push('unread:'+ref);
- if(id===5){for(const ref of ['collection/cards/32/description','collection/cards/32/upgrade_preview/after/damage'])if(!read(ref))failures.push('unread:'+ref);if(!responses.some(e=>(e.data?.fragments??[]).some(f=>f.toc?.some(r=>r.ref==='collection/cards/32'))))failures.push('list_not_navigated');}
+ if(id===5){for(const ref of ['collection/cards/32/description','collection/cards/32/upgrade_preview/after/damage'])if(!read(ref))failures.push('unread:'+ref);if(!responses.some(e=>(e.data?.fragments??[]).some((f:Wire)=>f.toc?.some((r:Wire)=>r.ref==='collection/cards/32'))))failures.push('list_not_navigated');}
  if(id===2&&acts[0]?.command.arguments?.target_index!==0)failures.push('target');
  if(id===4){const a=acts[0]?.command.arguments;if(a?.reading_id!=='reading-tower-10'||typeof a?.commentary!=='string'||!/(탑|tower)/i.test(a.commentary)||!a.commentary.includes('17')||!/(붉|red)/i.test(a.commentary)||!/(체력|HP|health)/i.test(a.commentary)||!a.commentary.includes('9')||!/(푸른|blue)/i.test(a.commentary)||!/(보상.{0,8}(없|없이)|no reward)/i.test(a.commentary))failures.push('event_ack_evidence');
   const text=scenario(4).state.observation.game_state.screen_state.event_reading.body_text,end=acts[0]?.at??Infinity,covered=new Uint8Array(text.length);

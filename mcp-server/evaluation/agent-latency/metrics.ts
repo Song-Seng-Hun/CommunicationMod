@@ -1,3 +1,4 @@
+import type {Wire} from '../wire.ts';
 export function schedule(){
  const rows=[];
  for(let scenario=1;scenario<=6;scenario++)for(let repetition=1;repetition<=2;repetition++){
@@ -7,22 +8,23 @@ export function schedule(){
  return rows;
 }
 export class Budget {
- constructor(settings,start){
+ deadline:number;starts:number;
+ constructor(settings:{model?:string,effort?:string},start:number){
   if(!settings.model||!settings.effort)throw new Error('Verified task model and effort required.');
   this.deadline=start+1200000;this.starts=0;
  }
- start(now){
+ start(now:number){
   if(this.starts>=24||now>=this.deadline)throw new Error('Evaluation budget exhausted.');
   this.starts++;return Math.min(90000,this.deadline-now);
  }
 }
-export const median=xs=>{
+export const median=(xs:number[])=>{
  if(!xs.length)return null;
  const a=[...xs].sort((a,b)=>a-b),i=Math.floor(a.length/2);
  return a.length%2?a[i]:(a[i-1]+a[i])/2;
 };
-const p90=xs=>xs.length?[...xs].sort((a,b)=>a-b)[Math.max(0,Math.ceil(xs.length*0.9)-1)]:null;
-export function metrics(events,source='mcp_proxy'){
+const p90=(xs:number[])=>xs.length?[...xs].sort((a,b)=>a-b)[Math.max(0,Math.ceil(xs.length*0.9)-1)]:null;
+export function metrics(events:Wire[],source='mcp_proxy'){
  const pending=new Map(),gaps_ms=[],server_ms=[],seen=new Set(),actionIds=new Set();let last=null,calls=0,duplicates=0,errors=0,invalid_arguments=0,retries=0,stale_rejections=0;
  for(const e of events){
   if(e.kind==='request'){
@@ -40,15 +42,15 @@ export function metrics(events,source='mcp_proxy'){
  }
  return {source,gaps_ms,server_ms,calls,duplicates,errors,invalid_arguments,retries,stale_rejections};
 }
-const valid=n=>typeof n==='number'&&Number.isFinite(n)&&n>=0;
-export function assess(rows){
- const reasons=[],expected=schedule(),key=x=>`${x.scenario}/${x.repetition}/${x.variant}`;
+const valid=(n:unknown):n is number=>typeof n==='number'&&Number.isFinite(n)&&n>=0;
+export function assess(rows:Wire[]){
+ const reasons=[],expected=schedule(),key=(x:Wire)=>`${x.scenario}/${x.repetition}/${x.variant}`;
  if(rows.length!==24||new Set(rows.map(key)).size!==24||expected.some(x=>!rows.some(r=>key(x)===key(r))))reasons.push('incomplete_samples');
  if(rows.some(r=>r.correct!==true||r.safe!==true||r.status!=='completed'))reasons.push('correctness_or_safety');
  if(rows.some(r=>r.cleanup_verified!==true))reasons.push('cleanup_unverified');
- if(rows.some(r=>!valid(r.tokens)||!valid(r.total_ms)||!r.gaps_ms?.length||r.gaps_ms.some(n=>!valid(n))))reasons.push('missing_metrics');
+ if(rows.some(r=>!valid(r.tokens)||!valid(r.total_ms)||!r.gaps_ms?.length||r.gaps_ms.some((n:unknown)=>!valid(n))))reasons.push('missing_metrics');
  if(new Set(rows.map(r=>r.source)).size!==1||rows.some(r=>!['host_event','mcp_proxy'].includes(r.source)))reasons.push('mixed_or_unknown_clock');
- const groups={};
+ const groups:Record<string,Wire>={};
  for(const variant of ['baseline','candidate']){
   const rs=rows.filter(r=>r.variant===variant);
   const gaps=rs.flatMap(r=>r.gaps_ms??[]);

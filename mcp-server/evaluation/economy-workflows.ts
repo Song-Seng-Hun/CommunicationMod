@@ -2,24 +2,29 @@ import assert from 'node:assert/strict';
 import {fixture} from './fixture.ts';
 import {focus,section,mapSummary} from './baseline/view-v1.mjs';
 import {conditionalDecision,readContext} from '../dist/context.js';
+import type {Wire} from './wire.ts';
+
+export interface Step {request:{name:string,arguments:Wire};response:Wire;}
+type Call=(tool:string,args?:Wire)=>Wire;
+interface Probe {oldState:Wire;newState:Wire;read:(refs:string[],extra?:Wire)=>Wire;legacy:(sectionName:string,extra?:Wire)=>Wire;oldCall:Call;newCall:Call;ids:{session_id:unknown,state_id:unknown};}
 
 // Deterministic public fixtures, not actual game sessions or autonomous model decisions.
 // Both variants must recover the SAME task facts; count every extra request and reply.
 export function workflows(){
- const cases=[];
- function trace(name,state,check){
-  const old=[],next=[];let view;
+ const cases:{name:string,state:Wire,before:Step[],after:Step[]}[]=[];
+ function trace(name:string,state:Wire,check:(probe:Probe)=>void){
+  const old:Step[]=[],next:Step[]=[];let view:Wire;
   const ids={session_id:state.session_id,state_id:state.state_id};
-  const oldCall=(tool,args={})=>{const data=tool==='sts_get_state'?(args.view==='map_plan'?mapSummary(state):focus(state)):section(state,args.section,args.offset??0,args.limit??30);old.push({request:{name:tool,arguments:args},response:data});return data;};
-  const newCall=(tool,args={})=>{
+  const oldCall=(tool:string,args:Wire={})=>{const data=tool==='sts_get_state'?(args.view==='map_plan'?mapSummary(state):focus(state)):section(state,args.section,args.offset??0,args.limit??30);old.push({request:{name:tool,arguments:args},response:data});return data;};
+  const newCall=(tool:string,args:Wire={})=>{
    let data=tool==='sts_get_state'?conditionalDecision(state,view?.view_id,args.view):readContext(state,args.refs,args.offset??0,args.limit??20);
    // The current MCP session pins this identity internally; it is not an argument or model payload.
    if(tool==='sts_get_state'){if(!data.unchanged)view=data;const {view_id,...publicData}=data;data=publicData;}
    next.push({request:{name:tool,arguments:args},response:data});return data;
   };
   const oldState=oldCall('sts_get_state'),newState=newCall('sts_get_state');
-  const read=(refs,extra={})=>newCall('sts_get_context',{refs,...extra}).fragments;
-  const legacy=(sectionName,extra={})=>oldCall('sts_get_context',{...ids,section:sectionName,...extra});
+  const read=(refs:string[],extra={})=>newCall('sts_get_context',{refs,...extra}).fragments;
+  const legacy=(sectionName:string,extra={})=>oldCall('sts_get_context',{...ids,section:sectionName,...extra});
   check({oldState,newState,read,legacy,oldCall,newCall,ids});
   // Same two deliberate read-only polls; current-session conditional identity stays internal.
   for(let i=0;i<2;i++){oldCall('sts_get_state');newCall('sts_get_state');}
@@ -42,7 +47,7 @@ export function workflows(){
   assert.equal(newState.event_reading.text_complete===false,oldState.screen_state.event_reading.text_complete===false);
   let text='',offset=0;do{const part=read([newState.event_reading.body_ref],{offset})[0];text+=part.text;const next=part.next_offset??null;if(next!==null)assert.ok(Number.isInteger(next)&&next>offset,'text cursor must advance');offset=next;}while(offset!==null);
   assert.equal(text,oldState.screen_state.event_reading.body_text);
-  assert.deepEqual(newState.event_reading.options.map(x=>x.text),oldState.screen_state.event_reading.options.map(x=>x.text));
+  assert.deepEqual(newState.event_reading.options.map((x:Wire)=>x.text),oldState.screen_state.event_reading.options.map((x:Wire)=>x.text));
  });
  const map=structuredClone(fixture);map.state_id+=2;map.observation.game_state.screen_type='MAP';delete map.observation.game_state.combat_state;
  map.observation.game_state.map_plan={map_id:'map-1',revision:2,current_node:'0,0',next_planned_node:'0,1',route:['0,0','0,1'],status:'on_route',route_author:'human'};
@@ -55,7 +60,7 @@ export function workflows(){
  shop.observation.game_state.screen_state={cards:[{...shop.observation.game_state.deck[0],upgrade_preview:{status:'available',after:{name:'일격+',description:'피해 9.',base_damage:9},can_upgrade_after:false}}]};
  shop.observation.shop_controls=[{id:'run.shop.card.a',price:75,available:true}];shop.actions=[{id:'run.shop.card.a',label:'일격',parameters:{}}];
  trace('shop_price_upgrade_comparison',shop,({oldState,newState,read})=>{
-  assert.ok(newState.toc.some(x=>x.ref==='shop_controls'));
+  assert.ok(newState.toc.some((x:Wire)=>x.ref==='shop_controls'));
   const [control,card]=read(['shop_controls/0',newState.offers[0].ref]);
   assert.equal(control.data.price,oldState.shop_controls[0].price);
   assert.equal(card.data.name,oldState.screen_state.cards[0].name);
@@ -64,7 +69,7 @@ export function workflows(){
  const collection=structuredClone(fixture);collection.state_id+=4;
  collection.observation.game_state.combat_state.player={mechanics:{reserves:4,information_complete:false,collection:{count:135,cards_complete:true,order_visible:false,cards:Array.from({length:135},(_,i)=>({id:`card-${i}`,name:`수집 카드 ${i}`,description:`저장한 공개 효과 ${i}.`,displayed_cost_complete:false}))}}};
  trace('collection_last_card',collection,({newState,read,legacy})=>{
-  assert.ok(newState.toc.some(x=>x.ref==='collection'));
+  assert.ok(newState.toc.some((x:Wire)=>x.ref==='collection'));
   const collectionInfo=read(['collection'])[0];assert.equal(collectionInfo.data.count,135);
   const dir=read(['collection/cards'],{offset:130,limit:30})[0];assert.equal(dir.next_offset??null,null);
   const last=read([dir.toc.at(-1).ref])[0].data;

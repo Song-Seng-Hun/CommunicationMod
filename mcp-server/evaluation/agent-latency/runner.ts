@@ -6,10 +6,13 @@ import {fileURLToPath} from 'node:url';import {createHash} from 'node:crypto';
 import {Budget,schedule,metrics,assess} from './metrics.ts';import {scenario,judge} from './scenarios.ts';
 import {remainingTimeout,stopTree} from './process.ts';
 import {hostBlocker} from './events.ts';
+import type {Wire} from '../wire.ts';
+interface Settings {model:string;effort:string;timestamp?:string;thread?:string;scenario?:number;deadline?:number;}
+type Row=ReturnType<typeof schedule>[number];
 const here=path.dirname(fileURLToPath(import.meta.url)),repo=path.resolve(here,'../../..');
 const now=()=>Number(process.hrtime.bigint())/1e6;
 const allowed=['sts_get_state','sts_get_context','sts_act','sts_get_request'];
-export async function taskSettings(rollout,thread){
+export async function taskSettings(rollout:string,thread:string):Promise<Settings>{
  if(!thread||!path.basename(rollout).includes(thread))throw new Error('Actual task rollout required');
  let result;
  for await(const line of readline.createInterface({input:createReadStream(rollout),crlfDelay:Infinity})){
@@ -20,7 +23,7 @@ export async function taskSettings(rollout,thread){
  if(!result?.model||!result?.effort)throw new Error('Actual task model/effort unavailable; evaluation deferred');
  return result;
 }
-export async function verifySnapshot(root){
+export async function verifySnapshot(root:string){
  const manifest=JSON.parse(await readFile(path.join(root,'manifest.json'),'utf8'));
  for(const [name,hash] of Object.entries(manifest.hashes)){
   if(path.isAbsolute(name)||name.split(/[\\/]/).includes('..'))throw new Error('Invalid snapshot path');
@@ -30,7 +33,7 @@ export async function verifySnapshot(root){
  try{await access(path.join(root,'node_modules'));}catch{await symlink(path.join(repo,'mcp-server/node_modules'),path.join(root,'node_modules'),'junction');}
  return manifest;
 }
-export function codexArgs({cwd,dist,log,settings}){
+export function codexArgs({cwd,dist,log,settings}:{cwd:string,dist:string,log:string,settings:Settings}){
  const args=['exec','--strict-config','--ignore-user-config','--ephemeral','--skip-git-repo-check','--sandbox','read-only','--cd',cwd,'--json','--color','never','--model',settings.model,
   '-c',`model_reasoning_effort=${JSON.stringify(settings.effort)}`,'-c','approval_policy="never"','-c','web_search="disabled"','-c','forced_login_method="chatgpt"'];
  for(const feature of ['shell_tool','shell_snapshot','unified_exec','apps','plugins','hooks','browser_use','browser_use_external','computer_use','in_app_browser','image_generation','multi_agent','multi_agent_v2','memories','skill_search','skill_mcp_dependency_install','workspace_dependencies','view_image','sleep_tool','code_mode','goals'])args.push('--disable',feature);
@@ -39,7 +42,7 @@ export function codexArgs({cwd,dist,log,settings}){
  args.push('-c',`mcp_servers.eval={command=${JSON.stringify(process.execPath)},args=${JSON.stringify([path.join(here,'server.ts'),String(settings.scenario),dist,log,String(settings.deadline??0)])},enabled_tools=${JSON.stringify(allowed)},startup_timeout_sec=15,tool_timeout_sec=20}`);
  args.push('-');return args;
 }
-async function runOne(codex,root,row,snap,settings,deadline){
+async function runOne(codex:string,root:string,row:Row,snap:string,settings:Settings,deadline:number){
  const run=path.join(root,`${row.scenario}-${row.repetition}-${row.variant}`);await mkdir(run);
  const cwd=await mkdtemp(path.join(os.tmpdir(),'downfall-agent-eval-')),log=path.join(run,'mcp.jsonl'),hostLog=path.join(run,'host.jsonl');
  const skill=await readFile(path.join(snap,'plugin/downfall-agent/skills/downfall-play/SKILL.md'),'utf8');
@@ -52,9 +55,9 @@ async function runOne(codex,root,row,snap,settings,deadline){
  await writeFile(path.join(run,'invocation.json'),JSON.stringify({args,settings,cwd},null,2));
  const timeout=remainingTimeout(runDeadline,now());
  const started=now(),child=spawn(codex,args,{cwd,env,stdio:['pipe','pipe','pipe'],windowsHide:true});
- let status='running',usage=null,answer=null,finalAt=null,stderr='',violation=null,blocker=null,cleanupVerified=true,resolveExit,cleanupWork=Promise.resolve(true);const host=[];
+ let status='running',usage:Wire=null,answer=null,finalAt=null,stderr='',violation=null,blocker=null,cleanupVerified=true,resolveExit:(code:number)=>void,cleanupWork=Promise.resolve(true);const host:Wire[]=[];
  const exited=new Promise(resolve=>{resolveExit=resolve;child.on('error',e=>{stderr+=e.message;resolve(-1);});child.on('close',resolve);});
- const kill=why=>{if(status==='running'){
+ const kill=(why:string)=>{if(status==='running'){
   status=why;cleanupWork=stopTree(child);cleanupWork.then(ok=>{if(!ok)resolveExit(-2);});
  }};
  const timer=setTimeout(()=>kill('timeout'),timeout);
@@ -89,7 +92,7 @@ async function runOne(codex,root,row,snap,settings,deadline){
  const code=await exited;clearTimeout(timer);clearInterval(monitor);cleanupVerified=await cleanupWork;
  if(status==='running')status=code===0?'completed':'failed';
  await writeFile(path.join(run,'stderr.txt'),stderr);
- let proxy=[];try{proxy=(await readFile(log,'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse);}catch{}
+ let proxy:Wire[]=[];try{proxy=(await readFile(log,'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));}catch{}
  const proxyViolation=proxy.find(e=>e.kind==='violation');if(proxyViolation){violation='proxy:'+proxyViolation.reason;status='violation';}
  // Prefer host lifecycle events only when complete and one-to-one with actual proxy calls.
  const hostRequests=host.filter(e=>e.kind==='request').length,proxyCalls=proxy.filter(e=>e.kind==='request').length;
@@ -101,7 +104,7 @@ async function runOne(codex,root,row,snap,settings,deadline){
   calls:Math.max(hostRequests,proxyCalls),host_calls:hostRequests,proxy_calls:proxyCalls,initial_connection_ms:proxy.find(e=>e.kind==='initialize_response')?.at-started,proxy_ready_ms:proxy.find(e=>e.kind==='ready')?.at-started,violation,blocker,cleanup_verified:cleanupVerified,run_dir:run};
  await writeFile(path.join(run,'result.json'),JSON.stringify(result,null,2));return result;
 }
-export async function campaign({codex,baseline,candidate,rollout,thread,output,resume=false}){
+export async function campaign({codex,baseline,candidate,rollout,thread,output,resume=false}:{codex:string,baseline:string,candidate:string,rollout:string,thread:string,output:string,resume?:boolean}){
  const settings=await taskSettings(rollout,thread);
  await verifySnapshot(baseline);await verifySnapshot(candidate);
  // Exclusive creation prevents accidental resume/rerun of a spent campaign.
@@ -109,10 +112,10 @@ export async function campaign({codex,baseline,candidate,rollout,thread,output,r
  if(resume){
   const previous=JSON.parse(await readFile(path.join(output,'report.json'),'utf8'));
   if(previous.settings.model!==settings.model||previous.settings.effort!==settings.effort||previous.settings.thread!==thread)throw new Error('Resume settings mismatch');
-  const ledger=(await readFile(path.join(output,'starts.jsonl'),'utf8')).trim().split('\n').map(JSON.parse);
+  const ledger=(await readFile(path.join(output,'starts.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));
   if(ledger.length!==previous.rows.length||ledger.length!==previous.starts)throw new Error('Ambiguous pending evaluation; never replay');
-  if(previous.rows.some(r=>r.cleanup_verified!==true))throw new Error('Previous evaluation cleanup unverified; cannot resume');
-  if(previous.rows.some(r=>r.violation&&!(r.violation==='unexpected_host_item:error'&&r.calls===0&&r.cleanup_verified===true)))throw new Error('Actual isolation violation: campaign cannot resume');
+  if(previous.rows.some((r:Wire)=>r.cleanup_verified!==true))throw new Error('Previous evaluation cleanup unverified; cannot resume');
+  if(previous.rows.some((r:Wire)=>r.violation&&!(r.violation==='unexpected_host_item:error'&&r.calls===0&&r.cleanup_verified===true)))throw new Error('Actual isolation violation: campaign cannot resume');
   rows=previous.rows;starts=ledger.length;
   // Legacy first-run ledger lacks a deadline file; subtract one second conservatively.
   try{started=JSON.parse(await readFile(path.join(output,'budget.json'),'utf8')).started;}catch{started=ledger[0].at-1000;}

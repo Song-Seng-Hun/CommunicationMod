@@ -7,14 +7,16 @@ import ranks from 'js-tiktoken/ranks/o200k_base';
 import {workflows} from '../evaluation/economy-workflows.ts';
 import assert from 'node:assert/strict';
 
-const tokenizer=new Tiktoken(ranks),count=x=>tokenizer.encode(JSON.stringify(x),[],[]).length;
+type Step={request:unknown;response:unknown};
+
+const tokenizer=new Tiktoken(ranks),count=(x:unknown)=>tokenizer.encode(JSON.stringify(x),[],[]).length;
 const baseline=JSON.parse(await readFile(new URL('../evaluation/baseline/tools-v1.json',import.meta.url),'utf8'));
 const client=new Client({name:'economy-catalog-verifier',version:'1'});let current;
 try{await client.connect(new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('../dist/index.js',import.meta.url))],stderr:'pipe'}));current=(await client.listTools()).tools;}finally{await client.close();}
 const definitions={before:count(baseline),after:count(current)};
 const rows=workflows().map(test=>{
- const tokens=steps=>steps.reduce((sum,step)=>sum+count(step.request)+count(step.response),0);
- const duplicated=steps=>steps.reduce((sum,step)=>sum+count(step.request)+count({content:[{type:'text',text:JSON.stringify(step.response)}],structuredContent:{data:step.response}}),0);
+ const tokens=(steps:Step[])=>steps.reduce((sum,step)=>sum+count(step.request)+count(step.response),0);
+ const duplicated=(steps:Step[])=>steps.reduce((sum,step)=>sum+count(step.request)+count({content:[{type:'text',text:JSON.stringify(step.response)}],structuredContent:{data:step.response}}),0);
  return {scenario:test.name,calls_before:test.before.length,calls_after:test.after.length,
   payload_tokens_before:tokens(test.before),payload_tokens_after:tokens(test.after),
   without_polls_before:tokens(test.before.slice(0,-2)),without_polls_after:tokens(test.after.slice(0,-2)),

@@ -4,8 +4,11 @@ import {mkdir,writeFile} from 'node:fs/promises';
 import * as before from '../evaluation/baseline/context-v3.mjs';
 import * as after from '../dist/context.js';
 import {performanceState,countedArray} from '../evaluation/performance-fixtures.ts';
+import type {Wire} from '../evaluation/wire.ts';
 
-const cases=[];
+type Api=Pick<typeof after,'readContext'|'conditionalDecision'>;
+interface Scenario {name:string;run:(api:Api)=>Wire;}
+const cases:Scenario[]=[];
 for(const size of [30,10000]){
  const page=performanceState(size);page.observation.game_state.narrative.entries=[];
  cases.push({name:`array_page_${size}`,run:api=>api.readContext(page,['collection/cards'],size-3,3)});
@@ -15,10 +18,10 @@ for(const size of [30,10000]){
  cases.push({name:`decision_${size}`,run:api=>api.conditionalDecision(map)});
 }
 const batch=100,samples=11,warmup=2000;let sink=0;
-const measure=(scenario,api)=>{const start=performance.now();for(let i=0;i<batch;i++){
+const measure=(scenario:Scenario,api:Api)=>{const start=performance.now();for(let i=0;i<batch;i++){
  const result=scenario.run(api);sink+=result.state_id??0;
 }return (performance.now()-start)*1000/batch;};
-const stats=values=>{const sorted=[...values].sort((a,b)=>a-b);return {median_batch_mean_us:+sorted[Math.floor(sorted.length/2)].toFixed(2),p95_batch_mean_us:+sorted[Math.ceil(sorted.length*0.95)-1].toFixed(2)};};
+const stats=(values:number[])=>{const sorted=[...values].sort((a,b)=>a-b);return {median_batch_mean_us:+sorted[Math.floor(sorted.length/2)].toFixed(2),p95_batch_mean_us:+sorted[Math.ceil(sorted.length*0.95)-1].toFixed(2)};};
 const rows=cases.map(scenario=>{
  assert.equal(JSON.stringify(scenario.run(after)),JSON.stringify(scenario.run(before)),scenario.name);
  for(let i=0;i<warmup;i++){scenario.run(before);scenario.run(after);}
@@ -28,7 +31,7 @@ const rows=cases.map(scenario=>{
  const old=stats(baseline),next=stats(current);
  return {scenario:scenario.name,before:old,after:next,median_speedup:+(old.median_batch_mean_us/next.median_batch_mean_us).toFixed(2)};
 });
-const counts=api=>{
+const counts=(api:Api)=>{
  const s=performanceState(),cards=countedArray(s.observation.game_state.mechanics.collection.cards),entries=countedArray(s.observation.game_state.narrative.entries);
  s.observation.game_state.mechanics.collection.cards=cards.array;s.observation.game_state.narrative.entries=entries.array;
  api.readContext(s,['collection/cards'],9990,3);const page_reads=cards.reads,priorNarrativeReads=entries.reads;

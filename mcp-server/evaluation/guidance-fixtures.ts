@@ -1,6 +1,7 @@
 // Independent, reviewed source inventory: never derive expectations from the catalog.
 import {readFileSync} from 'node:fs';
-export const nativeRewards=JSON.parse(readFileSync(new URL('../../devtools/native-rewards.json',import.meta.url),'utf8')).rewards;
+export interface NativeReward {class:string;type:string;kind:string;cover:string;}
+export const nativeRewards:NativeReward[]=JSON.parse(readFileSync(new URL('../../devtools/native-rewards.json',import.meta.url),'utf8')).rewards;
 export const providerLiterals = {
  'devclient/McpBridge.java':['run.','menu.','acknowledge_event_reading'],
  'devclient/MenuRequestInbox.java':['menu.','run.','acknowledge_event_reading'],

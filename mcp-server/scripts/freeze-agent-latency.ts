@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 const repo=fileURLToPath(new URL('../../',import.meta.url));
 await mkdir(path.join(repo,'target'),{recursive:true});
 const root=await mkdtemp(path.join(repo,'target','agent-latency-baseline-'));
-const hashes={};
+const hashes:Record<string,string>={};
 for(const dir of ['mcp-server/src','mcp-server/dist','plugin/downfall-agent/skills/downfall-play']){
  await mkdir(path.join(root,dir),{recursive:true});
  for(const name of await readdir(path.join(repo,dir))){

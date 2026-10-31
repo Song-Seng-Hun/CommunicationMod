@@ -4,11 +4,12 @@ import {readFile,readdir,mkdtemp,mkdir,writeFile} from 'node:fs/promises';
 import {randomBytes} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import net from 'node:net';
+import net,{type AddressInfo} from 'node:net';
 import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
+import type {Wire} from '../evaluation/wire.ts';
 import {performanceState} from '../evaluation/performance-fixtures.ts';
 
 assert.ok(process.argv[2],'Pass the exact installed cache directory.');
@@ -23,7 +24,7 @@ const {decode}=await import(pathToFileURL(requireInstalled.resolve('@toon-format
 const root=await mkdtemp(path.join(tmpdir(),'comm-installed-compact-'));
 const runtime=path.join(root,'target','synthetic'),records=path.join(runtime,'recordings','one');
 await mkdir(records,{recursive:true});
-const token=randomBytes(32).toString('base64url'),peers=new Set();let commands=0;
+const token=randomBytes(32).toString('base64url'),peers=new Set<net.Socket>();let commands=0;
 const backend=net.createServer(socket=>{
  peers.add(socket);socket.on('close',()=>peers.delete(socket));socket.setEncoding('utf8');
  let buffer='',authenticated=false;
@@ -38,20 +39,20 @@ const backend=net.createServer(socket=>{
   }
  });
 });
-await new Promise(resolve=>backend.listen(0,'127.0.0.1',resolve));
+await new Promise<void>(resolve=>backend.listen(0,'127.0.0.1',resolve));
 const client=new Client({name:'installed-compact-verifier',version:'1'});
 try{
  await writeFile(path.join(root,'target','local-test-ready.json'),JSON.stringify({runtime}));
- await writeFile(path.join(records,'mcp-bridge.json'),JSON.stringify({protocol:1,port:backend.address().port,token}));
+ await writeFile(path.join(records,'mcp-bridge.json'),JSON.stringify({protocol:1,port:(backend.address() as AddressInfo).port,token}));
  const config=path.join(root,'plugin.json');await writeFile(config,JSON.stringify({workspace:root}));
  await client.connect(new StdioClientTransport({command:process.execPath,args:[path.join(cache,'scripts','start.mjs')],env:{...process.env,COMMUNICATIONMOD_CONFIG:config},stderr:'pipe'}));
- const catalog=(await client.listTools()).tools;assert.equal(catalog.length,6);
+ const catalog:Wire[]=(await client.listTools()).tools;assert.equal(catalog.length,6);
  const schema=catalog.find(tool=>tool.name==='sts_get_context').inputSchema;
  assert.deepEqual(schema.properties.response_format.enum,['json','compact']);assert.equal(schema.properties.response_format.default,'json');
- const state=await client.callTool({name:'sts_get_state',arguments:{wait_ms:1000}});assert.ok(!state.isError);
+ const state:Wire=await client.callTool({name:'sts_get_state',arguments:{wait_ms:1000}});assert.ok(!state.isError);
  const args={session_id:state.structuredContent.data.session_id,state_id:state.structuredContent.data.state_id,refs:['collection/cards'],limit:20};
- const plain=await client.callTool({name:'sts_get_context',arguments:args});assert.ok(!plain.isError);
- const compact=await client.callTool({name:'sts_get_context',arguments:{...args,response_format:'compact'}});assert.ok(!compact.isError);
+ const plain:Wire=await client.callTool({name:'sts_get_context',arguments:args});assert.ok(!plain.isError);
+ const compact:Wire=await client.callTool({name:'sts_get_context',arguments:{...args,response_format:'compact'}});assert.ok(!compact.isError);
  assert.equal(compact.structuredContent,undefined);const text=compact.content[0].text;assert.match(text,/^TOON:/);
  assert.deepEqual(decode(text.slice(text.indexOf('\n')+1),{strict:true}),plain.structuredContent.data);
  const recovered=await client.callTool({name:'sts_get_context',arguments:{...args,response_format:'json'}});assert.deepEqual(recovered,plain);

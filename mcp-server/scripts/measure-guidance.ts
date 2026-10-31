@@ -7,27 +7,30 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {workflows} from '../evaluation/economy-workflows.ts';
 import * as current from '../dist/context.js';
-const enc=new Tiktoken(ranks),count=x=>enc.encode(typeof x==='string'?x:JSON.stringify(x),[],[]).length;
-export const cost=(steps,skill,catalog)=>count(skill)+count(catalog)+steps.reduce((n,s)=>n+count(s.request)+count(s.response),0);
-const duplicated=(steps,skill,catalog)=>cost(steps.map(s=>({...s,response:{content:[{type:'text',text:JSON.stringify(s.response)}],structuredContent:{data:s.response}}})),skill,catalog);
-export async function measure(baselinePath){
+import type {Step} from '../evaluation/economy-workflows.ts';
+import type {Wire} from '../evaluation/wire.ts';
+type Api=Pick<typeof current,'conditionalDecision'|'readContext'>;
+const enc=new Tiktoken(ranks),count=(x:unknown)=>enc.encode(typeof x==='string'?x:JSON.stringify(x),[],[]).length;
+export const cost=(steps:Step[],skill:string,catalog:unknown)=>count(skill)+count(catalog)+steps.reduce((n,s)=>n+count(s.request)+count(s.response),0);
+const duplicated=(steps:Step[],skill:string,catalog:unknown)=>cost(steps.map(s=>({...s,response:{content:[{type:'text',text:JSON.stringify(s.response)}],structuredContent:{data:s.response}}})),skill,catalog);
+export async function measure(baselinePath:string){
  const baseline=path.resolve(baselinePath),repo=fileURLToPath(new URL('../../',import.meta.url));
  const manifest=JSON.parse(await readFile(path.join(baseline,'manifest.json'),'utf8'));
  if(!manifest.hashes?.['mcp-server/src/context.ts'])throw new Error('Frozen baseline manifest required');
  const old=await import(pathToFileURL(path.join(baseline,'mcp-server/dist/context.js')).href);
  const skillPath='plugin/downfall-agent/skills/downfall-play/SKILL.md';
  const beforeSkill=await readFile(path.join(baseline,skillPath),'utf8'),afterSkill=await readFile(path.join(repo,skillPath),'utf8');
- const client=new Client({name:'guidance-catalog-cost',version:'1'});let catalog;
+ const client=new Client({name:'guidance-catalog-cost',version:'1'});let catalog:unknown;
  try{await client.connect(new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('../dist/index.js',import.meta.url))],stderr:'pipe'}));catalog=(await client.listTools()).tools;}finally{await client.close();}
  // workflows already checks required native facts. Replay its exact reads with each projection.
  const rows=workflows();
  const results=[];
  for(const trace of rows){
   const s=trace.state;if(!s)throw new Error('Workflow must expose its synthetic state');
-  const replay=(api,examples)=>{
-   const steps=[];let last;
-   const call=(name,args)=>{
-    const response=name==='sts_get_state'?api.conditionalDecision(s,args.known_view,args.view):api.readContext(s,args.refs,args.offset??0,args.limit??20);
+  const replay=(api:Api,examples:false|'oneshot'|'fewshot')=>{
+   const steps:Step[]=[];let last:Wire;
+   const call=(name:string,args:Wire)=>{
+    const response:Wire=name==='sts_get_state'?api.conditionalDecision(s,args.known_view,args.view):api.readContext(s,args.refs,args.offset??0,args.limit??20);
     steps.push({request:{name,arguments:args},response});if(name==='sts_get_state'&&!response.unchanged)last=response;return response;
    };
    for(const [i,step] of trace.after.entries()){
@@ -42,17 +45,17 @@ export async function measure(baselinePath){
      }
      const ids={session_id:s.session_id,state_id:s.state_id};
      const root=call('sts_get_context',{...ids,refs:[last.guidance.more]});
-     const cap=root.fragments[0].toc.find(x=>normalRef.startsWith(x.ref+'/'));
+     const cap=root.fragments[0].toc.find((x:Wire)=>normalRef.startsWith(x.ref+'/'));
      if(!cap)throw new Error('Representative not discoverable in current directory');
      const dir=call('sts_get_context',{...ids,refs:[cap.ref]});
-     const refs=dir.fragments[0].toc.filter(x=>x.ref!==seen).map(x=>x.ref);
+     const refs=dir.fragments[0].toc.filter((x:Wire)=>x.ref!==seen).map((x:Wire)=>x.ref);
      if(refs.length)call('sts_get_context',{session_id:s.session_id,state_id:s.state_id,refs});
     }
    }
    return steps;
   };
   const before=replay(old,false);
-  for(const mode of ['inline','oneshot','fewshot']){
+  for(const mode of ['inline','oneshot','fewshot'] as const){
    const after=replay(current,mode==='inline'?false:mode);
    const b=cost(before,beforeSkill,catalog),a=cost(after,afterSkill,catalog);
    results.push({scenario:trace.name,mode,calls_before:before.length,calls_after:after.length,before:b,after:a,increase_percent:+((a/b-1)*100).toFixed(2),duplicated_before:duplicated(before,beforeSkill,catalog),duplicated_after:duplicated(after,afterSkill,catalog)});
