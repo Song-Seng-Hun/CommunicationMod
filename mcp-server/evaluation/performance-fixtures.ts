@@ -1,5 +1,6 @@
 // Synthetic parsed-JSON-compatible snapshots; no live state or saves.
-export function performanceState(count=10000,screen='MAP'){
+import type {Wire} from './wire.ts';
+export function performanceState(count=10000,screen='MAP'):Wire{
  return {session_id:'performance',state_id:42,ready:true,connection:{status:'connected',pending_request_id:null,age_ms:0},
   actions:[{id:'run.map.plan',label:'계획',parameters:{}}],observation:{game_state:{screen_type:screen,current_hp:30,max_hp:60,
    mechanics:{collection:{count,cards:Array.from({length:count},(_,i)=>({id:`card-${i}`,name:`카드 ${i}`,description:'피해 6. 사용 불가 조건 유지.',displayed_cost_complete:false}))}},

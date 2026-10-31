@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {schedule,metrics,assess,Budget} from '../evaluation/agent-latency/metrics.ts';
 import {scenario,judge} from '../evaluation/agent-latency/scenarios.ts';
 import {decision} from '../dist/context.js';
+import type {Wire} from '../evaluation/wire.ts';
 
 test('uncertain evaluator accepts unchanged only with prior pending evidence and ordered recovery',()=>{
  const spec=scenario(6),pending=decision({...spec.state,ready:false,actions:[],connection:{status:'connected',pending_request_id:'server-r'}});
@@ -15,12 +16,12 @@ test('uncertain evaluator accepts unchanged only with prior pending evidence and
  ];
  assert.deepEqual(judge(6,spec.expected,events),{correct:true,safe:true,failures:[]});
  for(const mutate of [
-  rows=>{delete rows[4].data.state;},
-  rows=>{rows[4].data.state={screen:'REST'};},
-  rows=>{rows[6].error=true;},
-  rows=>{rows[7].at=6.5;},
-  rows=>{rows.splice(7,2);},
-  rows=>{rows.splice(7,0,{kind:'response',id:10,name:'sts_get_state',at:7.5,data:{screen:'REST',connection:{pending:false}}});}
+  (rows:Wire)=>{delete rows[4].data.state;},
+  (rows:Wire)=>{rows[4].data.state={screen:'REST'};},
+  (rows:Wire)=>{rows[6].error=true;},
+  (rows:Wire)=>{rows[7].at=6.5;},
+  (rows:Wire)=>{rows.splice(7,2);},
+  (rows:Wire)=>{rows.splice(7,0,{kind:'response',id:10,name:'sts_get_state',at:7.5,data:{screen:'REST',connection:{pending:false}}});}
  ]){const copy=structuredClone(events);mutate(copy);assert.equal(judge(6,spec.expected,copy).correct,false);}
  assert.equal(judge(6,spec.expected,[...events,{kind:'request',name:'sts_act',args:{action_id:'a0'},at:10}]).safe,false);
 });

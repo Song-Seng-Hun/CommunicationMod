@@ -6,6 +6,7 @@ import {toolSchemas} from '../dist/tool-schemas.js';import {contextText} from '.
 import type {Binding,Capability,Capsule} from '../dist/guidance-catalog.js';
 import type {Wire} from '../evaluation/wire.ts';
 interface SourceContract {revision:string;fingerprint:string;files:number;}
+type CheckedContract=Pick<SourceContract,'revision'|'files'>&Partial<SourceContract>;
 
 // Explicit reviewed revision; guidance-contract.json records source evidence and live-acceptance limits.
 const REVIEWED_CONTRACT='2026-10-11-lossless-reuse-guidance-v20',digest=(v:string|Buffer)=>createHash('sha256').update(v).digest('hex'),object=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='object'&&!Array.isArray(v);
@@ -20,7 +21,7 @@ export async function sourceContract():Promise<SourceContract>{
  await walk('src/main/java/communicationmod');files.sort();const parts=[];for(const file of files)parts.push([file,digest((await readFile(new URL(file,root),'utf8')).replace(/\r\n/g,'\n'))]);
  return {revision:REVIEWED_CONTRACT,fingerprint:digest(JSON.stringify(parts)),files:files.length};
 }
-export function validateSourceContract(expected:SourceContract,actual:SourceContract){assert.equal(actual.revision,expected.revision,'Guidance reviewed contract revision changed: revalidate examples/tests and bump the explicit reviewed revision.');assert.equal(actual.files,expected.files,'Guidance source file set changed: revalidate examples/tests and update the reviewed contract.');}
+export function validateSourceContract(expected:CheckedContract,actual:CheckedContract){assert.equal(actual.revision,expected.revision,'Guidance reviewed contract revision changed: revalidate examples/tests and bump the explicit reviewed revision.');assert.equal(actual.files,expected.files,'Guidance source file set changed: revalidate examples/tests and update the reviewed contract.');}
 const cleanProse=(text:string)=>text.replace(/same current session\/state;?\s*/gi,'').replace(/current session\/state and\s*/gi,'').replace(/Stale required IDs\/refs/gi,'Stale refs').replace(/No current IDs\/refs for context/gi,'No current refs for context').replace(/current IDs\/refs/gi,'current refs').replace(/whether its view_id changed/gi,'whether the visible decision changed').replace(/omit known_view and recover it/gi,'request a full refresh').replace(/\bview_id\b/gi,'visible decision').replace(/\bknown_view\b/gi,'delta baseline').replace(/current map_id\/revision/gi,'pinned current map state').replace(/map_id\/revision/gi,'map state').replace(/current event_reading\.reading_id/gi,'pinned current event page').replace(/\breading_id\b/gi,'pinned event page').replace(/current decision_id/gi,'pinned current combat decision').replace(/\bdecision_id\b/gi,'pinned combat decision');
 const publicArguments=(tool:string,args:Wire)=>{
  const out=Object.fromEntries(Object.entries(args??{}).filter(([key])=>key!=='session_id'&&key!=='state_id'));
@@ -34,7 +35,7 @@ const bindingNames=(value:unknown,out=new Set<unknown>())=>{if(object(value)&&Ob
 const usedBindings=(calls:Capsule['calls'],bindings:Capsule['bindings'])=>{const used=new Set();for(const call of calls)bindingNames(publicArguments(call.tool,call.arguments),used);return Object.fromEntries(Object.entries(bindings??{}).filter(([key])=>used.has(key)));};
 const cleanBindingSource=(source:unknown)=>String(source).replace(/agent\.commentary_already_presented_to_user_for_current\.event_reading\.reading_id/g,'agent.commentary_already_presented_for_pinned_event_page').replace(/current\.event_reading\.reading_id/g,'pinned_event_page');
 const publicCapsule=(source:Capsule)=>{const c:Wire=structuredClone(source);delete c.revision;for(const call of c.calls)call.arguments=publicArguments(call.tool,call.arguments);c.bindings=usedBindings(c.calls,c.bindings);for(const binding of Object.values<Binding>(c.bindings))binding.source=cleanBindingSource(binding.source);for(const key of ['when','not_when','requires','expect','stop'])c[key]=cleanProse(c[key]);return c;};
-export function bindCall(call:Capsule['calls'][number],bindings:Capsule['bindings'],values:Record<string,unknown>){
+export function bindCall(call:Capsule['calls'][number],bindings:Record<string,{type:string,source:string}>,values:Record<string,unknown>){
  const template=publicArguments(call.tool,call.arguments),names=bindingNames(template),active=Object.fromEntries(Object.entries(bindings??{}).filter(([key])=>names.has(key)));
  for(const binding of Object.values(active))assert.equal(sources.get(binding.source),binding.type,'Unknown or mistyped binding source: '+binding.source);
  const bind=(v:unknown):Wire=>{if(object(v)&&Object.hasOwn(v,'$bind')){assert.deepEqual(Object.keys(v),['$bind'],'binding must be a single typed reference');const key=v.$bind as string,b=active[key];assert.ok(b&&Object.hasOwn(values,key),'missing binding: '+key);const value=values[key],type=Array.isArray(value)?'array':value===null?'null':typeof value;assert.equal(type,b.type,'binding type: '+key);return structuredClone(value);}if(Array.isArray(v))return v.map(bind);if(object(v))return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,bind(x)]));return v;};

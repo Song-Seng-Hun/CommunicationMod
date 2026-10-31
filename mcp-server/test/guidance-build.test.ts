@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import type {Wire} from '../evaluation/wire.ts';
 const load=async()=>{const value=await import('../scripts/build-guidance.ts').catch(()=>null);assert.ok(value,'offline guidance validator required');return value;};
 
 test('offline validator strips transport bindings and still validates live argument types',async()=>{
@@ -23,7 +24,7 @@ test('public guidance calls omit pinned event/map constants and dead bindings',a
  assert.deepEqual(bindCall(event,eventBindings,{a:'acknowledge_event_reading',commentary:'현재 이벤트를 설명함'}),{action_id:'acknowledge_event_reading',arguments:{commentary:'현재 이벤트를 설명함'}});
  const {capabilities}=await import('../dist/guidance-catalog.js'),{exampleFragment}=await import('../dist/guidance.js');
  for(const id of ['event.ack','map.plan']){
-  const cap=capabilities.find(x=>x.id===id),raw=cap.cases.find(x=>x.case==='normal'),shown=exampleFragment(raw),text=JSON.stringify(shown);
+  const cap:Wire=capabilities.find(x=>x.id===id),raw=cap.cases.find((x:Wire)=>x.case==='normal'),shown=exampleFragment(raw),text=JSON.stringify(shown);
   assert.ok(!text.includes('reading_id'),id);assert.ok(!text.includes('map_id'),id);assert.ok(!text.includes('current.offered_action.parameters.properties.revision.const'),id);
  }
 });

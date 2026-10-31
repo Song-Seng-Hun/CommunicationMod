@@ -11,9 +11,10 @@ import {readContext,decision} from '../dist/context.js';
 import {performanceState} from '../evaluation/performance-fixtures.ts';
 import {workflows} from '../evaluation/economy-workflows.ts';
 import {data as readingData,expected} from '../evaluation/format-reading.ts';
+import type {Wire} from '../evaluation/wire.ts';
 
-const tokenizer=new Tiktoken(ranks),tokens=text=>tokenizer.encode(text,[],[]).length;
-const restore=text=>text.startsWith('TOON:')?decode(text.slice(text.indexOf('\n')+1),{strict:true}):JSON.parse(text);
+const tokenizer=new Tiktoken(ranks),tokens=(text:Wire)=>tokenizer.encode(text,[],[]).length;
+const restore=(text:Wire)=>text.startsWith('TOON:')?decode(text.slice(text.indexOf('\n')+1),{strict:true}):JSON.parse(text);
 const directory=()=>readContext(performanceState(40),['collection/cards'],0,20);
 
 test('default and explicit json emit one exact model-visible payload',async()=>{
@@ -23,7 +24,7 @@ test('default and explicit json emit one exact model-visible payload',async()=>{
 });
 
 test('uniform context directory uses smaller lossless labeled TOON without duplication',async()=>{
- const data=directory(),original=JSON.stringify(data),result=await formatContext(data,'compact');
+ const data=directory(),original=JSON.stringify(data),result:Wire=await formatContext(data,'compact');
  assert.deepEqual(Object.keys(result),['content']);assert.equal(result.content.length,1);
  const text=result.content[0].text;
  assert.match(text,/^TOON:.*\[N\].*fields.*rows/);
@@ -37,7 +38,7 @@ test('uniform context directory uses smaller lossless labeled TOON without dupli
 
 test('default combat decision also benefits from lossless TOON tables',async()=>{
  const s={session_id:'s',state_id:1,ready:true,actions:Array.from({length:6},(_,i)=>({id:`run.play.${i}`,label:`카드 ${i}`,parameters:{}})),observation:{game_state:{screen_type:'NONE',current_hp:42,max_hp:70,gold:50,combat_state:{hand_complete:true,turn:3,player:{current_hp:42,max_hp:70,energy:3,block:4},hand:Array.from({length:6},(_,i)=>({uuid:`u${i}`,id:`c${i}`,name:`카드 ${i}`,cost:i%3,type:i%2?'SKILL':'ATTACK',is_playable:true,description:`효과 ${i}.`,displayed_cost_complete:true,cost_components_complete:true})),monsters:Array.from({length:3},(_,i)=>({name:`적 ${i}`,current_hp:20+i,max_hp:30,block:0,intent:'ATTACK',move_adjusted_damage:6,move_hits:1}))}}}};
- const data=decision(s);delete data.view_id;const json=JSON.stringify(data),result=await formatContext(data,'compact'),text=result.content[0].text;
+ const data=decision(s);delete data.view_id;const json=JSON.stringify(data),result:Wire=await formatContext(data,'compact'),text=result.content[0].text;
  assert.match(text,/^TOON:/);assert.equal(JSON.stringify(restore(text)),json);assert.ok(tokens(text)<=tokens(json)*0.9);assert.ok(Buffer.byteLength(text,'utf8')<Buffer.byteLength(json,'utf8'));
 });
 
@@ -45,7 +46,7 @@ test('small, non-tabular and oversized responses retain exact JSON text',async()
  const cases=[{state_id:42,unchanged:true},{text:'사용 불가.\nDo not replay unknown outcomes.'.repeat(60)},
   {rows:[{id:'a'},{id:'b',complete:false},{id:'c'}]},
   {...directory(),text:'한'.repeat(70000)}];
- for(const data of cases){const result=await formatContext(data,'compact');assert.equal(result.structuredContent,undefined);assert.equal(result.content[0].text,JSON.stringify(data));}
+ for(const data of cases){const result:Wire=await formatContext(data,'compact');assert.equal(result.structuredContent,undefined);assert.equal(result.content[0].text,JSON.stringify(data));}
 });
 
 test('types, strings, control characters, unusual keys and missing fields roundtrip',async()=>{
@@ -53,13 +54,13 @@ test('types, strings, control characters, unusual keys and missing fields roundt
   'a,b','a\tb','a\nb','a\r\nb','"quoted"','\\path',' padded ','한글😀','[DONE]','# comment','- item',
   '\u0000\u0001\u0008\u000b\u000c\u001f','<|endoftext|>','a: b','{id}', '```toon', '\ud800','\udfff'];
  for(const value of values){
-  const data=directory();data.fragments[0].data=JSON.parse('{"__proto__":{"safe":true},"constructor":"constructor","a.b":"literal key","":"empty key"}');
+  const data:Wire=directory();data.fragments[0].data=JSON.parse('{"__proto__":{"safe":true},"constructor":"constructor","a.b":"literal key","":"empty key"}');
   data.fragments[0].data.value=value;data.fragments[0].data.missing=undefined;
-  const original=JSON.stringify(data),result=await formatContext(data,'compact');
+  const original=JSON.stringify(data),result:Wire=await formatContext(data,'compact');
   assert.equal(JSON.stringify(restore(result.content[0].text)),original,`Value ${JSON.stringify(value)}`);
   assert.equal(JSON.stringify(data),original);
  }
- assert.equal({}.safe,undefined);
+ assert.equal(({} as Wire).safe,undefined);
 });
 
 test('generated row data preserve every primitive and never grow compact text',async()=>{
@@ -68,7 +69,7 @@ test('generated row data preserve every primitive and never grow compact text',a
  for(let i=0;i<100;i++){
   const rows=Array.from({length:3+Math.floor(next()*28)},(_,j)=>({ref:`hand/${j}`,label:atoms[Math.floor(next()*atoms.length)],complete:atoms[Math.floor(next()*atoms.length)]}));
   const data={state_id:i,toc:rows,next_offset:i%2?null:30},json=JSON.stringify(data);
-  const result=await formatContext(data,'compact');
+  const result:Wire=await formatContext(data,'compact');
   assert.equal(JSON.stringify(restore(result.content[0].text)),json);
   assert.ok(tokens(result.content[0].text)<=tokens(json));
  }
@@ -76,14 +77,14 @@ test('generated row data preserve every primitive and never grow compact text',a
 
 test('all existing required-fact workflows roundtrip with unchanged refs and pagination',async()=>{
  for(const workflow of workflows())for(const step of workflow.after){
-  const result=await formatContext(step.response,'compact');
+  const result:Wire=await formatContext(step.response,'compact');
   assert.equal(JSON.stringify(restore(result.content[0].text)),JSON.stringify(step.response),workflow.name);
  }
 });
 
 test('reading-evaluation facts have independently checked types and safety answers',async()=>{
- const result=await formatContext(readingData,'compact');assert.match(result.content[0].text,/^TOON:/);
- const data=restore(result.content[0].text),rows=data.fragment.toc,card=n=>rows.find(row=>row.ref===`collection/cards/${n}`);
+ const result:Wire=await formatContext(readingData,'compact');assert.match(result.content[0].text,/^TOON:/);
+ const data=restore(result.content[0].text),rows=data.fragment.toc,card=(n:Wire)=>rows.find((row:Wire)=>row.ref===`collection/cards/${n}`);
  const actual={q1:data.receipt.retry_allowed,q2:data.fragment.next_offset,q3:rows.at(-1).ref,
   q4:card(22).displayed_cost_text,q5:card(24).displayed_cost_complete&&card(24).displayed_cost_text==='0',
   q6:card(26).reason,q7:card(25).note,q8:card(27).note,q9:data.fragment.total-data.fragment.offset-rows.length,q10:data.session_id};
@@ -92,14 +93,14 @@ test('reading-evaluation facts have independently checked types and safety answe
 
 test('unsupported UTF-16 retains exact JSON instead of accepting a damaged codec result',async()=>{
  for(const text of ['\ud800','\udfff','prefix\ud800tail']){
-  const data=directory();data.fragments[0].text=text;
-  assert.equal((await formatContext(data,'compact')).content[0].text,JSON.stringify(data));
+  const data:Wire=directory();data.fragments[0].text=text;
+  assert.equal((await formatContext(data,'compact') as Wire).content[0].text,JSON.stringify(data));
  }
 });
 
 test('archived isolated JSON and TOON reading answers match the frozen truth',async()=>{
  const evidence=JSON.parse(await readFile(new URL('../evaluation/format-reading-results.json',import.meta.url),'utf8'));
- assert.deepEqual(evidence.results.map(row=>row.format),['json','compact']);
+ assert.deepEqual(evidence.results.map((row:Wire)=>row.format),['json','compact']);
  for(const row of evidence.results)assert.deepEqual(row.answers,expected,row.format);
 });
 

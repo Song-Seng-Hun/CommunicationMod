@@ -4,6 +4,7 @@ import {mkdtemp,readdir,copyFile,symlink,readFile,writeFile} from 'node:fs/promi
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
+import type {Wire} from '../evaluation/wire.ts';
 
 test('stale or missing guidance artifact disables examples only; native rules still work',async()=>{
  const dist=fileURLToPath(new URL('../dist/',import.meta.url));
@@ -15,7 +16,7 @@ test('stale or missing guidance artifact disables examples only; native rules st
   if(mode!=='missing'){
    const bundle=JSON.parse(await readFile(path.join(dist,'guidance-bundle.json'),'utf8'));
    if(mode==='mismatch')bundle.modules['context.js']='bad';
-   else if(mode==='one-capability')for(const [id,v] of Object.entries(bundle.capabilities))if(id.startsWith('shop'))v.digest='bad';
+   else if(mode==='one-capability')for(const [id,v] of Object.entries(bundle.capabilities))if(id.startsWith('shop'))(v as Wire).digest='bad';
    await writeFile(path.join(temp,'guidance-bundle.json'),JSON.stringify(bundle));
    if(mode.endsWith('-drift')){
     const file=path.join(temp,mode.slice(0,-6)+'.js');
@@ -26,10 +27,10 @@ test('stale or missing guidance artifact disables examples only; native rules st
   const s={session_id:'s',state_id:1,ready:true,actions:[{id:'run.shop.card.a',parameters:{}}],observation:{game_state:{screen_type:'SHOP_SCREEN',current_hp:7}}};
   const view=api.decision(s);assert.equal(view.player.current_hp,7);assert.ok(api.readContext(s,['rules']).fragments.length);
   if(mode==='one-capability'){
-   assert.ok(view.toc.some(x=>x.ref==='guidance'));assert.equal(view.guidance,undefined);
-   const rows=api.readContext(s,['guidance']).fragments[0].toc;assert.ok(rows.every(x=>!x.ref.startsWith('guidance/shop')));
+   assert.ok(view.toc.some((x:Wire)=>x.ref==='guidance'));assert.equal(view.guidance,undefined);
+   const rows=api.readContext(s,['guidance']).fragments[0].toc;assert.ok(rows.every((x:Wire)=>!x.ref.startsWith('guidance/shop')));
   }else{
-   assert.ok(!view.toc.some(x=>x.ref==='guidance'));assert.equal(view.guidance,undefined);assert.throws(()=>api.readContext(s,['guidance']),/not available/);
+   assert.ok(!view.toc.some((x:Wire)=>x.ref==='guidance'));assert.equal(view.guidance,undefined);assert.throws(()=>api.readContext(s,['guidance']),/not available/);
   }
  }
 });
