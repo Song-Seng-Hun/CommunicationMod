@@ -113,7 +113,7 @@
 - 기존 로컬 `downfall-agent@personal`을 `0.1.0+codex.20260911193435`로 갱신했습니다.
   이전 소스/설정 백업을 유지했고, 설치된 서버와 빌드 코드의 일치 및 실제 MCP 도구
   조회에서 `view=map_plan`, `section=map_plan` 노출을 확인했습니다.
-  `verify-map-planner-plugin.mjs` 결과: game_phase=stopped, gameplay_actions=0.
+  `verify-map-planner-plugin.ts` 결과: game_phase=stopped, gameplay_actions=0.
   플러그인 갱신은 `target/map-planner-plugin-verification.log`에 기록되어 있습니다.
 - 실제 게임 창에서의 펜 감각·도구막대 배치·모든 해상도·역방향 지도 시각 비교는
   아직 미검증입니다. 이번 작업은 게임을 자동으로 실행하거나 플레이하지 않았습니다.

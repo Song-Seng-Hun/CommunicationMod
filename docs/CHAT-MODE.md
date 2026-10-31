@@ -51,7 +51,7 @@ After code changes, stop the tunnel, run `Prepare`, and reconnect with the same 
 
 - Official Windows release `v0.0.14`; archive SHA-256 `784ab8da7b5a88f0109f1fd8aaf0a1c86067430b896dddf307ef7e3cc49fa1a5` matched the release API digest.
 - All 11 existing MCP tests passed.
-- `verify-chat-entry.mjs` started the actual stdio entry from an unrelated working directory, verified all six tool names, output schemas and annotations, and successfully called `sts_game_status` with the game stopped. Gameplay actions: zero.
+- `verify-chat-entry.ts` started the actual stdio entry from an unrelated working directory, verified all six tool names, output schemas and annotations, and successfully called `sts_game_status` with the game stopped. Gameplay actions: zero.
 - Platform tunnel settings redirected to login. No dedicated Downfall tunnel ID or runtime key was supplied. Therefore managed `Connect`/`Stop`, tunnel readiness, ChatGPT registration and end-to-end Chat tool calls remain unverified. Local preparation is complete; Chat mode is not yet connected.
 
 Official references: [Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels), [Connect and test](https://developers.openai.com/plugins/deploy/connect-chatgpt).

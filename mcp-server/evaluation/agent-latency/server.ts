@@ -2,7 +2,7 @@
 import net from 'node:net';import {spawn} from 'node:child_process';
 import {mkdtemp,mkdir,writeFile} from 'node:fs/promises';import {appendFileSync} from 'node:fs';
 import path from 'node:path';import os from 'node:os';import {randomBytes} from 'node:crypto';
-import {decode} from '@toon-format/toon';import {scenario} from './scenarios.mjs';
+import {decode} from '@toon-format/toon';import {scenario} from './scenarios.ts';
 const [id,dist,log,absoluteDeadline]=process.argv.slice(2),s=scenario(Number(id));
 if(!path.isAbsolute(dist)||!path.isAbsolute(log))throw new Error('Absolute evaluation paths required');
 const now=()=>Number(process.hrtime.bigint())/1e6,record=e=>appendFileSync(log,JSON.stringify({at:now(),...e})+'\n');

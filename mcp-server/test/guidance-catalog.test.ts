@@ -4,7 +4,7 @@ import {readFile,readdir} from 'node:fs/promises';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {getEncoding} from 'js-tiktoken';
-import {providerLiterals,actionFactories,legacyActions,controlRoots,contextRoots,dynamicContracts,coverageFixtures,requiredProviderCoverage,requiredRootCoverage,transportInventoryFiles} from '../evaluation/guidance-fixtures.mjs';
+import {providerLiterals,actionFactories,legacyActions,controlRoots,contextRoots,dynamicContracts,coverageFixtures,requiredProviderCoverage,requiredRootCoverage,transportInventoryFiles} from '../evaluation/guidance-fixtures.ts';
 
 const root=fileURLToPath(new URL('../../src/main/java/communicationmod/',import.meta.url));
 const catalogURL=process.env.GUIDANCE_CATALOG_MODULE?pathToFileURL(path.resolve(process.env.GUIDANCE_CATALOG_MODULE)).href:new URL('../dist/guidance-catalog.js',import.meta.url).href;

@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc && node scripts/build-guidance.mjs",
-    "test": "npm run build && node --test test/*.test.mjs",
+    "build": "tsc && node scripts/build-guidance.ts",
+    "test": "npm run build && node --test test/*.test.ts",
     "start": "node dist/index.js"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {fixture} from './fixture.mjs';
+import {fixture} from './fixture.ts';
 import {focus,section,mapSummary} from './baseline/view-v1.mjs';
 import {conditionalDecision,readContext} from '../dist/context.js';
 

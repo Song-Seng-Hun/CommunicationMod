@@ -1,11 +1,11 @@
 // Executable example shapes against actual projection/session/lifecycle, fake effects only.
 import test from 'node:test';import assert from 'node:assert/strict';
 import {capabilities} from '../dist/guidance-catalog.js';
-import {coverageFixtures} from '../evaluation/guidance-fixtures.mjs';
+import {coverageFixtures} from '../evaluation/guidance-fixtures.ts';
 import {GameSession} from '../dist/session.js';import {Lifecycle} from '../dist/lifecycle.js';
 import {readContext,conditionalDecision} from '../dist/context.js';
-import {bindCall} from '../scripts/build-guidance.mjs';
-import {fixtureScenario,resolveBindings,validateArguments,assertActionEvidence} from '../evaluation/guidance-scenarios.mjs';
+import {bindCall} from '../scripts/build-guidance.ts';
+import {fixtureScenario,resolveBindings,validateArguments,assertActionEvidence} from '../evaluation/guidance-scenarios.ts';
 
 test('match fixture rejects fake positives for stale intro, unavailable position and animation',()=>{
  const fixture={capability:'event.match',cover:'event.match',action:'run.match.flip.0'};

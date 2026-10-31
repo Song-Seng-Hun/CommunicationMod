@@ -9,7 +9,7 @@ import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
-import {performanceState} from '../evaluation/performance-fixtures.mjs';
+import {performanceState} from '../evaluation/performance-fixtures.ts';
 
 assert.ok(process.argv[2],'Pass the exact installed cache directory.');
 const cache=path.resolve(process.argv[2]);

@@ -45,7 +45,7 @@ if($Operation -eq 'Prepare') {
  try {
   & npm.cmd test
   if($LASTEXITCODE -ne 0){throw 'MCP regression tests failed.'}
-  & node scripts/verify-chat-entry.mjs
+  & node scripts/verify-chat-entry.ts
   if($LASTEXITCODE -ne 0){throw 'Chat stdio entry verification failed.'}
  } finally {Pop-Location}
  $node=(Get-Command node -CommandType Application).Source

@@ -11,7 +11,7 @@ For the integrated Codex plugin (game launch through MCP), see `docs/CODEX-PLUGI
 .\devtools\start-local-test.ps1 -McpControl
 ```
 
-Requires Node.js 22+, the existing Maven/JDK build prerequisites, and the installed standalone Downfall runtime. Preparation runs Node and complete Java regression checks before promoting a fresh copied runtime. Java 11 and original Steam files are unchanged; the test game uses bundled Java 8 and existing online-submission blocking. A newly prepared runtime does **not** automatically migrate saved games. Preserve/copy only the chosen test profile before resuming; never replace Steam/cloud saves.
+Requires Node.js 22.18+, the existing Maven/JDK build prerequisites, and the installed standalone Downfall runtime. Preparation runs Node and complete Java regression checks before promoting a fresh copied runtime. Java 11 and original Steam files are unchanged; the test game uses bundled Java 8 and existing online-submission blocking. A newly prepared runtime does **not** automatically migrate saved games. Preserve/copy only the chosen test profile before resuming; never replace Steam/cloud saves.
 
 Register once in the MCP host (replace absolute paths):
 
@@ -72,7 +72,7 @@ For an actual wait, use `sts_get_state({wait_ms:15000})`; the server compares wi
 
 `hooks/hooks.template.json` is an **unregistered** SessionStart example for `startup|resume|compact`, not an active plugin hook. Its relative command assumes this repository root as the hook cwd. The handler additionally requires `DOWNFALL_AGENT_CONTEXT=1`, an exact canonical repository cwd and validated build artifacts; otherwise it emits nothing. Static restoration is build-limited to 128 o200k tokens and never restores game state, history or user permission. No PreToolUse/PostToolUse hook is supplied. Future activation requires separate permission and the [official hook trust flow](https://learn.chatgpt.com/docs/hooks); do not copy it into active configuration during verification.
 
-After building, `node scripts/measure-agent-efficiency.mjs <frozen-baseline-directory>` runs synthetic MCP only and writes `../target/agent-efficiency/report.json`, including candidate/baseline hashes, both roundtrip denominators, complete static payload accounting, and separately labelled wait, processing and local hook process samples. It is not a real-agent A/B. See [implementation record](../docs/superpowers/plans/2026-09-12-event-wait-minimal-hooks.md) for scope and acceptance limits.
+After building, `node scripts/measure-agent-efficiency.ts <frozen-baseline-directory>` runs synthetic MCP only and writes `../target/agent-efficiency/report.json`, including candidate/baseline hashes, both roundtrip denominators, complete static payload accounting, and separately labelled wait, processing and local hook process samples. It is not a real-agent A/B. See [implementation record](../docs/superpowers/plans/2026-09-12-event-wait-minimal-hooks.md) for scope and acceptance limits.
 
 ### Contextual examples
 
@@ -82,7 +82,7 @@ Examples are conditional templates, not current facts, user permissions, or exec
 
 `npm run build` validates examples against the same input schemas used by tool registration, the manually reviewed `evaluation/guidance-contract.json`, and wrapper/token budgets. It generates `dist/guidance-bundle.json`; packaging must carry that file beside the JS modules. Source-contract drift fails the build pending revalidation. Missing/stale runtime artifacts disable examples, not native state/rules. Tokenization runs at build time, not on each decision.
 
-`node scripts/measure-guidance.mjs <frozen-baseline-directory>` records current-versus-baseline scripted costs, including skill/catalog, request/reply and optional example reads, in `target/guidance-token-report.json` at repository root. Optional few-shot reads can increase cost substantially. These reports do not measure agent reasoning, billing or speed; real-model A/B requires separate acceptance. Installation evidence is recorded with each release.
+`node scripts/measure-guidance.ts <frozen-baseline-directory>` records current-versus-baseline scripted costs, including skill/catalog, request/reply and optional example reads, in `target/guidance-token-report.json` at repository root. Optional few-shot reads can increase cost substantially. These reports do not measure agent reasoning, billing or speed; real-model A/B requires separate acceptance. Installation evidence is recorded with each release.
 
 For card acquisition/upgrade decisions, inspect `upgrade_preview` through the offered card reference. Event options/cards remain under the current screen fragments; the default event reading includes a direct body reference and short choices. Native branch/multi-upgrade choices are separate observed previews, not guessed outcomes. See [card upgrade comparison scope](../docs/CARD-UPGRADE-PREVIEWS.md).
 
@@ -90,14 +90,14 @@ Current controls and resources remain available as summaries or toc fragments. R
 
 `npm test` inside this directory builds and tests focused observations, state/timeout guards, and real MCP SDK stdio calls against a synthetic loopback backend. `prepare-mcp-test.ps1` also runs real Java loopback/auth/queue tests and all prior game regression checks. These do not substitute for actual gameplay tests.
 
-`evaluation/evaluation.xml` contains ten read-only questions against `evaluation/server.mjs`, which rejects every mutation. The test suite verifies all ten answers through real SDK calls, using a separate map snapshot (`COMMUNICATIONMOD_EVAL_SCREEN=MAP`) for map questions. No game attachment or autonomous model evaluation is implied.
+`evaluation/evaluation.xml` contains ten read-only questions against `evaluation/server.ts`, which rejects every mutation. The test suite verifies all ten answers through real SDK calls, using a separate map snapshot (`COMMUNICATIONMOD_EVAL_SCREEN=MAP`) for map questions. No game attachment or autonomous model evaluation is implied.
 
-Run `node scripts/measure-context-economy.mjs` after building. It writes `../target/context-economy-report.json` using the local `o200k_base` tokenizer. Five deterministic workflows compare the frozen prior implementation/catalog with current required-fact retrieval, all extra requests/replies and two unchanged polls. The report also includes no-poll totals and a duplicated-wire estimate. These historical measurements used a duplicated-output baseline; the current default uses one response copy and automatic compact formatting. The tokenizer is now a pinned runtime dependency, loaded lazily for compact candidates. Host-specific injection, context replay, reasoning and billing are unknown. Individual one-shot reads can cost more. See [context economy](../docs/MCP-CONTEXT-ECONOMY.md).
+Run `node scripts/measure-context-economy.ts` after building. It writes `../target/context-economy-report.json` using the local `o200k_base` tokenizer. Five deterministic workflows compare the frozen prior implementation/catalog with current required-fact retrieval, all extra requests/replies and two unchanged polls. The report also includes no-poll totals and a duplicated-wire estimate. These historical measurements used a duplicated-output baseline; the current default uses one response copy and automatic compact formatting. The tokenizer is now a pinned runtime dependency, loaded lazily for compact candidates. Host-specific injection, context replay, reasoning and billing are unknown. Individual one-shot reads can cost more. See [context economy](../docs/MCP-CONTEXT-ECONOMY.md).
 
 For manual actual-game verification (close the host controller first):
 
 ```powershell
-node .\mcp-server\scripts\live-client.mjs
+node .\mcp-server\scripts\live-client.ts
 ```
 
 Enter `{"name":"sts_get_state","arguments":{"wait_ms":8000}}`. Each further JSON line is exactly one MCP request. `{"benchmark":true}` performs 50 read-only cached-state calls and measures response sizes; it makes no gameplay decision. Never run this client concurrently with another controller. See `docs/MCP-LIVE-VERIFICATION.md` for measured scope and remaining limitations.

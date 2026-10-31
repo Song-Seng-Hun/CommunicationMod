@@ -3,7 +3,7 @@ import {performance} from 'node:perf_hooks';
 import {mkdir,writeFile} from 'node:fs/promises';
 import * as before from '../evaluation/baseline/context-v3.mjs';
 import * as after from '../dist/context.js';
-import {performanceState,countedArray} from '../evaluation/performance-fixtures.mjs';
+import {performanceState,countedArray} from '../evaluation/performance-fixtures.ts';
 
 const cases=[];
 for(const size of [30,10000]){

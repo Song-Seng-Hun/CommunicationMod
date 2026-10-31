@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as current from '../dist/context.js';
-import {performanceState,countedArray} from '../evaluation/performance-fixtures.mjs';
+import {performanceState,countedArray} from '../evaluation/performance-fixtures.ts';
 
 const bytes=value=>Buffer.byteLength(JSON.stringify(value),'utf8');
 
