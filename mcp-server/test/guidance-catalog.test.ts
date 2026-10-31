@@ -5,6 +5,7 @@ import {pathToFileURL,fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {getEncoding} from 'js-tiktoken';
 import {providerLiterals,actionFactories,legacyActions,controlRoots,contextRoots,dynamicContracts,coverageFixtures,requiredProviderCoverage,requiredRootCoverage,transportInventoryFiles} from '../evaluation/guidance-fixtures.ts';
+import type {Wire} from '../evaluation/wire.ts';
 
 const root=fileURLToPath(new URL('../../src/main/java/communicationmod/',import.meta.url));
 const catalogURL=process.env.GUIDANCE_CATALOG_MODULE?pathToFileURL(path.resolve(process.env.GUIDANCE_CATALOG_MODULE)).href:new URL('../dist/guidance-catalog.js',import.meta.url).href;
@@ -13,42 +14,42 @@ const api=async()=>{
  assert.ok(Array.isArray(result.capabilities),'Missing declarative capabilities export: '+(result.loadError?.message??catalogURL));
  return result.capabilities;
 };
-const sorted=x=>[...new Set(x)].sort();
-const literals=source=>[...source.matchAll(/"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|\/\/[^\n]*|\/\*[\s\S]*?\*\//g)].filter(x=>x[0][0]==='"').map(x=>x[0].slice(1,-1));
-const actionLiterals=source=>sorted(literals(source).filter(x=>/^(run\.|menu\.)/.test(x)||x==='acknowledge_event_reading'));
+const sorted=(x:Wire)=>[...new Set(x)].sort();
+const literals=(source:Wire)=>[...source.matchAll(/"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|\/\/[^\n]*|\/\*[\s\S]*?\*\//g)].filter(x=>x[0][0]==='"').map(x=>x[0].slice(1,-1));
+const actionLiterals=(source:Wire)=>sorted(literals(source).filter(x=>/^(run\.|menu\.)/.test(x)||x==='acknowledge_event_reading'));
 async function javaSources(dir=root,prefix=''){
- const out={};
+ const out:Wire={};
  for(const e of await readdir(dir,{withFileTypes:true})){
   if(e.isDirectory())Object.assign(out,await javaSources(path.join(dir,e.name),prefix+e.name+'/'));
   else if(e.name.endsWith('.java'))out[prefix+e.name]=await readFile(path.join(dir,e.name),'utf8');
  }
  return out;
 }
-function rootsFrom(source){
+function rootsFrom(source:Wire):Wire{
  const keys=source.match(/\bconst controlKeys\s*=\s*\[([^\]]+)\]/)?.[1]??'';
  const controls=[...keys.matchAll(/['"]([^'"]+)['"]/g)].map(x=>x[1]);
  const roots=[...source.matchAll(/\badd\(\s*['"]([^'"]+)['"]/g)].map(x=>x[1]);
  return {controls:sorted(controls),roots:sorted([...roots,...controls].filter(x=>x!=='guidance'))};
 }
-const gateMatches=(gate,action)=>(gate.actions??[]).some(x=>x.endsWith('.')?action.startsWith(x):action===x);
-const wrapper=c=>({ref:'guidance/'+c.id,format:'example',data:c,page_complete:true,next_offset:null});
-const bind=name=>({$bind:name});
-function assertCoverage(caps,fixtures){
- const byId=new Map(caps.map(x=>[x.id,x]));
- const requireOwner=(owner,covers,origin)=>{
-  const cap=byId.get(owner);assert.ok(cap,origin+': missing '+owner);
+const gateMatches=(gate:Wire,action:Wire)=>(gate.actions??[]).some((x:Wire)=>x.endsWith('.')?action.startsWith(x):action===x);
+const wrapper=(c:Wire):Wire=>({ref:'guidance/'+c.id,format:'example',data:c,page_complete:true,next_offset:null});
+const bind=(name:Wire):Wire=>({$bind:name});
+function assertCoverage(caps:Wire,fixtures:Wire){
+ const byId=new Map(caps.map((x:Wire)=>[x.id,x]));
+ const requireOwner=(owner:Wire,covers:Wire,origin:Wire)=>{
+  const cap:Wire=byId.get(owner);assert.ok(cap,origin+': missing '+owner);
   for(const cover of covers){
    assert.ok(cap.covers.includes(cover),origin+': missing '+cover+' in '+owner);
-   assert.ok(fixtures.some(f=>f.capability===owner&&f.cover===cover),origin+': missing fixture '+cover);
+   assert.ok(fixtures.some((f:Wire)=>f.capability===owner&&f.cover===cover),origin+': missing fixture '+cover);
   }
  };
  for(const [file,rows] of Object.entries(requiredProviderCoverage))
   for(const [literal,owner,covers] of rows)requireOwner(owner,covers,file+':'+literal);
  for(const [root,owners] of Object.entries(requiredRootCoverage))
   for(const [owner,covers] of owners)requireOwner(owner,covers,'root '+root);
- assert.deepEqual(sorted(caps.flatMap(x=>x.covers)),sorted(fixtures.map(x=>x.cover)));
+ assert.deepEqual(sorted(caps.flatMap((x:Wire)=>x.covers)),sorted(fixtures.map((x:Wire)=>x.cover)));
  for(const fixture of fixtures){
-  const cap=byId.get(fixture.capability);assert.ok(cap,fixture.capability);
+  const cap:Wire=byId.get(fixture.capability);assert.ok(cap,fixture.capability);
   assert.ok(cap.covers.includes(fixture.cover),fixture.cover);
   // Match help is scoped to the current EVENT root, never an OR with a lingering action.
   if(fixture.capability==='event.match')assert.deepEqual(cap.gate,{roots:['match_controls']});
@@ -60,21 +61,21 @@ test('catalog loads as declarative capabilities',async()=>{assert.ok((await api(
 test('base minigames have explicit semantic coverage without duplicate capabilities or calls',async()=>{
  const caps=await api();
  for(const [id,cover] of [['event.choice','event.wheel.base'],['event.match','event.match.base']]){
-  const cap=caps.find(c=>c.id===id);assert.ok(cap.covers.includes(cover),'missing '+cover);
+  const cap=caps.find((c:Wire)=>c.id===id);assert.ok(cap.covers.includes(cover),'missing '+cover);
   assert.ok(coverageFixtures.some(f=>f.capability===id&&f.cover===cover),'missing fixture '+cover);
-  const normal=cap.cases.find(c=>c.case==='normal');assert.equal(normal.calls.filter(c=>c.tool==='sts_act').length,1);
+  const normal=cap.cases.find((c:Wire)=>c.case==='normal');assert.equal(normal.calls.filter((c:Wire)=>c.tool==='sts_act').length,1);
  }
- assert.match(caps.find(c=>c.id==='event.match').cases.find(c=>c.case==='normal').requires,/rules page/i);
- assert.match(caps.find(c=>c.id==='event.choice').cases.find(c=>c.case==='normal').requires,/Base\/rest\/evil wheel/i);
+ assert.match(caps.find((c:Wire)=>c.id==='event.match').cases.find((c:Wire)=>c.case==='normal').requires,/rules page/i);
+ assert.match(caps.find((c:Wire)=>c.id==='event.choice').cases.find((c:Wire)=>c.case==='normal').requires,/Base\/rest\/evil wheel/i);
 });
 test('every capability has exactly three independent bounded capsules with typed used bindings',async()=>{
  const caps=await api(),ids=new Set();
  for(const cap of caps){
   assert.equal(typeof cap.id,'string');assert.ok(!ids.has(cap.id),cap.id);ids.add(cap.id);
   assert.equal(typeof cap.title,'string');assert.ok(cap.title.length>0);assert.ok([0,1,2].includes(cap.priority));
-  assert.ok(cap.covers.length>0);assert.deepEqual(sorted(cap.cases.map(x=>x.case)),['exception','incomplete','normal']);
+  assert.ok(cap.covers.length>0);assert.deepEqual(sorted(cap.cases.map((x:Wire)=>x.case)),['exception','incomplete','normal']);
   assert.ok(Object.keys(cap.gate).length>0);
-  for(const [k,v] of Object.entries(cap.gate)){
+  for(const [k,v] of Object.entries<Wire>(cap.gate)){
    if(k==='special')assert.ok(['ready','parameters','empty_parameters','pending','unready','bootstrap'].includes(v));
    else {assert.ok(['screens','roots','actions'].includes(k));assert.ok(Array.isArray(v)&&v.length>0);assert.ok(v.every(x=>typeof x==='string'&&x.length>0));}
   }
@@ -84,7 +85,7 @@ test('every capability has exactly three independent bounded capsules with typed
    assert.ok(JSON.stringify(wrapper(c)).length<=2400,c.id+' wrapper exceeds 2400');
    assert.ok(Array.isArray(c.calls));assert.ok(c.bindings&&typeof c.bindings==='object');
    const used=new Set();
-   function visit(v){
+   function visit(v:Wire){
     if(v===null||typeof v!=='object')return;
     if(Object.hasOwn(v,'$bind')){
      assert.deepEqual(Object.keys(v),['$bind']);assert.ok(Object.hasOwn(c.bindings,v.$bind),c.id+': unknown binding '+v.$bind);used.add(v.$bind);return;
@@ -93,7 +94,7 @@ test('every capability has exactly three independent bounded capsules with typed
    }
    visit(c.calls);assert.deepEqual(sorted(used),sorted(Object.keys(c.bindings)),c.id+': unused bindings');
    for(const binding of Object.values(c.bindings)){
-    assert.ok(['string','number','object','array'].includes(binding.type));assert.ok(typeof binding.source==='string'&&binding.source.length>0);
+    assert.ok(['string','number','object','array'].includes((binding as Wire).type));assert.ok(typeof (binding as Wire).source==='string'&&(binding as Wire).source.length>0);
    }
    for(const call of c.calls){
     assert.ok(['sts_game_status','sts_start_game','sts_get_state','sts_act','sts_get_context','sts_get_request'].includes(call.tool),call.tool);
@@ -116,13 +117,13 @@ test('capsules preserve permission, incomplete-read-only and no-retransmit bound
  for(const cap of await api())for(const c of cap.cases){
   const prose=[c.when,c.not_when,c.requires,c.expect,c.stop].join(' ');
   assert.match(prose,/unknown.*missing.*receipt.*never (retransmit|replay)|unknown\/missing receipt.*never (retransmit|replay)/i,c.id);
-  if(c.case==='incomplete')assert.ok(c.calls.every(x=>!['sts_act','sts_start_game'].includes(x.tool)),c.id);
-  if(c.calls.some(x=>x.tool==='sts_act')){
+  if(c.case==='incomplete')assert.ok(c.calls.every((x:Wire)=>!['sts_act','sts_start_game'].includes(x.tool)),c.id);
+  if(c.calls.some((x:Wire)=>x.tool==='sts_act')){
    assert.equal(c.case,'normal');assert.match(prose,/explicit task permission/i);assert.match(prose,/ready/i);
    assert.match(prose,/current offered action/i);assert.match(prose,/complete relevant evidence/i);
    assert.match(prose,/pending/i);
   }
-  if(c.calls.some(x=>x.tool==='sts_start_game')){
+  if(c.calls.some((x:Wire)=>x.tool==='sts_start_game')){
    assert.equal(cap.gate.special,'bootstrap');assert.match(prose,/explicit user launch permission/i);
   }
   if(cap.id.startsWith('lifecycle.'))assert.deepEqual(cap.gate,{special:'bootstrap'});
@@ -141,10 +142,10 @@ test('static catalog contains no runtime dependencies or generated behavior',asy
  assert.deepEqual(JSON.parse(declaration[1]),await api(),'Only JSON data, no factories or runtime expressions');
 });
 test('source inventory independently rejects new Java literals and action providers',async()=>{
- const sources=await javaSources(),observed={};
+ const sources:Wire=await javaSources(),observed:Wire={};
  for(const [file,source] of Object.entries(sources)){const ids=actionLiterals(source);if(ids.length)observed[file]=ids;}
  assert.deepEqual(observed,Object.fromEntries(Object.entries(providerLiterals).map(([k,v])=>[k,sorted(v)])));
- assert.deepEqual(sorted(Object.entries(sources).filter(([,s])=>/new ProtocolSession\.Action\s*\(/.test(s)).map(([f])=>f)),sorted(actionFactories));
+ assert.deepEqual(sorted(Object.entries<string>(sources).filter(([,s])=>/new ProtocolSession\.Action\s*\(/.test(s)).map(([f])=>f)),sorted(actionFactories));
  const legacy=[...sources['protocol/CombatActions.java'].matchAll(/\baction\("([^"]+)"/g)].map(x=>x[1]);
  assert.deepEqual(sorted(legacy),sorted(legacyActions));
  // New exact subtypes fail even under an already known family; comments are not actions.
@@ -161,7 +162,7 @@ test('native context roots and controls are independently inventoried without im
 });
 
 test('required semantic ownership is joined to original Java inventory and every public root',async()=>{
- const sources=await javaSources();
+ const sources:Wire=await javaSources();
  assert.deepEqual(sorted(Object.keys(requiredProviderCoverage)),sorted(Object.keys(providerLiterals).filter(f=>!transportInventoryFiles.includes(f))));
  for(const [file,rows] of Object.entries(requiredProviderCoverage)){
   assert.deepEqual(sorted(rows.map(r=>r[0])),actionLiterals(sources[file]),file+' needs explicit semantic owners for every literal');
@@ -169,7 +170,7 @@ test('required semantic ownership is joined to original Java inventory and every
  }
  const observed=rootsFrom(await readFile(new URL('../src/context.ts',import.meta.url),'utf8'));
  assert.deepEqual(sorted(Object.keys(requiredRootCoverage)),observed.roots);
- for(const control of observed.controls)assert.ok(requiredRootCoverage[control]?.length>0,control+' missing control ownership');
+ for(const control of observed.controls)assert.ok((requiredRootCoverage as Wire)[control]?.length>0,control+' missing control ownership');
  assertCoverage(await api(),coverageFixtures);
 });
 test('dynamic providers retain every reviewed semantic discriminator',async()=>{
@@ -182,34 +183,34 @@ test('dynamic providers retain every reviewed semantic discriminator',async()=>{
 test('fixture coverage names each semantic subtype without catchall action/root coverage',async()=>{
  const caps=await api();assertCoverage(caps,coverageFixtures);
  for(const cap of caps){
-  assert.ok(!cap.covers.some(x=>/\*|catchall|all_actions|all_roots/.test(x)));
-  assert.ok(!(cap.gate.actions??[]).some(x=>['run.','menu.','run.shop.','run.grid.','run.hand.'].includes(x)),cap.id+' broad family');
+  assert.ok(!cap.covers.some((x:Wire)=>/\*|catchall|all_actions|all_roots/.test(x)));
+  assert.ok(!(cap.gate.actions??[]).some((x:Wire)=>['run.','menu.','run.shop.','run.grid.','run.hand.'].includes(x)),cap.id+' broad family');
   if(cap.gate.actions)assert.ok(!cap.gate.screens&&!cap.gate.roots&&!cap.gate.special,cap.id+' action-specific gates must only match offered actions');
  }
 });
 
 test('removing a capability and its fixtures cannot erase an inventoried provider obligation',async()=>{
  const caps=await api();assertCoverage(caps,coverageFixtures);
- assert.throws(()=>assertCoverage(caps.filter(c=>c.id!=='potion.use'),coverageFixtures.filter(f=>f.capability!=='potion.use')),/potion.use|potion.targeted/);
- assert.throws(()=>assertCoverage(caps.filter(c=>c.id!=='tutorial.confirm'),coverageFixtures.filter(f=>f.capability!=='tutorial.confirm')),/tutorial.confirm/);
- const changed=structuredClone(caps);changed.find(c=>c.id==='potion.use').covers=['potion.untargeted'];
+ assert.throws(()=>assertCoverage(caps.filter((c:Wire)=>c.id!=='potion.use'),coverageFixtures.filter(f=>f.capability!=='potion.use')),/potion.use|potion.targeted/);
+ assert.throws(()=>assertCoverage(caps.filter((c:Wire)=>c.id!=='tutorial.confirm'),coverageFixtures.filter(f=>f.capability!=='tutorial.confirm')),/tutorial.confirm/);
+ const changed=structuredClone(caps);changed.find((c:Wire)=>c.id==='potion.use').covers=['potion.untargeted'];
  assert.throws(()=>assertCoverage(changed,coverageFixtures.filter(f=>f.cover!=='potion.targeted')),/potion.targeted/);
  // Every required subtype must survive deletion of its labels on BOTH sides.
  const requirements=new Set([
-  ...Object.values(requiredProviderCoverage).flatMap(rows=>rows.flatMap(([,owner,covers])=>covers.map(c=>owner+'|'+c))),
-  ...Object.values(requiredRootCoverage).flatMap(rows=>rows.flatMap(([owner,covers])=>covers.map(c=>owner+'|'+c))),
+  ...Object.values(requiredProviderCoverage).flatMap(rows=>rows.flatMap(([,owner,covers])=>(covers as Wire).map((c:Wire)=>owner+'|'+c))),
+  ...Object.values(requiredRootCoverage).flatMap(rows=>rows.flatMap(([owner,covers])=>(covers as Wire).map((c:Wire)=>owner+'|'+c))),
  ]);
  for(const item of requirements){
   const [owner,cover]=item.split('|'),mutant=structuredClone(caps);
-  mutant.find(c=>c.id===owner).covers=mutant.find(c=>c.id===owner).covers.filter(c=>c!==cover);
-  assert.throws(()=>assertCoverage(mutant,coverageFixtures.filter(f=>f.capability!==owner||f.cover!==cover)),error=>error.code==='ERR_ASSERTION'&&error.message.includes(cover),item+' removal escaped source obligations');
+  mutant.find((c:Wire)=>c.id===owner).covers=mutant.find((c:Wire)=>c.id===owner).covers.filter((c:Wire)=>c!==cover);
+  assert.throws(()=>assertCoverage(mutant,coverageFixtures.filter(f=>f.capability!==owner||f.cover!==cover)),(error:Wire)=>error.code==='ERR_ASSERTION'&&error.message.includes(cover),item+' removal escaped source obligations');
  }
 });
 
 test('grid confirmation distinguishes ordinary native after from branch/tree selected_after',async()=>{
- const cap=(await api()).find(c=>c.id==='selection.grid.confirm');
+ const cap=(await api()).find((c:Wire)=>c.id==='selection.grid.confirm');
  for(const kind of ['normal','incomplete']){
-  const c=cap.cases.find(c=>c.case===kind);
+  const c=cap.cases.find((c:Wire)=>c.case===kind);
   assert.match(c.requires,/Ordinary upgrade: read (?:screen\.)?upgrade_selection_preview\.after/);
   assert.match(c.requires,/ordinary upgrade does not require (?:upgrade_choice\.)?selected_after/i);
   assert.match(c.requires,/Branch\/tree upgrade: read selection_controls\.upgrade_choice\.selected_after and require choice_required=false/);
@@ -222,38 +223,38 @@ test('grid confirmation distinguishes ordinary native after from branch/tree sel
  assert.match(extension,/choice\.addProperty\("choice_required"/);
 });
 test('at least one complete state/simple capsule fits the 160 o200k inline budget',async()=>{
- const candidates=(await api()).filter(x=>['state.decision','action.simple'].includes(x.id)).flatMap(x=>x.cases),enc=getEncoding('o200k_base');
- assert.ok(candidates.some(c=>enc.encode(JSON.stringify(wrapper(c))).length<=160),'Keep a short safe capsule; other examples may be lookup-only');
+ const candidates=(await api()).filter((x:Wire)=>['state.decision','action.simple'].includes(x.id)).flatMap((x:Wire)=>x.cases),enc=getEncoding('o200k_base');
+ assert.ok(candidates.some((c:Wire)=>enc.encode(JSON.stringify(wrapper(c))).length<=160),'Keep a short safe capsule; other examples may be lookup-only');
 });
 test('special call shapes preserve actual event and map parameter contracts',async()=>{
- const caps=await api(),normal=id=>caps.find(x=>x.id===id).cases.find(x=>x.case==='normal');
- const ack=normal('event.ack'),ackArgs=ack.calls.find(x=>x.tool==='sts_act').arguments.arguments;
+ const caps=await api(),normal=(id:Wire)=>caps.find((x:Wire)=>x.id===id).cases.find((x:Wire)=>x.case==='normal');
+ const ack=normal('event.ack'),ackArgs=ack.calls.find((x:Wire)=>x.tool==='sts_act').arguments.arguments;
  assert.deepEqual(sorted(Object.keys(ackArgs)),['commentary','reading_id']);
- for(const value of Object.values(ackArgs))assert.equal(ack.bindings[value.$bind].type,'string');
- const plan=normal('map.plan'),planArgs=plan.calls.find(x=>x.tool==='sts_act').arguments.arguments;
+ for(const value of Object.values(ackArgs))assert.equal(ack.bindings[(value as Wire).$bind].type,'string');
+ const plan=normal('map.plan'),planArgs=plan.calls.find((x:Wire)=>x.tool==='sts_act').arguments.arguments;
  assert.deepEqual(sorted(Object.keys(planArgs)),['map_id','nodes','revision']);
  for(const [key,type] of [['map_id','string'],['revision','number'],['nodes','array']])assert.equal(plan.bindings[planArgs[key].$bind].type,type);
- const generic=normal('action.parameters'),args=generic.calls.find(x=>x.tool==='sts_act').arguments.arguments;
+ const generic=normal('action.parameters'),args=generic.calls.find((x:Wire)=>x.tool==='sts_act').arguments.arguments;
  assert.deepEqual(args,bind('parameters'));assert.equal(generic.bindings.parameters.type,'object');
 });
 
 test('match capsules require a current acknowledged intro and one flip without a redundant state call',async()=>{
- const cap=(await api()).find(c=>c.id==='event.match');assert.ok(cap,'missing match capability');
+ const cap=(await api()).find((c:Wire)=>c.id==='event.match');assert.ok(cap,'missing match capability');
  assert.deepEqual(cap.gate,{roots:['match_controls']});
- const normal=cap.cases.find(c=>c.case==='normal');
+ const normal=cap.cases.find((c:Wire)=>c.case==='normal');
  assert.match(normal.requires,/acknowledged current intro/i);assert.match(normal.requires,/available.*position/i);
  assert.match(normal.requires,/face-down identity.*intentionally unknown/i);
- assert.deepEqual(normal.calls.map(c=>c.tool),['sts_act']);
+ assert.deepEqual(normal.calls.map((c:Wire)=>c.tool),['sts_act']);
  assert.match(normal.expect,/Reuse.*returned.*state/i);
  assert.match(normal.expect,/sts_get_context.*omitted.*details/i);
  assert.match(normal.expect,/sts_get_state only if.*absent.*stale.*transition/i);
  assert.deepEqual(normal.calls[0].arguments.arguments,{});
  assert.match(normal.stop,/no auto sequence/i);assert.match(normal.stop,/never replay/i);
- for(const kind of ['incomplete','exception'])assert.ok(cap.cases.find(c=>c.case===kind).calls.every(c=>c.tool!=='sts_act'));
- const reward=(await api()).find(c=>c.id==='reward.take'),event=(await api()).find(c=>c.id==='event.choice');
+ for(const kind of ['incomplete','exception'])assert.ok(cap.cases.find((c:Wire)=>c.case===kind).calls.every((c:Wire)=>c.tool!=='sts_act'));
+ const reward=(await api()).find((c:Wire)=>c.id==='reward.take'),event=(await api()).find((c:Wire)=>c.id==='event.choice');
  for(const kind of ['normal','incomplete']){
-  assert.match(reward.cases.find(c=>c.case===kind).requires,/SEALCARD.*after.*claim/i);
-  assert.match(event.cases.find(c=>c.case===kind).requires,/relic_preview.*if.*relevant/i);
+  assert.match(reward.cases.find((c:Wire)=>c.case===kind).requires,/SEALCARD.*after.*claim/i);
+  assert.match(event.cases.find((c:Wire)=>c.case===kind).requires,/relic_preview.*if.*relevant/i);
  }
  assert.ok(event.covers.includes('event.wheel.evil'));assert.ok(event.covers.includes('event.relic_preview'));
 });

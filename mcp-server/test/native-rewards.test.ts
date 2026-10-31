@@ -5,11 +5,12 @@ import {capabilities} from '../dist/guidance-catalog.js';
 import {coverageFixtures} from '../evaluation/guidance-fixtures.ts';
 import {fixtureScenario,assertActionEvidence} from '../evaluation/guidance-scenarios.ts';
 import {readContext} from '../dist/context.js';
+import type {Wire} from '../evaluation/wire.ts';
 
 const inventory=JSON.parse(await readFile(new URL('../../devtools/native-rewards.json',import.meta.url),'utf8'));
 test('every pinned native reward is joined to semantic guidance and a correctly typed fixture',()=>{
- const cap=capabilities.find(c=>c.id==='reward.take');
- assert.equal(new Set(inventory.rewards.map(r=>r.class)).size,inventory.rewards.length);
+ const cap:Wire=capabilities.find(c=>c.id==='reward.take');
+ assert.equal(new Set(inventory.rewards.map((r:Wire)=>r.class)).size,inventory.rewards.length);
  for(const row of inventory.rewards){
   assert.ok(cap.covers.includes(row.cover),`missing native reward coverage: ${row.class}`);
   const fixture=coverageFixtures.find(f=>f.capability==='reward.take'&&f.cover===row.cover);assert.ok(fixture,row.class);
@@ -27,8 +28,8 @@ test('every pinned native reward is joined to semantic guidance and a correctly 
  }
 });
 test('reward examples separate opening native selection from executing a deck change',()=>{
- const normal=capabilities.find(c=>c.id==='reward.take').cases.find(c=>c.case==='normal');
- assert.equal(normal.calls.filter(c=>c.tool==='sts_act').length,1);
+ const normal:Wire=(capabilities as Wire).find((c:Wire)=>c.id==='reward.take').cases.find((c:Wire)=>c.case==='normal');
+ assert.equal(normal.calls.filter((c:Wire)=>c.tool==='sts_act').length,1);
  for(const term of [/remove/i,/transform/i,/upgrade/i,/separate/i,/hidden/i,/gold/i])assert.match(normal.requires+' '+normal.expect,term);
  assert.match(normal.stop,/never retransmit/i);
 });

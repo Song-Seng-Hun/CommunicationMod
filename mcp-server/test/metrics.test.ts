@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { performance } from 'node:perf_hooks';
+import type {Wire} from '../evaluation/wire.ts';
 
 const tools = ['sts_game_status', 'sts_start_game', 'sts_get_state', 'sts_act', 'sts_get_context', 'sts_get_request'];
 const MiB = 1024 * 1024;
@@ -29,13 +30,13 @@ async function fixture() {
   return { workspace, directory: join(workspace, 'target', 'agent-efficiency', 'metrics') };
 }
 
-async function rows(directory) {
+async function rows(directory:Wire) {
   const names = await readdir(directory);
   const contents = await Promise.all(names.map(name => readFile(join(directory, name), 'utf8')));
   return contents.flatMap(text => text.trim() ? text.trim().split('\n').map(line => JSON.parse(line)) : []);
 }
 
-function emit(metrics, tool = 'sts_get_state', result = values) {
+function emit(metrics:Wire, tool = 'sts_get_state', result: Wire = values) {
   metrics.finish(metrics.start(tool), result);
 }
 
@@ -183,7 +184,7 @@ test('rotation keeps at most three regular files of at most 1 MiB with complete 
   const createMetrics = await factory();
   const { workspace, directory } = await fixture();
   const metrics = createMetrics(workspace, { COMMUNICATIONMOD_METRICS: '1' });
-  let lastId;
+  let lastId:Wire;
   for (let batch = 0; batch < 88; batch++) {
     for (let index = 0; index < 256; index++) {
       const span = metrics.start('sts_get_context');
@@ -298,7 +299,7 @@ test('concurrent instances share one clock identity and recover from lock conten
   assert.equal(new Set(result.map(row => row.process_run_id)).size, 1);
 });
 
-function childWriter(workspace) {
+function childWriter(workspace:Wire) {
   const source = `
     import { createMetrics } from ${JSON.stringify(moduleUrl)};
     const metrics = createMetrics(${JSON.stringify(workspace)}, { COMMUNICATIONMOD_METRICS: '1' });
@@ -307,7 +308,7 @@ function childWriter(workspace) {
       await metrics.flush();
     }
   `;
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const child = spawn(process.execPath, ['--experimental-default-type=module', '--input-type=module', '-e', source], { stdio: ['ignore', 'ignore', 'pipe'] });
     let stderr = '';
     child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-4096); });
