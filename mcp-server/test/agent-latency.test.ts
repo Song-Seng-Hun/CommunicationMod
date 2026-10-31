@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {schedule,metrics,assess,Budget} from '../evaluation/agent-latency/metrics.mjs';
-import {scenario,judge} from '../evaluation/agent-latency/scenarios.mjs';
+import {schedule,metrics,assess,Budget} from '../evaluation/agent-latency/metrics.ts';
+import {scenario,judge} from '../evaluation/agent-latency/scenarios.ts';
 import {decision} from '../dist/context.js';
 
 test('uncertain evaluator accepts unchanged only with prior pending evidence and ordered recovery',()=>{

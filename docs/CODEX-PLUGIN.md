@@ -19,7 +19,7 @@
 
 ## 설치와 업데이트
 
-요구 환경: Windows, Node.js 22+, PowerShell 7, Python(패키지 검증용), Codex CLI/기본 plugin-creator 스킬, 기존 CommunicationMod 체크아웃과 검증된 테스트 게임. 게임 JAR를 재배포하지 않습니다. 설치된 독립판과 빌드 선행 조건으로 최초 `devtools/prepare-mcp-test.ps1`을 수행한 환경을 사용합니다. 일반 설치/업데이트는 Java 게임을 재빌드하지 않으므로 기존 준비 경로와 저장을 유지합니다.
+요구 환경: Windows, Node.js 22.18+, PowerShell 7, Python(패키지 검증용), Codex CLI/기본 plugin-creator 스킬, 기존 CommunicationMod 체크아웃과 검증된 테스트 게임. 게임 JAR를 재배포하지 않습니다. 설치된 독립판과 빌드 선행 조건으로 최초 `devtools/prepare-mcp-test.ps1`을 수행한 환경을 사용합니다. 일반 설치/업데이트는 Java 게임을 재빌드하지 않으므로 기존 준비 경로와 저장을 유지합니다.
 
 저장소 루트에서 한 명령으로 MCP 검사 → 패키징 → 검증 → 개인 플러그인 설치/업데이트:
 
@@ -49,7 +49,7 @@
 
 사용자 요청으로 `downfall-agent@personal`을 `0.1.0+codex.20260912053309`로 로컬 업데이트했습니다. CLI에서 installed/enabled를 확인했습니다. 설치 전 48개 Node 테스트, 런처 안전 경계 검사, 플러그인/스킬 검증을 통과했습니다. 설치 스크립트가 이전 개인 소스와 설정을 `target/plugin-source-backup-74b1404b00e94624b6a18d368f474a86` 및 `target/plugin-settings-backup-e87ed4bbae544d30b76d5be700845c8c.json`에 백업했습니다.
 
-`node mcp-server/scripts/verify-compact-plugin.mjs '<설치 캐시 경로>'`로 설치 캐시의 시작 스크립트와 서버를 실제 MCP SDK로 검사했습니다. 서버 JS 7개와 package/lock 파일이 현재 빌드와 일치하며, 도구 6개 노출, compact TOON 무손실 복원, JSON 복귀, 오래된 상태 거부를 확인했습니다. 검사는 임시 가상 백엔드만 사용했으며 실제 게임 연결/실행/행동은 0회입니다. 기존 준비 런타임 `target/local-test-20260912-124552-af471f87`, 원본 설치와 세이브는 변경하지 않았습니다.
+`node mcp-server/scripts/verify-compact-plugin.ts '<설치 캐시 경로>'`로 설치 캐시의 시작 스크립트와 서버를 실제 MCP SDK로 검사했습니다. 서버 JS 7개와 package/lock 파일이 현재 빌드와 일치하며, 도구 6개 노출, compact TOON 무손실 복원, JSON 복귀, 오래된 상태 거부를 확인했습니다. 검사는 임시 가상 백엔드만 사용했으며 실제 게임 연결/실행/행동은 0회입니다. 기존 준비 런타임 `target/local-test-20260912-124552-af471f87`, 원본 설치와 세이브는 변경하지 않았습니다.
 
 큰 목록의 `sts_get_context`에 `response_format: compact`를 선택할 수 있습니다. 기존 기본값은 JSON입니다. 새 Codex 작업에서 Downfall Agent를 선택해야 갱신된 도구를 확실히 읽을 수 있습니다. 현재 대화의 자동 재로드나 실제 게임 플레이 검증까지 완료했다는 뜻은 아닙니다.
 
@@ -61,7 +61,7 @@
 
 게임 실행만 `WindowStyle Normal`로 변경했습니다. PowerShell/MCP 보조 프로세스의 숨김 실행은 유지합니다. `PluginLifecycleTest.ps1`에 실제 실행 AST의 표시 모드 검사를 추가하여 기존 코드에서 실패하는 것을 확인했습니다. 기존 실행 중인 게임은 재등록만으로 바뀌거나 종료되지 않습니다.
 
-수정본 `0.1.0+codex.20260908125453`을 재등록하고 installed/enabled를 확인했습니다. 창 제어 도구 초기화 오류로 기존 창 복원이 불가능하여, 사용자 승인 후 실행 경로를 재검증한 PID 36848만 종료했습니다. 수정된 설치 캐시로 새 게임 PID 37688을 실행하여 Windows 주 창 핸들 68093172와 제목 `Modded Slay the Spire`, MCP의 한국어 `MAIN_MENU`/상태 4/세션 `307bf311-415e-4db6-9860-d26ecf729c8f`, 제출 차단, 같은 PID 재사용을 확인했습니다. 총 약 77초, 게임 행동 0회이며 저장 파일은 수정하지 않았습니다. 스크린샷 검증과는 구분합니다. `verify-plugin-live.mjs`도 이제 게임 PID의 주 창 핸들과 제목을 검사하여 숨김 실행을 성공으로 선언하지 않습니다.
+수정본 `0.1.0+codex.20260908125453`을 재등록하고 installed/enabled를 확인했습니다. 창 제어 도구 초기화 오류로 기존 창 복원이 불가능하여, 사용자 승인 후 실행 경로를 재검증한 PID 36848만 종료했습니다. 수정된 설치 캐시로 새 게임 PID 37688을 실행하여 Windows 주 창 핸들 68093172와 제목 `Modded Slay the Spire`, MCP의 한국어 `MAIN_MENU`/상태 4/세션 `307bf311-415e-4db6-9860-d26ecf729c8f`, 제출 차단, 같은 PID 재사용을 확인했습니다. 총 약 77초, 게임 행동 0회이며 저장 파일은 수정하지 않았습니다. 스크린샷 검증과는 구분합니다. `verify-plugin-live.ts`도 이제 게임 PID의 주 창 핸들과 제목을 검사하여 숨김 실행을 성공으로 선언하지 않습니다.
 
 - 설치 ID `downfall-agent@personal`, 버전 `0.1.0+codex.20260908123748`; CLI 조회에서 installed/enabled 확인.
 - Node 테스트 11개 통과. 기존 10개 고정 평가 질문도 실제 SDK 도구로 정답 접근 가능 확인(별도 LLM 평가 아님).
@@ -77,7 +77,7 @@
 실행 재현(명시적으로 테스트 게임을 켜며 게임 선택은 하지 않음):
 
 ```powershell
-node .\mcp-server\scripts\verify-plugin-live.mjs '실제 설치 캐시의 downfall-agent 버전 폴더'
+node .\mcp-server\scripts\verify-plugin-live.ts '실제 설치 캐시의 downfall-agent 버전 폴더'
 .\devtools\PluginLaunchMutexTest.ps1
 ```
 

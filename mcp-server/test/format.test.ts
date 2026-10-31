@@ -8,9 +8,9 @@ import {Tiktoken} from 'js-tiktoken/lite';
 import ranks from 'js-tiktoken/ranks/o200k_base';
 import {formatContext} from '../dist/format.js';
 import {readContext,decision} from '../dist/context.js';
-import {performanceState} from '../evaluation/performance-fixtures.mjs';
-import {workflows} from '../evaluation/economy-workflows.mjs';
-import {data as readingData,expected} from '../evaluation/format-reading.mjs';
+import {performanceState} from '../evaluation/performance-fixtures.ts';
+import {workflows} from '../evaluation/economy-workflows.ts';
+import {data as readingData,expected} from '../evaluation/format-reading.ts';
 
 const tokenizer=new Tiktoken(ranks),tokens=text=>tokenizer.encode(text,[],[]).length;
 const restore=text=>text.startsWith('TOON:')?decode(text.slice(text.indexOf('\n')+1),{strict:true}):JSON.parse(text);
@@ -104,7 +104,7 @@ test('archived isolated JSON and TOON reading answers match the frozen truth',as
 });
 
 test('full selective workflow saves tokens including discovery, recovery detail, requests and catalog',async()=>{
- const {stdout}=await promisify(execFile)(process.execPath,['scripts/measure-context-format.mjs'],{windowsHide:true,timeout:30000});
+ const {stdout}=await promisify(execFile)(process.execPath,['scripts/measure-context-format.ts'],{windowsHide:true,timeout:30000});
  const report=JSON.parse(stdout);
  assert.equal(report.selective_browse_including_catalog.context_reads,5,'discovery, three pages and selected detail all counted');
  assert.equal(report.selective_browse_including_catalog.requests,6,'initial state and every context call counted');

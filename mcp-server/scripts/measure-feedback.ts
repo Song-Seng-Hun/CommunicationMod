@@ -7,7 +7,7 @@ import path from 'node:path';
 import {Tiktoken} from 'js-tiktoken/lite';
 import ranks from 'js-tiktoken/ranks/o200k_base';
 import * as current from '../dist/context.js';
-import {workflows} from '../evaluation/economy-workflows.mjs';
+import {workflows} from '../evaluation/economy-workflows.ts';
 import {toolSchemas} from '../dist/tool-schemas.js';
 const root=fileURLToPath(new URL('../../',import.meta.url));
 const baseline=path.join(root,'target/feedback-baseline-20260913');

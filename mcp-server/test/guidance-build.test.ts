@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-const load=async()=>{const value=await import('../scripts/build-guidance.mjs').catch(()=>null);assert.ok(value,'offline guidance validator required');return value;};
+const load=async()=>{const value=await import('../scripts/build-guidance.ts').catch(()=>null);assert.ok(value,'offline guidance validator required');return value;};
 
 test('offline validator strips transport bindings and still validates live argument types',async()=>{
  const {bindCall}=await load();

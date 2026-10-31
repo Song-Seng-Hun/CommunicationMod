@@ -1,6 +1,6 @@
 // Curated synthetic observations, not a game simulator or an agent policy.
 import assert from 'node:assert/strict';
-import {nativeRewards} from './guidance-fixtures.mjs';
+import {nativeRewards} from './guidance-fixtures.ts';
 import {conditionalDecision,readContext} from '../dist/context.js';
 import {publicParameterSchema} from '../dist/action-projection.js';
 export function fixtureScenario(fixture){

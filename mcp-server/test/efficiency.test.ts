@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-const load=async()=>{const m=await import('../scripts/measure-agent-efficiency.mjs').catch(()=>null);assert.ok(m,'efficiency report implementation required');return m;};
+const load=async()=>{const m=await import('../scripts/measure-agent-efficiency.ts').catch(()=>null);assert.ok(m,'efficiency report implementation required');return m;};
 test('synthetic MCP wait comparison accounts for roundtrips and optional metrics',async()=>{
  const {probeWait}=await load();
  const off=await probeWait({durationMs:180,pollMs:30,mode:'event',metrics:false});
@@ -17,5 +17,5 @@ test('processing microbenchmark separates optional logger work from flush and ne
 test('report fingerprints include the generator, runtime, skill and reviewed contract',async()=>{
  const {artifactHashes}=await load();assert.equal(typeof artifactHashes,'function');
  const hashes=await artifactHashes();
- for(const file of ['mcp-server/src/session.ts','mcp-server/dist/index.js','mcp-server/scripts/measure-agent-efficiency.mjs','mcp-server/hooks/session-start.mjs','mcp-server/evaluation/guidance-contract.json','plugin/downfall-agent/skills/downfall-play/SKILL.md'])assert.match(hashes[file],/^[a-f0-9]{64}$/);
+ for(const file of ['mcp-server/src/session.ts','mcp-server/dist/index.js','mcp-server/scripts/measure-agent-efficiency.ts','mcp-server/hooks/session-start.mjs','mcp-server/evaluation/guidance-contract.json','plugin/downfall-agent/skills/downfall-play/SKILL.md'])assert.match(hashes[file],/^[a-f0-9]{64}$/);
 });

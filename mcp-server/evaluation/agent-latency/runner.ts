@@ -3,9 +3,9 @@ import {spawn} from 'node:child_process';import {createReadStream,appendFileSync
 import {readFile,writeFile,mkdtemp,mkdir,symlink,access} from 'node:fs/promises';
 import path from 'node:path';import os from 'node:os';import readline from 'node:readline';
 import {fileURLToPath} from 'node:url';import {createHash} from 'node:crypto';
-import {Budget,schedule,metrics,assess} from './metrics.mjs';import {scenario,judge} from './scenarios.mjs';
-import {remainingTimeout,stopTree} from './process.mjs';
-import {hostBlocker} from './events.mjs';
+import {Budget,schedule,metrics,assess} from './metrics.ts';import {scenario,judge} from './scenarios.ts';
+import {remainingTimeout,stopTree} from './process.ts';
+import {hostBlocker} from './events.ts';
 const here=path.dirname(fileURLToPath(import.meta.url)),repo=path.resolve(here,'../../..');
 const now=()=>Number(process.hrtime.bigint())/1e6;
 const allowed=['sts_get_state','sts_get_context','sts_act','sts_get_request'];
@@ -36,7 +36,7 @@ export function codexArgs({cwd,dist,log,settings}){
  for(const feature of ['shell_tool','shell_snapshot','unified_exec','apps','plugins','hooks','browser_use','browser_use_external','computer_use','in_app_browser','image_generation','multi_agent','multi_agent_v2','memories','skill_search','skill_mcp_dependency_install','workspace_dependencies','view_image','sleep_tool','code_mode','goals'])args.push('--disable',feature);
  // The host runtime is required by this task's model even when no Code Mode override is requested.
  args.push('--enable','code_mode_host','--enable','skip_host_skill_discovery','-c','suppress_unstable_features_warning=true');
- args.push('-c',`mcp_servers.eval={command=${JSON.stringify(process.execPath)},args=${JSON.stringify([path.join(here,'server.mjs'),String(settings.scenario),dist,log,String(settings.deadline??0)])},enabled_tools=${JSON.stringify(allowed)},startup_timeout_sec=15,tool_timeout_sec=20}`);
+ args.push('-c',`mcp_servers.eval={command=${JSON.stringify(process.execPath)},args=${JSON.stringify([path.join(here,'server.ts'),String(settings.scenario),dist,log,String(settings.deadline??0)])},enabled_tools=${JSON.stringify(allowed)},startup_timeout_sec=15,tool_timeout_sec=20}`);
  args.push('-');return args;
 }
 async function runOne(codex,root,row,snap,settings,deadline){

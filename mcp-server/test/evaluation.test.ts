@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import path
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';import {decode} from '@toon-format/toon';
 const payload=r=>{const text=r.content[0].text;return text.startsWith('TOON:')?decode(text.slice(text.indexOf('\n')+1),{strict:true}):JSON.parse(text);};
 test('ten frozen read-only evaluation answers remain reachable through lean MCP tools',async()=>{
- const client=new Client({name:'frozen-verifier',version:'1'});await client.connect(new StdioClientTransport({command:process.execPath,args:[path.resolve('evaluation/server.mjs')],stderr:'pipe'}));
+ const client=new Client({name:'frozen-verifier',version:'1'});await client.connect(new StdioClientTransport({command:process.execPath,args:[path.resolve('evaluation/server.ts')],stderr:'pipe'}));
  try{
   const call=async(name,args={})=>{const r=await client.callTool({name,arguments:args});assert.notEqual(r.isError,true);return payload(r);};
   const s=await call('sts_get_state',{wait_ms:1000});assert.equal(s.session_id,undefined);assert.equal(s.state_id,undefined);
@@ -13,7 +13,7 @@ test('ten frozen read-only evaluation answers remain reachable through lean MCP 
    offset=page.next_offset??null;}return text||Object.keys(data).length?text||data:rows;}
   const deck=await read('deck'),piles=await read('piles'),history=await read('history'),hand0=await read('hand/0'),hand2=await read('hand/2'),request=await call('sts_get_request',{request_id:'fixture-choice'});
   const mapClient=new Client({name:'map-verifier',version:'1'});let map=[];
-  try{await mapClient.connect(new StdioClientTransport({command:process.execPath,args:[path.resolve('evaluation/server.mjs')],env:{...process.env,COMMUNICATIONMOD_EVAL_SCREEN:'MAP'},stderr:'pipe'}));
+  try{await mapClient.connect(new StdioClientTransport({command:process.execPath,args:[path.resolve('evaluation/server.ts')],env:{...process.env,COMMUNICATIONMOD_EVAL_SCREEN:'MAP'},stderr:'pipe'}));
    await mapClient.callTool({name:'sts_get_state',arguments:{}});
    const directory=payload(await mapClient.callTool({name:'sts_get_context',arguments:{refs:['map']}})).fragments[0];
    for(const entry of directory.toc??[])map.push(payload(await mapClient.callTool({name:'sts_get_context',arguments:{refs:[entry.ref]}})).fragments[0].data);

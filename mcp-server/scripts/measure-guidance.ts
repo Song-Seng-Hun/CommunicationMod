@@ -5,7 +5,7 @@ import path from 'node:path';
 import {Tiktoken} from 'js-tiktoken/lite';import ranks from 'js-tiktoken/ranks/o200k_base';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
-import {workflows} from '../evaluation/economy-workflows.mjs';
+import {workflows} from '../evaluation/economy-workflows.ts';
 import * as current from '../dist/context.js';
 const enc=new Tiktoken(ranks),count=x=>enc.encode(typeof x==='string'?x:JSON.stringify(x),[],[]).length;
 export const cost=(steps,skill,catalog)=>count(skill)+count(catalog)+steps.reduce((n,s)=>n+count(s.request)+count(s.response),0);
@@ -63,4 +63,4 @@ export async function measure(baselinePath){
  await writeFile(new URL('../../target/guidance-token-report.json',import.meta.url),JSON.stringify(report,null,2)+'\n');
  console.log(JSON.stringify(report,null,2));return report;
 }
-if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){if(!process.argv[2])throw new Error('Usage: measure-guidance.mjs <frozen-baseline>');await measure(process.argv[2]);}
+if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href){if(!process.argv[2])throw new Error('Usage: measure-guidance.ts <frozen-baseline>');await measure(process.argv[2]);}

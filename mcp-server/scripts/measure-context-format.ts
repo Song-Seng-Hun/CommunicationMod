@@ -9,8 +9,8 @@ import ranks from 'js-tiktoken/ranks/o200k_base';
 import {decode} from '@toon-format/toon';
 import {formatContext} from '../dist/format.js';
 import {readContext,conditionalDecision} from '../dist/context.js';
-import {performanceState} from '../evaluation/performance-fixtures.mjs';
-import {workflows} from '../evaluation/economy-workflows.mjs';
+import {performanceState} from '../evaluation/performance-fixtures.ts';
+import {workflows} from '../evaluation/economy-workflows.ts';
 
 const directory=readContext(performanceState(40),['collection/cards'],0,20);
 let start=performance.now();const first=await formatContext(directory,'compact');const coldMs=performance.now()-start;

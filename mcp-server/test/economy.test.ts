@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {workflows} from '../evaluation/economy-workflows.mjs';
+import {workflows} from '../evaluation/economy-workflows.ts';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 test('economy workflows retain required combat/event/map/shop/collection facts',()=>{
@@ -17,5 +17,5 @@ test('economy workflows retain required combat/event/map/shop/collection facts',
  assert.ok(shop.after.some(x=>x.request.arguments.refs?.includes('shop_controls/0')),'on-demand price retrieval is counted');
 });
 test('tokenizer regression includes catalog, extra reads and no-poll totals',async()=>{
- await promisify(execFile)(process.execPath,['scripts/measure-context-economy.mjs'],{windowsHide:true,timeout:30000});
+ await promisify(execFile)(process.execPath,['scripts/measure-context-economy.ts'],{windowsHide:true,timeout:30000});
 });

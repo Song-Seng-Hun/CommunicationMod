@@ -4,7 +4,7 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {Tiktoken} from 'js-tiktoken/lite';
 import ranks from 'js-tiktoken/ranks/o200k_base';
-import {workflows} from '../evaluation/economy-workflows.mjs';
+import {workflows} from '../evaluation/economy-workflows.ts';
 import assert from 'node:assert/strict';
 
 const tokenizer=new Tiktoken(ranks),count=x=>tokenizer.encode(JSON.stringify(x),[],[]).length;
