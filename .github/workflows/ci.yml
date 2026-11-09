@@ -1,0 +1,42 @@
+name: CI
+
+# The Java mod needs the Slay the Spire, ModTheSpire and BaseMod jars, which
+# cannot be downloaded here, so CI covers the MCP server only. It runs on
+# Windows, where the game runs; the evaluation harness stops process trees with
+# taskkill.exe, and its tests call that path.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mcp-server:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mcp-server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mcp-server/package-lock.json
+      - run: npm ci
+      # Builds, type-checks the scripts and tests, then runs node --test.
+      # The runner's default %TEMP% is C:\Users\RUNNER~1\..., an 8.3 short name.
+      # The metrics writer refuses a directory whose realpath differs from the
+      # path it was given, so tests under os.tmpdir() would get no metrics rows.
+      - run: npm test
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
