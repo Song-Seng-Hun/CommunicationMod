@@ -33,4 +33,10 @@ jobs:
           cache-dependency-path: mcp-server/package-lock.json
       - run: npm ci
       # Builds, type-checks the scripts and tests, then runs node --test.
+      # The runner's default %TEMP% is C:\Users\RUNNER~1\..., an 8.3 short name.
+      # The metrics writer refuses a directory whose realpath differs from the
+      # path it was given, so tests under os.tmpdir() would get no metrics rows.
       - run: npm test
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
